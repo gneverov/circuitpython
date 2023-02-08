@@ -28,7 +28,6 @@
 #include "py/runtime.h"
 
 #include "bindings/rp2pio/DmaChannel.h"
-#include "bindings/rp2pio/Loop.h"
 #include "bindings/rp2pio/Sm.h"
 #include "bindings/rp2pio/StateMachine.h"
 #include "bindings/rp2pio/__init__.h"
@@ -80,9 +79,6 @@ STATIC const mp_rom_map_elem_t rp2pio_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_dmachannel_transfer), MP_ROM_PTR(&rp2pio_dmachannel_transfer_obj) },
     { MP_ROM_QSTR(MP_QSTR_dmachannel_stop), MP_ROM_PTR(&rp2pio_dmachannel_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_Sm), MP_ROM_PTR(&rp2pio_sm_type) },
-    { MP_ROM_QSTR(MP_QSTR_Loop), MP_ROM_PTR(&rp2pio_loop_type) },
-    { MP_ROM_QSTR(MP_QSTR_set_event_loop), MP_ROM_PTR(&rp2pio_set_event_loop_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_event_loop), MP_ROM_PTR(&rp2pio_get_event_loop_obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(rp2pio_module_globals, rp2pio_module_globals_table);

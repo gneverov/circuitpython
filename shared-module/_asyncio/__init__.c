@@ -23,16 +23,3 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-#pragma once
-
-#include "common-hal/rp2pio/Loop.h"
-#include "py/obj.h"
-
-extern const mp_obj_type_t rp2pio_loop_type;
-
-rp2pio_loop_obj_t *rp2pio_get_native_loop(mp_obj_t loop_obj);
-
-MP_DECLARE_CONST_FUN_OBJ_1(rp2pio_set_event_loop_obj);
-
-MP_DECLARE_CONST_FUN_OBJ_0(rp2pio_get_event_loop_obj);

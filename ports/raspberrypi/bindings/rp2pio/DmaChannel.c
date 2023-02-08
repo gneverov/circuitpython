@@ -25,9 +25,9 @@
  */
 
 #include "bindings/rp2pio/DmaChannel.h"
-#include "bindings/rp2pio/Loop.h"
+#include "shared-bindings/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Dma.h"
-#include "common-hal/rp2pio/Loop.h"
+#include "shared-module/_asyncio/Loop.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
 #include "src/rp2_common/hardware_dma/include/hardware/dma.h"
@@ -52,8 +52,8 @@ STATIC mp_obj_t _loop_callback(mp_obj_t channel_obj, mp_obj_t future_obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(_loop_callback_obj, _loop_callback);
 
 STATIC void _irq_handler(uint channel, void *context) {
-    rp2pio_loop_call_soon_entry_t *entry = context;
-    common_hal_rp2pio_loop_call_soon_isrsafe(entry);
+    _asyncio_loop_call_soon_entry_t *entry = context;
+    common_hal__asyncio_loop_call_soon_isrsafe(entry);
 }
 
 STATIC mp_obj_t rp2pio_dmachannel_transfer(mp_obj_t src_obj, mp_obj_t dst_obj) {
@@ -67,7 +67,7 @@ STATIC mp_obj_t rp2pio_dmachannel_transfer(mp_obj_t src_obj, mp_obj_t dst_obj) {
         mp_raise_IndexError(NULL);
     }
 
-    mp_obj_t loop_obj = common_hal_rp2pio_event_loop_obj;
+    mp_obj_t loop_obj = common_hal__asyncio_event_loop_obj;
     if (!mp_obj_is_obj(loop_obj)) {
         mp_raise_RuntimeError(NULL);
     }
@@ -81,9 +81,9 @@ STATIC mp_obj_t rp2pio_dmachannel_transfer(mp_obj_t src_obj, mp_obj_t dst_obj) {
         mp_raise_OSError(MP_EBUSY);
     }
 
-    rp2pio_loop_obj_t *native_loop = rp2pio_get_native_loop(loop_obj);
+    _asyncio_loop_obj_t *native_loop = _asyncio_get_native_loop(loop_obj);
     mp_obj_t args[] = {MP_OBJ_NEW_SMALL_INT(channel), future_obj };
-    void *context = common_hal_rp2pio_loop_call_soon_entry_alloc(native_loop, loop_obj, MP_OBJ_FROM_PTR(&_loop_callback_obj), 2, args);
+    void *context = common_hal__asyncio_loop_call_soon_entry_alloc(native_loop, loop_obj, MP_OBJ_FROM_PTR(&_loop_callback_obj), 2, args);
     common_hal_rp2pio_dma_set_irq(channel, _irq_handler, context);
 
     dma_channel_config c = dma_channel_get_default_config(channel);

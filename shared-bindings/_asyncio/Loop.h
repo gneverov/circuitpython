@@ -26,31 +26,9 @@
 
 #pragma once
 
+#include "shared-module/_asyncio/Loop.h"
 #include "py/obj.h"
 
-typedef struct _rp2pio_loop_call_soon_entry_t rp2pio_loop_call_soon_entry_t;
+extern const mp_obj_type_t _asyncio_loop_type;
 
-typedef struct {
-    mp_obj_base_t base;
-    rp2pio_loop_call_soon_entry_t *call_soon_list_head;
-    rp2pio_loop_call_soon_entry_t **call_soon_list_tail;
-} rp2pio_loop_obj_t;
-
-struct _rp2pio_loop_call_soon_entry_t {
-    rp2pio_loop_call_soon_entry_t *next;
-    rp2pio_loop_obj_t *native_loop;
-    size_t n_args;
-    mp_obj_t *args;
-};
-
-extern mp_obj_t common_hal_rp2pio_event_loop_obj;
-
-void common_hal_rp2pio_loop_init(rp2pio_loop_obj_t *native_loop, const mp_obj_type_t *type);
-
-rp2pio_loop_call_soon_entry_t *common_hal_rp2pio_loop_call_soon_entry_alloc(rp2pio_loop_obj_t *native_loop, mp_obj_t loop_obj,  mp_obj_t fun_obj, size_t n_args, mp_obj_t *args);
-
-void common_hal_rp2pio_loop_call_soon_entry_free(rp2pio_loop_call_soon_entry_t *entry);
-
-void common_hal_rp2pio_loop_call_soon_isrsafe(rp2pio_loop_call_soon_entry_t *entry);
-
-void common_hal_rp2pio_loop_poll_isr(rp2pio_loop_obj_t *native_loop, mp_obj_t loop_obj);
+_asyncio_loop_obj_t *_asyncio_get_native_loop(mp_obj_t loop_obj);

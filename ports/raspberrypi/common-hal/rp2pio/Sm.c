@@ -26,7 +26,7 @@
 
 #include "common-hal/rp2pio/Sm.h"
 #include "common-hal/microcontroller/Pin.h"
-#include "common-hal/rp2pio/Loop.h"
+#include "shared-module/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Pio.h"
 #include "py/mperrno.h"
 #include "src/rp2_common/hardware_clocks/include/hardware/clocks.h"
@@ -51,7 +51,7 @@ bool common_hal_rp2pio_sm_init(rp2pio_sm_obj_t *self, const mp_obj_type_t *type,
         return false;
     }
 
-    self->loop_obj = common_hal_rp2pio_event_loop_obj;
+    self->loop_obj = common_hal__asyncio_event_loop_obj;
     self->rx_futures = mp_obj_new_list(0, NULL);
     self->tx_futures = mp_obj_new_list(0, NULL);
     return true;

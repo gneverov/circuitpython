@@ -25,10 +25,10 @@
  */
 
 #include "bindings/rp2pio/Sm.h"
-#include "bindings/rp2pio/Loop.h"
+#include "shared-bindings/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Dma.h"
 #include "common-hal/rp2pio/DmaRingBuf.h"
-#include "common-hal/rp2pio/Loop.h"
+#include "shared-module/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Pio.h"
 #include "common-hal/rp2pio/Sm.h"
 #include "py/gc.h"
@@ -328,13 +328,13 @@ STATIC mp_obj_t rp2pio_sm_send(mp_obj_t self_obj, mp_obj_t buffer_obj) {
 MP_DEFINE_CONST_FUN_OBJ_2(rp2pio_sm_send_obj, rp2pio_sm_send);
 
 STATIC void _irq_handler(PIO pio, enum pio_interrupt_source source, void *context) {
-    rp2pio_loop_call_soon_entry_t *entry = context;
+    _asyncio_loop_call_soon_entry_t *entry = context;
 
     rp2pio_sm_obj_t *self = MP_OBJ_TO_PTR(entry->args[2]);
     bool tx = common_hal_rp2pio_sm_tx_from_source(source, self->sm);
     common_hal_rp2pio_sm_end_wait(self, tx);
 
-    common_hal_rp2pio_loop_call_soon_isrsafe(entry);
+    common_hal__asyncio_loop_call_soon_isrsafe(entry);
 }
 
 STATIC mp_obj_t rp2pio_sm_wait_handler(mp_obj_t self_obj, mp_obj_t tx_obj, mp_obj_t exc_obj) {
@@ -371,9 +371,9 @@ STATIC mp_obj_t rp2pio_sm_wait(mp_obj_t self_obj, mp_obj_t tx_obj) {
     mp_obj_t list_obj = tx ? self->tx_futures : self->rx_futures;
     mp_obj_list_append(list_obj, future_obj);
 
-    rp2pio_loop_obj_t *native_loop = rp2pio_get_native_loop(self->loop_obj);
+    _asyncio_loop_obj_t *native_loop = _asyncio_get_native_loop(self->loop_obj);
     mp_obj_t args[] = { self_obj, tx_obj, mp_const_none };
-    void *context = common_hal_rp2pio_loop_call_soon_entry_alloc(native_loop, self->loop_obj, MP_OBJ_FROM_PTR(&rp2pio_sm_wait_handler_obj), 3, args);
+    void *context = common_hal__asyncio_loop_call_soon_entry_alloc(native_loop, self->loop_obj, MP_OBJ_FROM_PTR(&rp2pio_sm_wait_handler_obj), 3, args);
     if (!common_hal_rp2pio_sm_begin_wait(self, tx, _irq_handler, context)) {
         rp2pio_sm_wait_handler(self_obj, tx_obj, mp_const_none);
     }

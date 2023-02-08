@@ -239,13 +239,11 @@ SRC_C += \
 	boards/$(BOARD)/board.c \
 	boards/$(BOARD)/pins.c \
   bindings/rp2pio/DmaChannel.c \
-  bindings/rp2pio/Loop.c \
   bindings/rp2pio/Sm.c \
 	bindings/rp2pio/StateMachine.c \
 	bindings/rp2pio/__init__.c \
   common-hal/rp2pio/Dma.c \
   common-hal/rp2pio/DmaRingBuf.c \
-  common-hal/rp2pio/Loop.c \
   common-hal/rp2pio/Pio.c \
   common-hal/rp2pio/PioSlice.c \
   common-hal/rp2pio/Sm.c \

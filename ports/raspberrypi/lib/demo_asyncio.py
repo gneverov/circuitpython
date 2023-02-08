@@ -1,9 +1,9 @@
 from collections import deque
-import rp2pio
+import _loop
 import time
 
 
-class Loop(rp2pio.Loop):
+class Loop(_loop.BaseLoop):
     def __init__(self):
         self.queue = deque((), 10)
         self.stopped = False
@@ -111,8 +111,8 @@ class Task(Future):
 
 
 def get_event_loop():
-    loop = rp2pio.get_event_loop()
+    loop = _loop.get_event_loop()
     if not loop:
         loop = Loop()
-        rp2pio.set_event_loop(loop)
+        _loop.set_event_loop(loop)
     return loop
