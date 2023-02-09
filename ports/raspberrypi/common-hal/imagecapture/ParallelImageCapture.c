@@ -31,8 +31,8 @@
 #include "shared/runtime/interrupt_char.h"
 
 #include "bindings/rp2pio/StateMachine.h"
-#include "bindings/rp2pio/__init__.h"
 #include "common-hal/imagecapture/ParallelImageCapture.h"
+#include "common-hal/rp2pio/__init__.h"
 #include "shared-bindings/imagecapture/ParallelImageCapture.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/microcontroller/Processor.h"

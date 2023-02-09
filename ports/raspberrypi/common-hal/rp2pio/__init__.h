@@ -27,28 +27,9 @@
 #pragma once
 
 #include "py/obj.h"
+#include "shared-bindings/microcontroller/Pin.h"
 
-typedef struct _asyncio_loop_call_soon_entry _asyncio_loop_call_soon_entry_t;
 
-typedef struct {
-    mp_obj_base_t base;
-    _asyncio_loop_call_soon_entry_t *call_soon_list_head;
-    _asyncio_loop_call_soon_entry_t **call_soon_list_tail;
-} _asyncio_loop_obj_t;
+bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins);
 
-struct _asyncio_loop_call_soon_entry {
-    _asyncio_loop_call_soon_entry_t *next;
-    _asyncio_loop_obj_t *native_loop;
-    size_t n_args;
-    mp_obj_t *args;
-};
-
-void common_hal__asyncio_loop_init(_asyncio_loop_obj_t *native_loop, const mp_obj_type_t *type);
-
-_asyncio_loop_call_soon_entry_t *common_hal__asyncio_loop_call_soon_entry_alloc(_asyncio_loop_obj_t *native_loop, mp_obj_t loop_obj,  mp_obj_t fun_obj, size_t n_args, mp_obj_t *args);
-
-void common_hal__asyncio_loop_call_soon_entry_free(_asyncio_loop_call_soon_entry_t *entry);
-
-void common_hal__asyncio_loop_call_soon_isrsafe(_asyncio_loop_call_soon_entry_t *entry);
-
-void common_hal__asyncio_loop_poll_isr(_asyncio_loop_obj_t *native_loop, mp_obj_t loop_obj);
+void common_hal_rp2pio_reset(void);

@@ -29,6 +29,28 @@
 #include "common-hal/microcontroller/__init__.h"
 #include "py/mperrno.h"
 
+STATIC uint _used_sm_mask[NUM_PIOS];
+
+STATIC uint *_get_used_sm_mask(PIO pio) {
+    return &_used_sm_mask[pio_get_index(pio)];
+}
+
+void common_hal_rp2pio_pioslice_reset(void) {
+    for (uint i = 0; i < NUM_PIOS; i++) {
+        if (_used_sm_mask[i] == 0) {
+            continue;
+        }
+
+        pio_set_sm_mask_enabled(all_pios[i], _used_sm_mask[i], false);
+        for (uint j = 0; j < NUM_PIO_STATE_MACHINES; j++) {
+            if (_used_sm_mask[i] & (1u << j)) {
+                pio_sm_unclaim(all_pios[i], j);
+            }
+        }
+        _used_sm_mask[i] = 0u;
+    }
+}
+
 void common_hal_rp2pio_pioslice_init(rp2pio_pioslice_obj_t *self, const mp_obj_type_t *type, PIO pio, const pio_program_t *program) {
     self->base.type = type;
     self->pio = pio;
@@ -66,6 +88,7 @@ bool common_hal_rp2pio_pioslice_claim(rp2pio_pioslice_obj_t *self, const mp_obj_
             if (sm == -1) {
                 goto cleanup;
             }
+            _used_sm_mask[i] |= 1u << (uint)sm;
             self->sm_mask |= 1u << (uint)sm;
         }
         for (uint j = 0; j < num_pins; j++) {
@@ -91,6 +114,7 @@ void common_hal_rp2pio_pioslice_release_sm(rp2pio_pioslice_obj_t *self, uint sm)
     if (self->sm_mask & bit) {
         pio_sm_set_enabled(self->pio, sm, false);
         pio_sm_unclaim(self->pio, sm);
+        *_get_used_sm_mask(self->pio) &= ~bit;
         self->sm_mask &= ~bit;
     }
 }

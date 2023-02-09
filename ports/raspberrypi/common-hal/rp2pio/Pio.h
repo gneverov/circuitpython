@@ -38,6 +38,8 @@ typedef void (*rp2pio_pio_irq_handler_t)(PIO pio, enum pio_interrupt_source sour
 
 void common_hal_rp2pio_pio_cinit(void);
 
+void common_hal_rp2pio_pio_reset(void);
+
 void common_hal_rp2pio_pio_set_irq(PIO pio, enum pio_interrupt_source source, rp2pio_pio_irq_handler_t handler, void *context);
 
 void common_hal_rp2pio_pio_clear_irq(PIO pio, enum pio_interrupt_source source);

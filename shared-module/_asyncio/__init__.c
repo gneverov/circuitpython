@@ -23,3 +23,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include "shared-module/_asyncio/__init__.h"
+#include "py/objgenerator.h"
+
+// TODO: move this to mp_state_thread_t
+STATIC mp_obj_t common_hal__asyncio_running_loop_obj;
+
+mp_obj_t *common_hal__asyncio_running_loop() {
+    return &common_hal__asyncio_running_loop_obj;
+}
+
+void common_hal__asyncio_reset() {
+    *common_hal__asyncio_running_loop() = mp_const_none;
+}
+
+bool common_hal__asyncio_iscoroutine(mp_const_obj_t obj) {
+    if (mp_obj_get_type(obj) == &mp_type_gen_instance) {
+        mp_obj_gen_instance_t *self = MP_OBJ_TO_PTR(obj);
+        return self->coroutine_generator;
+
+    }
+    if (mp_obj_get_type(obj) == &mp_type_gen_wrap) {
+        mp_obj_gen_wrap_t *self = MP_OBJ_TO_PTR(obj);
+        return self->coroutine_generator;
+    }
+    return false;
+}

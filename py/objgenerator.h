@@ -26,8 +26,29 @@
 #ifndef MICROPY_INCLUDED_PY_OBJGENERATOR_H
 #define MICROPY_INCLUDED_PY_OBJGENERATOR_H
 
+#include "py/bc.h"
 #include "py/obj.h"
 #include "py/runtime.h"
+
+/******************************************************************************/
+/* generator wrapper                                                          */
+
+typedef struct _mp_obj_gen_wrap_t {
+    mp_obj_base_t base;
+    mp_obj_t *fun;
+    bool coroutine_generator;
+} mp_obj_gen_wrap_t;
+
+typedef struct _mp_obj_gen_instance_t {
+    mp_obj_base_t base;
+    // mp_const_none: Not-running, no exception.
+    // MP_OBJ_NULL: Running, no exception.
+    // other: Not running, pending exception.
+    mp_obj_t pend_exc;
+    bool coroutine_generator;
+    mp_code_state_t code_state;
+} mp_obj_gen_instance_t;
+
 
 mp_vm_return_kind_t mp_obj_gen_resume(mp_obj_t self_in, mp_obj_t send_val, mp_obj_t throw_val, mp_obj_t *ret_val);
 

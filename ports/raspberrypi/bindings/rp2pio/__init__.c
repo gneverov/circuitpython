@@ -30,7 +30,7 @@
 #include "bindings/rp2pio/DmaChannel.h"
 #include "bindings/rp2pio/Sm.h"
 #include "bindings/rp2pio/StateMachine.h"
-#include "bindings/rp2pio/__init__.h"
+#include "common-hal/rp2pio/__init__.h"
 #include "common-hal/rp2pio/Dma.h"
 #include "common-hal/rp2pio/Pio.h"
 #include "shared-bindings/supervisor/Runtime.h"

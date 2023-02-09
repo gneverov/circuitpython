@@ -39,6 +39,8 @@ typedef struct {
     uint int_count;
 } rp2pio_dmaringbuf_t;
 
+void common_hal_rp2pio_dmaringbuf_reset(void);
+
 void common_hal_rp2pio_dmaringbuf_init(rp2pio_dmaringbuf_t *ringbuf, bool tx);
 
 bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_size_bits, uint dreq, enum dma_channel_transfer_size transfer_size, bool bswap, volatile void *target_addr);

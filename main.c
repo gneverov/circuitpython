@@ -68,6 +68,10 @@
 #include "shared-bindings/microcontroller/Processor.h"
 #include "shared-bindings/supervisor/Runtime.h"
 
+#if CIRCUITPY__ASYNCIO
+#include "shared-module/_asyncio/__init__.h"
+#endif
+
 #if CIRCUITPY_ALARM
 #include "shared-bindings/alarm/__init__.h"
 #endif
@@ -99,6 +103,10 @@
 
 #if CIRCUITPY_MEMORYMONITOR
 #include "shared-module/memorymonitor/__init__.h"
+#endif
+
+#if CIRCUITPY_RP2PIO
+#include "common-hal/rp2pio/__init__.h"
 #endif
 
 #if CIRCUITPY_SOCKETPOOL
@@ -340,6 +348,15 @@ STATIC void cleanup_after_vm(supervisor_allocation *heap, mp_obj_t exception) {
     #endif
     reset_port();
     reset_board();
+
+    #if CIRCUITPY_RP2PIO
+    common_hal_rp2pio_reset();
+    #endif
+
+    // Clear event loop state. All ISR that may write to this must be reset by now.
+    #if CIRCUITPY__ASYNCIO
+    common_hal__asyncio_reset();
+    #endif
 
     // Free the heap last because other modules may reference heap memory and need to shut down.
     filesystem_flush();

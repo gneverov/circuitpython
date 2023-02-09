@@ -35,7 +35,9 @@ typedef struct {
     void *context;
 } rp2pio_pio_irq_t;
 
-STATIC rp2pio_pio_irq_t *_irq_table[NUM_PIOS] = { NULL, NULL };
+STATIC rp2pio_pio_irq_t *_irq_table[NUM_PIOS];
+
+STATIC uint8_t _used_pins[NUM_PIOS][NUM_BANK0_GPIOS];
 
 STATIC rp2pio_pio_irq_t *_get_irq_entry(PIO pio, enum pio_interrupt_source source) {
     uint index = pio_get_index(pio);
@@ -84,6 +86,32 @@ void common_hal_rp2pio_pio_cinit(void) {
     _cinit_pio(1, PIO0_IRQ_1, _irq_handler_pio1);
 }
 
+STATIC void _reset_pio(uint pio_index, uint irq, irq_handler_t irq_handler) {
+    assert(pio_index < NUM_PIOS);
+    PIO pio = all_pios[pio_index];
+    rp2pio_pio_irq_t **irq_table = &_irq_table[pio_index];
+    if (*irq_table == NULL) {
+        return;
+    }
+
+    irq_set_enabled(irq, false);
+    irq_remove_handler(irq, irq_handler);
+
+    for (uint i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
+        pio_set_irq0_source_enabled(pio, i, false);
+    }
+
+    gc_free(*irq_table);
+    *irq_table = NULL;
+}
+
+void common_hal_rp2pio_pio_reset(void) {
+    _reset_pio(0, PIO0_IRQ_0, _irq_handler_pio0);
+    _reset_pio(1, PIO0_IRQ_1, _irq_handler_pio1);
+
+    memset(&_used_pins, 0, sizeof(_used_pins));
+}
+
 void common_hal_rp2pio_pio_set_irq(PIO pio, enum pio_interrupt_source source, rp2pio_pio_irq_handler_t handler, void *context) {
     rp2pio_pio_irq_t *entry = _get_irq_entry(pio, source);
     entry->handler = handler;
@@ -97,8 +125,6 @@ void common_hal_rp2pio_pio_clear_irq(PIO pio, enum pio_interrupt_source source) 
     entry->handler = NULL;
     entry->context = NULL;
 }
-
-uint8_t _used_pins[NUM_PIOS][NUM_BANK0_GPIOS] = { 0 };
 
 bool common_hal_rp2pio_pio_claim_pin(PIO pio, const mcu_pin_obj_t *pin) {
     uint pio_index = pio_get_index(pio);

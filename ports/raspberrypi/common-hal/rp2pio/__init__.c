@@ -24,9 +24,12 @@
  * THE SOFTWARE.
  */
 
-#include "py/obj.h"
-#include "shared-bindings/microcontroller/Pin.h"
-#include "bindings/rp2pio/__init__.h"
+#include "common-hal/rp2pio/__init__.h"
+#include "common-hal/rp2pio/Dma.h"
+#include "common-hal/rp2pio/DmaRingBuf.h"
+#include "common-hal/rp2pio/Pio.h"
+#include "common-hal/rp2pio/PioSlice.h"
+
 
 bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins) {
     if (len == 0) {
@@ -40,4 +43,12 @@ bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pin
         }
     }
     return true;
+}
+
+void common_hal_rp2pio_reset(void) {
+    common_hal_rp2pio_dma_reset();
+    common_hal_rp2pio_pio_reset();
+
+    common_hal_rp2pio_dmaringbuf_reset();
+    common_hal_rp2pio_pioslice_reset();
 }

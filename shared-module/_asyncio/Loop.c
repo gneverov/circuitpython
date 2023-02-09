@@ -29,8 +29,6 @@
 #include "py/runtime.h"
 
 
-mp_obj_t common_hal__asyncio_event_loop_obj = mp_const_none;
-
 void common_hal__asyncio_loop_init(_asyncio_loop_obj_t *native_loop, const mp_obj_type_t *type) {
     native_loop->base.type = type;
     native_loop->call_soon_list_head = NULL;

@@ -25,34 +25,50 @@
  */
 
 #include "shared-bindings/_asyncio/Loop.h"
+#include "shared-module/_asyncio/__init__.h"
 #include "shared-module/_asyncio/Loop.h"
 #include "py/runtime.h"
 
-//| def set_event_loop(loop: Loop) -> None:
-//|     """Set `loop` as the current event loop used by CircuitPython."""
+
+//| def set_running_loop(loop: Loop) -> None:
+//|     """Set `loop` as the running event loop used by CircuitPython."""
 //|     ...
 //|
-STATIC mp_obj_t _asyncio_set_event_loop(mp_obj_t loop_obj) {
-    _asyncio_get_native_loop(loop_obj);
-    common_hal__asyncio_event_loop_obj = loop_obj;
+STATIC mp_obj_t _asyncio_set_running_loop(mp_obj_t loop_obj) {
+    if (loop_obj != mp_const_none) {
+        _asyncio_get_native_loop(loop_obj);
+    }
+    *common_hal__asyncio_running_loop() = loop_obj;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(_asyncio_set_event_loop_obj, _asyncio_set_event_loop);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(_asyncio_set_running_loop_obj, _asyncio_set_running_loop);
 
-//| def get_event_loop() -> Loop:
-//|     """Returns the current event loop used by CircuitPython."""
+
+//| def get_running_loop() -> Loop:
+//|     """Returns the running event loop used by CircuitPython."""
 //|     ...
 //|
-STATIC mp_obj_t _asyncio_get_event_loop(void) {
-    return common_hal__asyncio_event_loop_obj;
+STATIC mp_obj_t _asyncio_get_running_loop(void) {
+    return *common_hal__asyncio_running_loop();
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(_asyncio_get_event_loop_obj, _asyncio_get_event_loop);
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(_asyncio_get_running_loop_obj, _asyncio_get_running_loop);
+
+
+//| def iscoroutine(obj) -> bool:
+//|     """Return True if the object is a coroutine created by an async def function."""
+//|     ...
+//|
+STATIC mp_obj_t _asyncio_iscoroutine(mp_obj_t obj) {
+    return mp_obj_new_bool(common_hal__asyncio_iscoroutine(obj));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(_asyncio_iscoroutine_obj, _asyncio_iscoroutine);
 
 STATIC const mp_rom_map_elem_t _asyncio_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__asyncio) },
     { MP_ROM_QSTR(MP_QSTR_BaseLoop), MP_ROM_PTR(&_asyncio_loop_type) },
-    { MP_ROM_QSTR(MP_QSTR_set_event_loop), MP_ROM_PTR(&_asyncio_set_event_loop_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_event_loop), MP_ROM_PTR(&_asyncio_get_event_loop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_running_loop), MP_ROM_PTR(&_asyncio_set_running_loop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_running_loop), MP_ROM_PTR(&_asyncio_get_running_loop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_iscoroutine), MP_ROM_PTR(&_asyncio_iscoroutine_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(_asyncio_module_globals, _asyncio_module_globals_table);
 

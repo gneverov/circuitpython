@@ -34,6 +34,26 @@ STATIC void _sync(rp2pio_dmaringbuf_t *ringbuf);
 STATIC void _trigger(rp2pio_dmaringbuf_t *ringbuf);
 STATIC void _irq_handler(uint channel, void *context);
 
+STATIC uint _used_channel_mask;
+
+void common_hal_rp2pio_dmaringbuf_reset(void) {
+    if (_used_channel_mask == 0u) {
+        return;
+    }
+
+    // abort
+    dma_hw->abort = _used_channel_mask;
+    while (dma_hw->abort) {
+        tight_loop_contents();
+    }
+
+    // acknowledge irq
+    dma_hw->ints1 = _used_channel_mask;
+
+    dma_unclaim_mask(_used_channel_mask);
+    _used_channel_mask = 0u;
+}
+
 void common_hal_rp2pio_dmaringbuf_init(rp2pio_dmaringbuf_t *ringbuf, bool tx) {
     ringbuf->channel = -1;
     ringbuf_init(&ringbuf->ringbuf, NULL, 0);
@@ -51,6 +71,7 @@ bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_
         errno = MP_EBUSY;
         return false;
     }
+    _used_channel_mask |= 1u << channel;
 
     void *ring_addr = common_hal_rp2pio_dma_alloc_aligned(ring_size_bits, false);
     if (!ring_addr) {
@@ -88,8 +109,9 @@ void common_hal_rp2pio_dmaringbuf_deinit(rp2pio_dmaringbuf_t *ringbuf) {
     if (ringbuf->channel != -1u) {
         _sync(ringbuf);
         dma_channel_abort(ringbuf->channel);
-        dma_channel_acknowledge_irq1(ringbuf->channel);
+        common_hal_rp2pio_dma_acknowledge_irq(ringbuf->channel);
         dma_channel_unclaim(ringbuf->channel);
+        _used_channel_mask &= ~(1u << ringbuf->channel);
         ringbuf->channel = -1u;
     }
     ringbuf_deinit(&ringbuf->ringbuf);
@@ -129,7 +151,7 @@ STATIC void _trigger(rp2pio_dmaringbuf_t *ringbuf) {
 
 STATIC void _irq_handler(uint channel, void *context) {
     rp2pio_dmaringbuf_t *ringbuf = context;
-    dma_channel_acknowledge_irq1(ringbuf->channel);
+    common_hal_rp2pio_dma_acknowledge_irq(ringbuf->channel);
     ringbuf->int_count++;
 
     _sync(ringbuf);
@@ -152,7 +174,7 @@ size_t common_hal_rp2pio_dmaringbuf_transfer(rp2pio_dmaringbuf_t *ringbuf, void 
 void common_hal_rp2pio_dmaringbuf_clear(rp2pio_dmaringbuf_t *ringbuf) {
     _sync(ringbuf);
     dma_channel_abort(ringbuf->channel);
-    dma_channel_acknowledge_irq1(ringbuf->channel);
+    common_hal_rp2pio_dma_acknowledge_irq(ringbuf->channel);
     ringbuf->trans_count = 0;
     dma_channel_set_trans_count(ringbuf->channel, 0, false);
 

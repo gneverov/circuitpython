@@ -41,7 +41,6 @@ typedef struct {
     rp2pio_dmaringbuf_t rx_ringbuf;
     rp2pio_dmaringbuf_t tx_ringbuf;
 
-    mp_obj_t loop_obj;
     mp_obj_t rx_futures;
     mp_obj_t tx_futures;
     bool rx_waiting;
@@ -71,3 +70,5 @@ bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_
 void common_hal_rp2pio_sm_end_wait(rp2pio_sm_obj_t *self, bool tx);
 
 bool common_hal_rp2pio_sm_tx_from_source(enum pio_interrupt_source source, uint sm);
+
+void common_hal_rp2pio_sm_debug(const mp_print_t *print, rp2pio_sm_obj_t *self);

@@ -51,7 +51,6 @@ bool common_hal_rp2pio_sm_init(rp2pio_sm_obj_t *self, const mp_obj_type_t *type,
         return false;
     }
 
-    self->loop_obj = common_hal__asyncio_event_loop_obj;
     self->rx_futures = mp_obj_new_list(0, NULL);
     self->tx_futures = mp_obj_new_list(0, NULL);
     return true;
@@ -138,8 +137,9 @@ bool common_hal_rp2pio_sm_configure_fifo(rp2pio_sm_obj_t *self, uint ring_size_b
     common_hal_rp2pio_sm_end_wait(self, tx);
     common_hal_rp2pio_dmaringbuf_deinit(ringbuf);
 
-    const volatile void *fifo_addr = tx ? &self->pio_slice->pio->txf[self->sm] : &self->pio_slice->pio->rxf[self->sm];
-    if (!common_hal_rp2pio_dmaringbuf_alloc(ringbuf, ring_size_bits, pio_get_dreq(self->pio_slice->pio, self->sm, tx), transfer_size, bswap, (volatile void *)fifo_addr)) {
+    PIO pio = self->pio_slice->pio;
+    const volatile void *fifo_addr = tx ? &pio->txf[self->sm] : &pio->rxf[self->sm];
+    if (!common_hal_rp2pio_dmaringbuf_alloc(ringbuf, ring_size_bits, pio_get_dreq(pio, self->sm, tx), transfer_size, bswap, (volatile void *)fifo_addr)) {
         common_hal_rp2pio_dmaringbuf_deinit(ringbuf);
         return false;
     }
@@ -157,8 +157,9 @@ void common_hal_rp2pio_sm_reset(rp2pio_sm_obj_t *self, uint initial_pc) {
 bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_irq_handler_t handler, void *context) {
     rp2pio_dmaringbuf_t *ringbuf = tx ? &self->tx_ringbuf : &self->rx_ringbuf;
     bool *waiting = tx ? &self->tx_waiting : &self->rx_waiting;
+    PIO pio = self->pio_slice->pio;
     enum pio_interrupt_source source = (tx ? pis_sm0_tx_fifo_not_full : pis_sm0_rx_fifo_not_empty) << self->sm;
-    common_hal_rp2pio_pio_clear_irq(self->pio_slice->pio, source);
+    common_hal_rp2pio_pio_clear_irq(pio, source);
 
     if (!*waiting) {
         common_hal_rp2pio_dmaringbuf_set_enabled(ringbuf, false);
@@ -170,7 +171,7 @@ bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_
         }
     }
     if (*waiting) {
-        common_hal_rp2pio_pio_set_irq(self->pio_slice->pio, source, handler, context);
+        common_hal_rp2pio_pio_set_irq(pio, source, handler, context);
     }
     return *waiting;
 }
@@ -190,4 +191,25 @@ void common_hal_rp2pio_sm_end_wait(rp2pio_sm_obj_t *self, bool tx) {
 bool common_hal_rp2pio_sm_tx_from_source(enum pio_interrupt_source source, uint sm) {
     assert(source & ((pis_sm0_tx_fifo_not_full | pis_sm0_rx_fifo_not_empty) << sm));
     return source & (pis_sm0_tx_fifo_not_full << sm);
+}
+
+void common_hal_rp2pio_sm_debug(const mp_print_t *print, rp2pio_sm_obj_t *self) {
+    PIO pio = self->pio_slice->pio;
+    mp_printf(print, "sm %u on pio %u at %p\n", self->sm, pio_get_index(pio), self);
+    mp_printf(print, "  clkdiv:    %08x\n", self->config.clkdiv);
+    mp_printf(print, "  execctrl:  %08x\n", self->config.execctrl);
+    mp_printf(print, "  shiftctrl: %08x\n", self->config.shiftctrl);
+    mp_printf(print, "  pinctrl:   %08x\n", self->config.pinctrl);
+
+    mp_printf(print, "  pc:        %u\n", pio_sm_get_pc(pio, self->sm));
+    mp_printf(print, "  rx_fifo:   %u", pio_sm_get_rx_fifo_level(pio, self->sm));
+    if (pio_sm_is_rx_fifo_full(pio, self->sm)) {
+        mp_printf(print, " full");
+    }
+    mp_printf(print, "\n");
+    mp_printf(print, "  tx_fifo:   %u", pio_sm_get_tx_fifo_level(pio, self->sm));
+    if (pio_sm_is_tx_fifo_full(pio, self->sm)) {
+        mp_printf(print, " full");
+    }
+    mp_printf(print, "\n");
 }

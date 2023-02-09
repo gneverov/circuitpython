@@ -30,8 +30,8 @@
 #include "common-hal/rotaryio/IncrementalEncoder.h"
 #include "shared-bindings/rotaryio/IncrementalEncoder.h"
 #include "shared-module/rotaryio/IncrementalEncoder.h"
-#include "bindings/rp2pio/__init__.h"
 #include "bindings/rp2pio/StateMachine.h"
+#include "common-hal/rp2pio/__init__.h"
 
 STATIC const uint16_t encoder[] = {
     //  again:

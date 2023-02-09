@@ -28,7 +28,7 @@
 #include "shared-bindings/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Dma.h"
 #include "common-hal/rp2pio/DmaRingBuf.h"
-#include "shared-module/_asyncio/Loop.h"
+#include "shared-module/_asyncio/__init__.h"
 #include "common-hal/rp2pio/Pio.h"
 #include "common-hal/rp2pio/Sm.h"
 #include "py/gc.h"
@@ -249,15 +249,6 @@ MP_DEFINE_CONST_FUN_OBJ_2(rp2pio_sm_exec_obj, rp2pio_sm_exec);
 STATIC mp_obj_t rp2pio_sm_debug(mp_obj_t self_obj, mp_obj_t tx_obj) {
     rp2pio_sm_obj_t *self = MP_OBJ_TO_PTR(self_obj);
     mp_obj_t result = mp_obj_new_dict(3);
-    mp_obj_t sm_dict = mp_obj_new_dict(8);
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_sm), mp_obj_new_int_from_uint(self->sm));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_clkdiv), mp_obj_new_int_from_uint(self->config.clkdiv));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_execctrl), mp_obj_new_int_from_uint(self->config.execctrl));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_shiftctrl), mp_obj_new_int_from_uint(self->config.shiftctrl));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_pinctrl), mp_obj_new_int_from_uint(self->config.pinctrl));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_rx_level), mp_obj_new_int_from_uint(pio_sm_get_rx_fifo_level(self->pio_slice->pio, self->sm)));
-    mp_obj_dict_store(sm_dict, MP_OBJ_NEW_QSTR(MP_QSTR_tx_level), mp_obj_new_int_from_uint(pio_sm_get_tx_fifo_level(self->pio_slice->pio, self->sm)));
-    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_sm), sm_dict);
 
     mp_obj_t pio_dict = mp_obj_new_dict(8);
     mp_obj_dict_store(pio_dict, MP_OBJ_NEW_QSTR(MP_QSTR_pio), mp_obj_new_int_from_uint(pio_get_index(self->pio_slice->pio)));
@@ -266,9 +257,10 @@ STATIC mp_obj_t rp2pio_sm_debug(mp_obj_t self_obj, mp_obj_t tx_obj) {
     mp_obj_dict_store(pio_dict, MP_OBJ_NEW_QSTR(MP_QSTR_pin_mask), mp_obj_new_int_from_uint(self->pio_slice->pin_mask));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_pio), pio_dict);
 
-    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_loop), self->loop_obj);
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_rx_futures), self->rx_futures);
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_tx_futures), self->tx_futures);
+
+    common_hal_rp2pio_sm_debug(&mp_plat_print, self);
 
     bool tx = mp_obj_is_true(tx_obj);
     rp2pio_dmaringbuf_t *dma_ringbuf = tx ? &self->tx_ringbuf : &self->rx_ringbuf;
@@ -356,30 +348,47 @@ STATIC mp_obj_t rp2pio_sm_wait_handler(mp_obj_t self_obj, mp_obj_t tx_obj, mp_ob
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(rp2pio_sm_wait_handler_obj, rp2pio_sm_wait_handler);
 
-STATIC mp_obj_t rp2pio_sm_wait(mp_obj_t self_obj, mp_obj_t tx_obj) {
+STATIC mp_obj_t rp2pio_sm_wait(size_t n_args, const mp_obj_t *all_args) {
+    enum {
+        ARG_self,
+        ARG_tx,
+        ARG_loop,
+    };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_self, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_tx, MP_ARG_REQUIRED | MP_ARG_BOOL },
+        { MP_QSTR_loop, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all_kw_array(n_args, 0, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    mp_obj_t self_obj = args[ARG_self].u_obj;
     rp2pio_sm_obj_t *self = MP_OBJ_TO_PTR(self_obj);
 
-    if (!mp_obj_is_bool(tx_obj)) {
-        mp_raise_ValueError(NULL);
+    bool tx = args[ARG_tx].u_bool;
+
+    mp_obj_t loop_obj = args[ARG_loop].u_obj;
+    if (loop_obj == mp_const_none) {
+        loop_obj = *common_hal__asyncio_running_loop();
     }
-    bool tx = mp_obj_is_true(tx_obj);
+    _asyncio_loop_obj_t *native_loop = _asyncio_get_native_loop(loop_obj);
 
     mp_obj_t dest[2];
-    mp_load_method(self->loop_obj, MP_QSTR_create_future, dest);
+    mp_load_method(loop_obj, MP_QSTR_create_future, dest);
     mp_obj_t future_obj = mp_call_function_1(dest[0], dest[1]);
 
     mp_obj_t list_obj = tx ? self->tx_futures : self->rx_futures;
     mp_obj_list_append(list_obj, future_obj);
 
-    _asyncio_loop_obj_t *native_loop = _asyncio_get_native_loop(self->loop_obj);
-    mp_obj_t args[] = { self_obj, tx_obj, mp_const_none };
-    void *context = common_hal__asyncio_loop_call_soon_entry_alloc(native_loop, self->loop_obj, MP_OBJ_FROM_PTR(&rp2pio_sm_wait_handler_obj), 3, args);
+    mp_obj_t args_out[] = { self_obj, mp_obj_new_bool(tx), mp_const_none };
+    void *context = common_hal__asyncio_loop_call_soon_entry_alloc(native_loop, loop_obj, MP_OBJ_FROM_PTR(&rp2pio_sm_wait_handler_obj), 3, args_out);
     if (!common_hal_rp2pio_sm_begin_wait(self, tx, _irq_handler, context)) {
-        rp2pio_sm_wait_handler(self_obj, tx_obj, mp_const_none);
+        rp2pio_sm_wait_handler(args_out[0], args_out[1], args_out[2]);
     }
     return future_obj;
 }
-MP_DEFINE_CONST_FUN_OBJ_2(rp2pio_sm_wait_obj, rp2pio_sm_wait);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2pio_sm_wait_obj, 2, 3, rp2pio_sm_wait);
 
 STATIC const mp_rom_map_elem_t rp2pio_sm_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&rp2pio_sm_deinit_obj) },

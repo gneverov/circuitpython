@@ -1,4 +1,4 @@
-import demo_asyncio as asyncio
+import asyncio
 import rp2pio
 import supervisor
 import adafruit_pioasm

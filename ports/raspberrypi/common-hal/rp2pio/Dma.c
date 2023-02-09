@@ -33,7 +33,7 @@ typedef struct {
     void *context;
 } rp2pio_dma_irq_t;
 
-STATIC rp2pio_dma_irq_t *_irq_table = NULL;
+STATIC rp2pio_dma_irq_t *_irq_table;
 
 STATIC rp2pio_dma_irq_t *_get_irq_entry(uint channel) {
     return &_irq_table[channel];
@@ -64,6 +64,27 @@ void common_hal_rp2pio_dma_cinit(void) {
     irq_set_enabled(DMA_IRQ_1, true);
 }
 
+void common_hal_rp2pio_dma_reset(void) {
+    if (_irq_table == NULL) {
+        return;
+    }
+
+    irq_set_enabled(DMA_IRQ_1, false);
+    irq_remove_handler(DMA_IRQ_1, _irq_handler);
+    if (irq_has_shared_handler(DMA_IRQ_1)) {
+        irq_set_enabled(DMA_IRQ_1, true);
+    }
+
+    for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
+        if (_get_irq_entry(i)->handler) {
+            dma_channel_set_irq1_enabled(i, false);
+        }
+    }
+
+    gc_free(_irq_table);
+    _irq_table = NULL;
+}
+
 void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context) {
     rp2pio_dma_irq_t *entry = _get_irq_entry(channel);
     entry->handler = handler;
@@ -76,6 +97,10 @@ void common_hal_rp2pio_dma_clear_irq(uint channel) {
     rp2pio_dma_irq_t *entry = _get_irq_entry(channel);
     entry->handler = NULL;
     entry->context = NULL;
+}
+
+void common_hal_rp2pio_dma_acknowledge_irq(uint channel) {
+    dma_channel_acknowledge_irq1(channel);
 }
 
 void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived) {

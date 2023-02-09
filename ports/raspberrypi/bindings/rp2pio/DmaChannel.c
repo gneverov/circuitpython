@@ -27,7 +27,7 @@
 #include "bindings/rp2pio/DmaChannel.h"
 #include "shared-bindings/_asyncio/Loop.h"
 #include "common-hal/rp2pio/Dma.h"
-#include "shared-module/_asyncio/Loop.h"
+#include "shared-module/_asyncio/__init__.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
 #include "src/rp2_common/hardware_dma/include/hardware/dma.h"
@@ -67,7 +67,7 @@ STATIC mp_obj_t rp2pio_dmachannel_transfer(mp_obj_t src_obj, mp_obj_t dst_obj) {
         mp_raise_IndexError(NULL);
     }
 
-    mp_obj_t loop_obj = common_hal__asyncio_event_loop_obj;
+    mp_obj_t loop_obj = *common_hal__asyncio_running_loop();
     if (!mp_obj_is_obj(loop_obj)) {
         mp_raise_RuntimeError(NULL);
     }

@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Jeff Epler for Adafruit Industries
+ * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,12 @@
 
 #pragma once
 
-#include "shared-bindings/microcontroller/Pin.h"
+#include "py/obj.h"
+#include "shared-module/_asyncio/Loop.h"
 
-bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins);
+
+mp_obj_t *common_hal__asyncio_running_loop(void);
+
+void common_hal__asyncio_reset(void);
+
+bool common_hal__asyncio_iscoroutine(mp_const_obj_t obj);
