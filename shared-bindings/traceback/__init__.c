@@ -59,7 +59,6 @@ STATIC void traceback_exception_common(bool is_print_exception, mp_print_t *prin
     }
     mp_obj_t tb_obj = args[ARG_tb].u_obj;
     mp_obj_t limit_obj = args[ARG_limit].u_obj;
-    bool chain = args[ARG_chain].u_bool;
 
     if (args[ARG_file].u_obj != mp_const_none) {
         if (!is_print_exception) {
@@ -96,7 +95,7 @@ STATIC void traceback_exception_common(bool is_print_exception, mp_print_t *prin
     mp_obj_exception_t *context_backup = exc->context;
     mp_obj_exception_t *cause_backup = exc->cause;
 
-    if (!chain) {
+    if (!args[ARG_chain].u_bool) {
         exc->context = NULL;
         exc->cause = NULL;
     }

@@ -42,7 +42,11 @@ struct wave_format_chunk {
     uint32_t byte_rate;
     uint16_t block_align;
     uint16_t bits_per_sample;
-    uint16_t extra_params; // Assumed to be zero below.
+};
+
+struct chunk_header {
+    uint8_t id[4];
+    uint32_t length;
 };
 
 void common_hal_audioio_wavefile_construct(audioio_wavefile_obj_t *self,
@@ -67,21 +71,23 @@ void common_hal_audioio_wavefile_construct(audioio_wavefile_obj_t *self,
         mp_raise_OSError(MP_EIO);
     }
     if (bytes_read != 4 ||
-        format_size > sizeof(struct wave_format_chunk)) {
-        mp_raise_ValueError(translate("Invalid format chunk size"));
+        format_size < sizeof(struct wave_format_chunk)) {
+        mp_arg_error_invalid(MP_QSTR_file);
     }
     struct wave_format_chunk format;
-    if (f_read(&self->file->fp, &format, format_size, &bytes_read) != FR_OK) {
+    if (f_read(&self->file->fp, &format, sizeof(struct wave_format_chunk), &bytes_read) != FR_OK) {
         mp_raise_OSError(MP_EIO);
     }
-    if (bytes_read != format_size) {
+    if (bytes_read != sizeof(struct wave_format_chunk)) {
+        mp_arg_error_invalid(MP_QSTR_file);
+    }
+    if (f_lseek(&self->file->fp, f_tell(&self->file->fp) + format_size - bytes_read) != FR_OK) {
+        mp_arg_error_invalid(MP_QSTR_file);
     }
 
     if (format.audio_format != 1 ||
         format.num_channels > 2 ||
-        format.bits_per_sample > 16 ||
-        (format_size == 18 &&
-         format.extra_params != 0)) {
+        format.bits_per_sample > 16) {
         mp_raise_ValueError(translate("Unsupported format"));
     }
     // Get the sample_rate
@@ -89,26 +95,25 @@ void common_hal_audioio_wavefile_construct(audioio_wavefile_obj_t *self,
     self->channel_count = format.num_channels;
     self->bits_per_sample = format.bits_per_sample;
 
-    // TODO(tannewt): Skip any extra chunks that occur before the data section.
+    // Skip through any other chunks until we find the data chunk
+    struct chunk_header data;
+    while (true) {
+        if (f_read(&self->file->fp, &data, sizeof(struct chunk_header), &bytes_read) != FR_OK) {
+            mp_raise_OSError(MP_EIO);
+        }
+        if (bytes_read != sizeof(struct chunk_header)) {
+            mp_arg_error_invalid(MP_QSTR_file);
+        }
+        if (memcmp(data.id, "data", 4) == 0) {
+            break;
+        }
+        if (f_lseek(&self->file->fp, f_tell(&self->file->fp) + data.length) != FR_OK) {
+            mp_arg_error_invalid(MP_QSTR_file);
+        }
+    }
 
-    uint8_t data_tag[4];
-    if (f_read(&self->file->fp, &data_tag, 4, &bytes_read) != FR_OK) {
-        mp_raise_OSError(MP_EIO);
-    }
-    if (bytes_read != 4 ||
-        memcmp((uint8_t *)data_tag, "data", 4) != 0) {
-        mp_raise_ValueError(translate("Data chunk must follow fmt chunk"));
-    }
-
-    uint32_t data_length;
-    if (f_read(&self->file->fp, &data_length, 4, &bytes_read) != FR_OK) {
-        mp_raise_OSError(MP_EIO);
-    }
-    if (bytes_read != 4) {
-        mp_arg_error_invalid(MP_QSTR_file);
-    }
-    self->file_length = data_length;
-    self->data_start = self->file->fp.fptr;
+    self->file_length = data.length;
+    self->data_start = f_tell(&self->file->fp);
 
     // Try to allocate two buffers, one will be loaded from file and the other
     // DMAed to DAC.
