@@ -39,8 +39,6 @@ typedef struct {
 
 } rp2pio_pioslice_obj_t;
 
-void common_hal_rp2pio_pioslice_reset(void);
-
 void common_hal_rp2pio_pioslice_init(rp2pio_pioslice_obj_t *self, const mp_obj_type_t *type, PIO pio, const pio_program_t *program);
 
 void common_hal_rp2pio_pioslice_deinit(rp2pio_pioslice_obj_t *self);

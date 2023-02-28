@@ -105,10 +105,6 @@
 #include "shared-module/memorymonitor/__init__.h"
 #endif
 
-#if CIRCUITPY_RP2PIO
-#include "common-hal/rp2pio/__init__.h"
-#endif
-
 #if CIRCUITPY_SOCKETPOOL
 #include "shared-bindings/socketpool/__init__.h"
 #endif
@@ -348,10 +344,6 @@ STATIC void cleanup_after_vm(supervisor_allocation *heap, mp_obj_t exception) {
     #endif
     reset_port();
     reset_board();
-
-    #if CIRCUITPY_RP2PIO
-    common_hal_rp2pio_reset();
-    #endif
 
     // Clear event loop state. All ISR that may write to this must be reset by now.
     #if CIRCUITPY__ASYNCIO

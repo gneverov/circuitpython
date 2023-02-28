@@ -26,262 +26,217 @@
 
 #include "common-hal/audiopwmio/PWMAudioOut.h"
 
-#include <math.h>
-#include <stdint.h>
-#include <string.h>
-
-#include "extmod/vfs_fat.h"
-#include "py/gc.h"
+#include "common-hal/rp2pio/Dma.h"
+#include "peripherals/pwm.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
-#include "shared-bindings/pwmio/PWMOut.h"
-#include "shared-bindings/audiopwmio/PWMAudioOut.h"
-#include "shared-bindings/microcontroller/__init__.h"
+#include "py/stream.h"
 #include "shared-bindings/microcontroller/Pin.h"
-#include "shared-bindings/microcontroller/Processor.h"
-#include "supervisor/shared/translate/translate.h"
-
-#include "src/rp2040/hardware_structs/include/hardware/structs/dma.h"
+#include "src/rp2_common/hardware_clocks/include/hardware/clocks.h"
+#include "src/rp2_common/hardware_dma/include/hardware/dma.h"
+#include "src/rp2_common/hardware_gpio/include/hardware/gpio.h"
 #include "src/rp2_common/hardware_pwm/include/hardware/pwm.h"
 
-// The PWM clock frequency is base_clock_rate / PWM_TOP, typically 125_000_000 / PWM_TOP.
-// We pick BITS_PER_SAMPLE so we get a clock frequency that is above what would cause aliasing.
-#define BITS_PER_SAMPLE 10
-#define SAMPLE_BITS_TO_DISCARD (16 - BITS_PER_SAMPLE)
-#define PWM_TOP ((1 << BITS_PER_SAMPLE) - 1)
-
-
-static uint32_t gcd(uint32_t a, uint32_t b) {
-    while (b) {
-        uint32_t tmp = a % b;
-        a = b;
-        b = tmp;
-    }
-    return a;
+void common_hal_audiopwmio_pwmaudioout_init(audiopwmio_pwmaudioout_obj_t *self, const mp_obj_type_t *type) {
+    self->base.type = type;
+    self->a_channel = NULL;
+    self->b_channel = NULL;
+    self->pwm_slice = -1;
+    self->dma_timer = -1;
+    common_hal_rp2pio_dmaringbuf_init(&self->ringbuf, true);
 }
 
-static uint32_t limit_denominator(uint32_t max_denominator, uint32_t num_in, uint32_t den_in, uint32_t *den_out) {
-// Algorithm based on Python's limit_denominator
-    uint32_t p0 = 0, q0 = 1, p1 = 1, q1 = 0;
-    uint32_t d = den_in, n = num_in;
-    uint32_t g = gcd(n, d);
-    d /= g;
-    n /= g;
-    if (d < max_denominator) {
-        *den_out = d;
-        return n;
-    }
-    while (1) {
-        uint32_t a = n / d;
-        uint32_t q2 = q0 + a * q1;
-        if (q2 > max_denominator) {
-            break;
-        }
+static void _dmaringbuf_handler(rp2pio_dmaringbuf_t *ringbuf) {
+    audiopwmio_pwmaudioout_obj_t *self = (audiopwmio_pwmaudioout_obj_t *)((char *)ringbuf - offsetof(audiopwmio_pwmaudioout_obj_t, ringbuf));
+    self->int_count++;
 
-        uint32_t p_tmp = p0 + a * p1;
-        p0 = p1;
-        q0 = q1;
-        p1 = p_tmp;
-        q1 = q2;
-
-        uint32_t d_tmp = n - a * d;
-        n = d;
-        d = d_tmp;
-    }
-    uint32_t k = (max_denominator - q0) / q1;
-    uint32_t bound1_num = p0 + k * p1, bound1_den = q0 + k * q1;
-    uint32_t bound2_num = p1, bound2_den = q1;
-
-    if (fabsf((float)bound1_num / bound1_den - (float)num_in / den_in) <=
-        fabsf((float)bound2_num / bound2_den - (float)num_in / den_in)) {
-        *den_out = bound2_den;
-        return bound2_num;
-    }
-
-    *den_out = bound1_den;
-    return bound1_num;
-}
-
-void audiopwmout_reset() {
-    for (size_t i = 0; i < NUM_DMA_TIMERS; i++) {
-        dma_hw->timer[i] = 0;
-    }
+    pwm_set_both_levels(self->pwm_slice, 0, (1u << self->output_bits) - 1);
+    pwm_set_enabled(self->pwm_slice, false);
 }
 
 // Caller validates that pins are free.
 void common_hal_audiopwmio_pwmaudioout_construct(audiopwmio_pwmaudioout_obj_t *self,
-    const mcu_pin_obj_t *left_channel, const mcu_pin_obj_t *right_channel, uint16_t quiescent_value) {
+    const mcu_pin_obj_t *a_channel, const mcu_pin_obj_t *b_channel, uint ring_size_bits, uint max_transfer_count, uint channel_count, uint sample_rate, uint input_bytes, uint output_bits, bool phase_correct) {
 
-    self->stereo = right_channel != NULL;
-
-    if (self->stereo) {
-        if (pwm_gpio_to_slice_num(left_channel->number) != pwm_gpio_to_slice_num(right_channel->number)) {
-            mp_raise_ValueError(translate("Pins must share PWM slice"));
-        }
-        if (pwm_gpio_to_channel(left_channel->number) != 0) {
-            mp_raise_ValueError(translate("Stereo left must be on PWM channel A"));
-        }
-        if (pwm_gpio_to_channel(right_channel->number) != 1) {
-            mp_raise_ValueError(translate("Stereo right must be on PWM channel B"));
-        }
+    if (pwm_gpio_to_slice_num(a_channel->number) != pwm_gpio_to_slice_num(b_channel->number)) {
+        mp_raise_ValueError(translate("Pins must share PWM slice"));
     }
 
-    // Typically pwmout doesn't let us change frequency with two objects on the
-    // same PWM slice. However, we have private access to it so we can do what
-    // we want. ;-) We mark ourselves variable only if we're a mono output to
-    // prevent other PWM use on the other channel. If stereo, we say fixed
-    // frequency so we can allocate with ourselves.
-
-    // We don't actually know our frequency yet. It is set when
-    // pwmio_pwmout_set_top() is called. This value is unimportant; it just needs to be valid.
-    const uint32_t frequency = 12000000;
-
-    // Make sure the PWMOut's are "deinited" by default.
-    self->left_pwm.pin = NULL;
-    self->right_pwm.pin = NULL;
-
-    pwmout_result_t result =
-        common_hal_pwmio_pwmout_construct(&self->left_pwm, left_channel, 0, frequency, !self->stereo);
-    if (result == PWMOUT_OK && right_channel != NULL) {
-        result =
-            common_hal_pwmio_pwmout_construct(&self->right_pwm, right_channel, 0, frequency, false);
-        if (result != PWMOUT_OK) {
-            common_hal_pwmio_pwmout_deinit(&self->left_pwm);
-        }
+    uint pwm_slice = pwm_gpio_to_slice_num(a_channel->number);
+    if (!peripherals_pwm_claim(pwm_slice)) {
+        const char *msg = "pwm";
+        mp_obj_t msg_obj = mp_obj_new_str(msg, strlen(msg));
+        mp_raise_OSError_errno_str(MP_EBUSY, msg_obj);
     }
-    if (result != PWMOUT_OK) {
-        mp_raise_RuntimeError(translate("All timers in use"));
+    self->pwm_slice = pwm_slice;
+
+    common_hal_mcu_pin_claim(a_channel);
+    gpio_set_function(a_channel->number, GPIO_FUNC_PWM);
+    gpio_set_drive_strength(a_channel->number, GPIO_DRIVE_STRENGTH_12MA);
+    self->a_channel = a_channel;
+
+    common_hal_mcu_pin_claim(b_channel);
+    gpio_set_function(b_channel->number, GPIO_FUNC_PWM);
+    gpio_set_drive_strength(b_channel->number, GPIO_DRIVE_STRENGTH_12MA);
+    self->b_channel = b_channel;
+
+    pwm_config c = pwm_get_default_config();
+    pwm_config_set_output_polarity(&c, false, true);
+    pwm_config_set_phase_correct(&c, phase_correct);
+    pwm_config_set_wrap(&c, (1u << output_bits) - 2);
+    pwm_init(self->pwm_slice, &c, false);
+
+    if (!peripherals_dma_timer_claim(&self->dma_timer)) {
+        const char *msg = "dma_timer";
+        mp_obj_t msg_obj = mp_obj_new_str(msg, strlen(msg));
+        mp_raise_OSError_errno_str(MP_EBUSY, msg_obj);
+    }
+    uint timer = self->dma_timer;
+    dma_timer_set_fraction(timer, sample_rate >> 12, clock_get_hz(clk_sys) >> 12);
+
+    uint dreq = dma_get_timer_dreq(self->dma_timer);
+    if (!common_hal_rp2pio_dmaringbuf_alloc(&self->ringbuf, ring_size_bits, dreq, max_transfer_count, DMA_SIZE_16, false, &pwm_hw->slice[self->pwm_slice].cc)) {
+        const char *msg = "dma_channel";
+        mp_obj_t msg_obj = mp_obj_new_str(msg, strlen(msg));
+        mp_raise_OSError_errno_str(errno, msg_obj);
     }
 
-    self->quiescent_value = quiescent_value >> SAMPLE_BITS_TO_DISCARD;
-    common_hal_pwmio_pwmout_set_duty_cycle(&self->left_pwm, self->quiescent_value);
-    pwmio_pwmout_set_top(&self->left_pwm, PWM_TOP);
-    if (self->stereo) {
-        common_hal_pwmio_pwmout_set_duty_cycle(&self->right_pwm, self->quiescent_value);
-        pwmio_pwmout_set_top(&self->right_pwm, PWM_TOP);
-    }
+    pwm_set_both_levels(self->pwm_slice, 0, (1u << output_bits) - 1);
+    pwm_set_enabled(self->pwm_slice, true);
+    pwm_set_enabled(self->pwm_slice, false);
 
-    audio_dma_init(&self->dma);
-    self->pacing_timer = NUM_DMA_TIMERS;
+    self->channel_count = channel_count;
+    self->input_bytes = input_bytes;
+    self->output_bits = output_bits;
+
+    common_hal_rp2pio_dmaringbuf_set_handler(&self->ringbuf, _dmaringbuf_handler);
 }
 
 bool common_hal_audiopwmio_pwmaudioout_deinited(audiopwmio_pwmaudioout_obj_t *self) {
-    return common_hal_pwmio_pwmout_deinited(&self->left_pwm);
+    return self->pwm_slice == -1u;
 }
 
 void common_hal_audiopwmio_pwmaudioout_deinit(audiopwmio_pwmaudioout_obj_t *self) {
-    if (common_hal_audiopwmio_pwmaudioout_deinited(self)) {
-        return;
+    common_hal_rp2pio_dmaringbuf_deinit(&self->ringbuf);
+
+    if (self->dma_timer != -1u) {
+        peripherals_dma_timer_unclaim(self->dma_timer);
+        self->dma_timer = -1;
     }
 
-    if (common_hal_audiopwmio_pwmaudioout_get_playing(self)) {
-        common_hal_audiopwmio_pwmaudioout_stop(self);
+    if (self->pwm_slice != -1u) {
+        peripherals_pwm_unclaim(self->pwm_slice);
+        self->pwm_slice = -1;
     }
 
-    // TODO: ramp the pwm down from quiescent value to 0
-    common_hal_pwmio_pwmout_deinit(&self->left_pwm);
-    common_hal_pwmio_pwmout_deinit(&self->right_pwm);
+    if (self->a_channel != NULL) {
+        common_hal_reset_pin(self->a_channel);
+        self->a_channel = NULL;
+    }
 
-    audio_dma_deinit(&self->dma);
+    if (self->b_channel != NULL) {
+        common_hal_reset_pin(self->b_channel);
+        self->b_channel = NULL;
+    }
 }
 
-void common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, mp_obj_t sample, bool loop) {
-
-    if (common_hal_audiopwmio_pwmaudioout_get_playing(self)) {
-        common_hal_audiopwmio_pwmaudioout_stop(self);
+mp_uint_t common_hal_audiopwmio_pwmaudioout_write(mp_obj_t self_obj, const void *buf, mp_uint_t size, int *errcode) {
+    audiopwmio_pwmaudioout_obj_t *self = MP_OBJ_TO_PTR(self_obj);
+    if (size < sizeof(self->input_bytes)) {
+        *errcode = MP_EINVAL;
+        return MP_STREAM_ERROR;
     }
 
-    // TODO: Share pacing timers based on frequency.
-    size_t pacing_timer = NUM_DMA_TIMERS;
-    for (size_t i = 0; i < NUM_DMA_TIMERS; i++) {
-        if (dma_hw->timer[i] == 0) {
-            pacing_timer = i;
-            break;
+    void *pwm_buf;
+    size_t pwm_size = common_hal_rp2pio_dmaringbuf_acquire(&self->ringbuf, &pwm_buf) >> DMA_SIZE_16;
+    if (pwm_size == 0) {
+        *errcode = MP_EAGAIN;
+        return MP_STREAM_ERROR;
+    }
+    size_t n = MIN(size / (self->channel_count * self->input_bytes), pwm_size);
+    if (self->input_bytes == 1) {
+        for (size_t i = 0; i < n; i++) {
+            uint16_t sample = ((uint8_t *)buf)[i * self->channel_count];
+            sample >>= 8 - self->output_bits;
+            ((uint16_t *)pwm_buf)[i] = sample;
         }
+    } else if (self->input_bytes == 2) {
+        for (size_t i = 0; i < n; i++) {
+            uint16_t sample = ((int16_t *)buf)[i * self->channel_count];
+            sample ^= 0x8000;
+            sample >>= 16 - self->output_bits;
+            ((uint16_t *)pwm_buf)[i] = sample;
+        }
+    } else {
+        *errcode = MP_EINVAL;
+        return MP_STREAM_ERROR;
     }
-    if (pacing_timer == NUM_DMA_TIMERS) {
-        mp_raise_RuntimeError(translate("No DMA pacing timer found"));
+    common_hal_rp2pio_dmaringbuf_release(&self->ringbuf, n << DMA_SIZE_16);
+    return n * self->channel_count * self->input_bytes;
+}
+
+mp_uint_t common_hal_audiopwmio_pwmaudioout_ioctl(mp_obj_t self_obj, mp_uint_t request, uintptr_t arg, int *errcode) {
+    audiopwmio_pwmaudioout_obj_t *self = MP_OBJ_TO_PTR(self_obj);
+    switch (request) {
+        case MP_STREAM_FLUSH:
+            common_hal_rp2pio_dmaringbuf_flush(&self->ringbuf);
+            return 0;
+        case MP_STREAM_CLOSE:
+            common_hal_audiopwmio_pwmaudioout_deinit(self);
+            return 0;
+        default:
+            *errcode = MP_EINVAL;
+            return MP_STREAM_ERROR;
     }
-    uint32_t tx_register = (uint32_t)&pwm_hw->slice[self->left_pwm.slice].cc;
-    if (self->stereo) {
-        // Shift the destination if we are outputting to both PWM channels.
-        tx_register += self->left_pwm.ab_channel * sizeof(uint16_t);
+}
+
+size_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len) {
+    int errcode;
+    mp_uint_t result = mp_stream_write_exactly(MP_OBJ_FROM_PTR(self), buf, len, &errcode);
+    if (result == MP_STREAM_ERROR) {
+        mp_raise_OSError(errcode);
     }
 
-    self->pacing_timer = pacing_timer;
-
-    // Playback with two independent clocks. One is the sample rate which
-    // determines when we push a new sample to the PWM slice. The second is the
-    // PWM frequency itself.
-
-    // Determine the DMA divisor. The RP2040 has four pacing timers we can use
-    // to trigger the DMA. Each has a 16 bit fractional divisor system clock * X / Y where X and Y
-    // are 16-bit.
-
-    uint32_t sample_rate = audiosample_sample_rate(sample);
-
-    uint32_t system_clock = common_hal_mcu_processor_get_frequency();
-    uint32_t best_denominator;
-    uint32_t best_numerator = limit_denominator(0xffff, sample_rate, system_clock, &best_denominator);
-
-    dma_hw->timer[pacing_timer] = best_numerator << 16 | best_denominator;
-    audio_dma_result result = audio_dma_setup_playback(
-        &self->dma,
-        sample,
-        loop,
-        false, // single channel
-        0, // audio channel
-        false,  // output signed
-        BITS_PER_SAMPLE,
-        (uint32_t)tx_register,  // output register: PWM cc register
-        0x3b + pacing_timer); // data request line
-
-    if (result == AUDIO_DMA_DMA_BUSY) {
-        common_hal_audiopwmio_pwmaudioout_stop(self);
-        mp_raise_RuntimeError(translate("No DMA channel found"));
-    }
-    if (result == AUDIO_DMA_MEMORY_ERROR) {
-        common_hal_audiopwmio_pwmaudioout_stop(self);
-        mp_raise_RuntimeError(translate("Unable to allocate buffers for signed conversion"));
-    }
-    // OK! We got all of the resources we need and dma is ready.
+    common_hal_rp2pio_dmaringbuf_flush(&self->ringbuf);
+    pwm_set_enabled(self->pwm_slice, true);
+    return result;
 }
 
 void common_hal_audiopwmio_pwmaudioout_stop(audiopwmio_pwmaudioout_obj_t *self) {
-    if (self->pacing_timer < NUM_DMA_TIMERS) {
-        dma_hw->timer[self->pacing_timer] = 0;
-        self->pacing_timer = NUM_DMA_TIMERS;
-    }
-
-    audio_dma_stop(&self->dma);
-
-    // Set to quiescent level.
-    common_hal_pwmio_pwmout_set_duty_cycle(&self->left_pwm, self->quiescent_value);
-    pwmio_pwmout_set_top(&self->left_pwm, PWM_TOP);
-    if (self->stereo) {
-        common_hal_pwmio_pwmout_set_duty_cycle(&self->right_pwm, self->quiescent_value);
-        pwmio_pwmout_set_top(&self->right_pwm, PWM_TOP);
-    }
+    common_hal_rp2pio_dmaringbuf_clear(&self->ringbuf);
+    pwm_set_both_levels(self->pwm_slice, 0, (1u << self->output_bits) - 1);
+    pwm_set_enabled(self->pwm_slice, false);
 }
 
 bool common_hal_audiopwmio_pwmaudioout_get_playing(audiopwmio_pwmaudioout_obj_t *self) {
-    bool playing = audio_dma_get_playing(&self->dma);
+    return self->ringbuf.trans_count != 0;
+}
 
-    if (!playing && self->pacing_timer < NUM_DMA_TIMERS) {
-        common_hal_audiopwmio_pwmaudioout_stop(self);
+uint common_hal_audiopwmio_pwmaudioout_get_stalled(audiopwmio_pwmaudioout_obj_t *self) {
+    uint stalled = self->int_count;
+    self->int_count = 0;
+    return stalled;
+}
+
+uint common_hal_audiopwmio_pwmaudioout_get_available(audiopwmio_pwmaudioout_obj_t *self) {
+    rp2pio_dmaringbuf_t *ringbuf = &self->ringbuf;
+    return ringbuf->size - (ringbuf->next_write - ringbuf->next_read);
+}
+
+#ifndef NDEBUG
+void common_hal_audiopwmio_pwmaudioout_debug(const mp_print_t *print, audiopwmio_pwmaudioout_obj_t *self) {
+    mp_printf(print, "pwmaudioout %p\n", self);
+    if (self->dma_timer != -1u) {
+        mp_printf(print, "  dma_timer:   %d\n", self->dma_timer);
+    }
+    mp_printf(print, "  input_bytes: %d\n", self->input_bytes);
+    mp_printf(print, "  output_bits: %d\n", self->output_bits);
+    mp_printf(print, "  int_count:   %d\n", self->int_count);
+
+    if (self->pwm_slice != -1u) {
+        peripherals_pwm_debug(print, self->pwm_slice);
     }
 
-    return playing;
+    common_hal_rp2pio_dmaringbuf_debug(print, &self->ringbuf);
 }
-
-void common_hal_audiopwmio_pwmaudioout_pause(audiopwmio_pwmaudioout_obj_t *self) {
-    audio_dma_pause(&self->dma);
-}
-
-void common_hal_audiopwmio_pwmaudioout_resume(audiopwmio_pwmaudioout_obj_t *self) {
-    audio_dma_resume(&self->dma);
-}
-
-bool common_hal_audiopwmio_pwmaudioout_get_paused(audiopwmio_pwmaudioout_obj_t *self) {
-    return audio_dma_get_paused(&self->dma);
-}
+#endif

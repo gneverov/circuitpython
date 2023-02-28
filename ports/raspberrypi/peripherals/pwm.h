@@ -1,9 +1,10 @@
+
 /*
  * This file is part of the MicroPython project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
+ * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,11 +25,16 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
-#define MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
+#pragma once
 
-#include "py/obj.h"
+#include "py/mpprint.h"
 
-// Nothing now.
+void peripherals_pwm_reset(void);
 
-#endif  // MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
+bool peripherals_pwm_claim(uint pwm_slice);
+
+void peripherals_pwm_never_reset(uint pwm_slice);
+
+void peripherals_pwm_unclaim(uint pwm_slice);
+
+void peripherals_pwm_debug(const mp_print_t *print, uint pwm_slice);

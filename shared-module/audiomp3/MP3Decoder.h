@@ -25,54 +25,37 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_SHARED_MODULE_AUDIOIO_MP3FILE_H
-#define MICROPY_INCLUDED_SHARED_MODULE_AUDIOIO_MP3FILE_H
+#pragma once
 
-#include "supervisor/background_callback.h"
-#include "extmod/vfs_fat.h"
 #include "py/obj.h"
+#include "lib/mp3/src/mp3common.h"
 
-#include "shared-module/audiocore/__init__.h"
 
 typedef struct {
     mp_obj_base_t base;
-    struct _MP3DecInfo *decoder;
-    background_callback_t inbuf_fill_cb;
-    uint8_t *inbuf;
-    uint32_t inbuf_length;
-    uint32_t inbuf_offset;
-    int16_t *buffers[2];
-    uint32_t len;
-    uint32_t frame_buffer_size;
+    mp_obj_t stream_obj;
+    MP3DecInfo *decoder;
+    MP3FrameInfo frame_info;
 
-    uint32_t sample_rate;
-    pyb_file_obj_t *file;
-
-    uint8_t buffer_index;
-    uint8_t channel_count;
-    bool eof;
-
-    int8_t other_channel;
-    int8_t other_buffer_index;
-
-    uint32_t samples_decoded;
+    unsigned char *in_buffer;
+    int in_buffer_size;
+    int in_buffer_index;
 } audiomp3_mp3file_obj_t;
 
-// These are not available from Python because it may be called in an interrupt.
-void audiomp3_mp3file_reset_buffer(audiomp3_mp3file_obj_t *self,
-    bool single_channel_output,
-    uint8_t channel);
-audioio_get_buffer_result_t audiomp3_mp3file_get_buffer(audiomp3_mp3file_obj_t *self,
-    bool single_channel_output,
-    uint8_t channel,
-    uint8_t **buffer,
-    uint32_t *buffer_length);                                                     // length in bytes
-void audiomp3_mp3file_get_buffer_structure(audiomp3_mp3file_obj_t *self, bool single_channel_output,
-    bool *single_buffer, bool *samples_signed,
-    uint32_t *max_buffer_length, uint8_t *spacing);
+void common_hal_audiomp3_mp3file_init(audiomp3_mp3file_obj_t *self, const mp_obj_type_t *type);
 
-float audiomp3_mp3file_get_rms_level(audiomp3_mp3file_obj_t *self);
+bool common_hal_audiomp3_mp3file_open(audiomp3_mp3file_obj_t *self, mp_obj_t stream_obj, int *errcode);
 
-uint32_t common_hal_audiomp3_mp3file_get_samples_decoded(audiomp3_mp3file_obj_t *self);
+mp_uint_t common_hal_audiomp3_mp3file_read(mp_obj_t self_obj, void *buf, mp_uint_t size, int *errcode);
 
-#endif // MICROPY_INCLUDED_SHARED_MODULE_AUDIOIO_MP3FILE_H
+mp_uint_t common_hal_audiomp3_mp3file_ioctl(mp_obj_t obj, mp_uint_t request, uintptr_t arg, int *errcode);
+
+void common_hal_audiomp3_mp3file_deinit(audiomp3_mp3file_obj_t *self);
+
+bool common_hal_audiomp3_mp3file_deinited(audiomp3_mp3file_obj_t *self);
+
+uint32_t common_hal_audiomp3_mp3file_get_sample_rate(audiomp3_mp3file_obj_t *self);
+
+uint8_t common_hal_audiomp3_mp3file_get_bits_per_sample(audiomp3_mp3file_obj_t *self);
+
+uint8_t common_hal_audiomp3_mp3file_get_channel_count(audiomp3_mp3file_obj_t *self);

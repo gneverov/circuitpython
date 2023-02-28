@@ -207,6 +207,7 @@ typedef long mp_off_t;
 #define mp_import_stat mp_vfs_import_stat
 #define mp_builtin_open_obj mp_vfs_open_obj
 
+#define MICROPY_PY_IO_IOBASE          (1)
 
 // extra built in names to add to the global namespace
 // Not indented so as not to confused the editor.

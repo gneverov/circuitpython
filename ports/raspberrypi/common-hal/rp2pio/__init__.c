@@ -44,11 +44,3 @@ bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pin
     }
     return true;
 }
-
-void common_hal_rp2pio_reset(void) {
-    common_hal_rp2pio_dma_reset();
-    common_hal_rp2pio_pio_reset();
-
-    common_hal_rp2pio_dmaringbuf_reset();
-    common_hal_rp2pio_pioslice_reset();
-}

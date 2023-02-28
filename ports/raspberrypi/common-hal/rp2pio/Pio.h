@@ -38,13 +38,23 @@ typedef void (*rp2pio_pio_irq_handler_t)(PIO pio, enum pio_interrupt_source sour
 
 void common_hal_rp2pio_pio_cinit(void);
 
-void common_hal_rp2pio_pio_reset(void);
+void peripherals_pio_reset(void);
 
 void common_hal_rp2pio_pio_set_irq(PIO pio, enum pio_interrupt_source source, rp2pio_pio_irq_handler_t handler, void *context);
 
 void common_hal_rp2pio_pio_clear_irq(PIO pio, enum pio_interrupt_source source);
 
+
+bool peripherals_pio_sm_claim(PIO pio, uint *sm);
+
+void peripherals_pio_sm_never_reset(PIO pio, uint sm);
+
+void peripherals_pio_sm_unclaim(PIO pio, uint sm);
+
+
 bool common_hal_rp2pio_pio_claim_pin(PIO pio, const mcu_pin_obj_t *pin);
+
+// void peripherals_pio_pin_never_reset_pin(uint timer);
 
 void common_hal_rp2pio_pio_unclaim_pin(PIO pio, const mcu_pin_obj_t *pin);
 

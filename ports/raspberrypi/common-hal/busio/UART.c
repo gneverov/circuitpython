@@ -78,7 +78,12 @@ static busio_uart_obj_t *active_uarts[NUM_UARTS];
 
 static void _copy_into_ringbuf(ringbuf_t *r, uart_inst_t *uart) {
     while (uart_is_readable(uart) && ringbuf_num_empty(r) > 0) {
-        ringbuf_put(r, (uint8_t)uart_get_hw(uart)->dr);
+        uint8_t ch = (uint8_t)uart_get_hw(uart)->dr;
+        if (ch == mp_interrupt_char) {
+            mp_sched_keyboard_interrupt();
+            continue;
+        }
+        ringbuf_put(r, ch);
     }
 }
 

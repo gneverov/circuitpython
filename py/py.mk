@@ -208,6 +208,7 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/vfs_fat_file.o \
 	extmod/vfs_lfs.o \
 	extmod/utime_mphal.o \
+	shared/libc/malloc.o \
 	shared/libc/abort_.o \
 	shared/libc/printf.o \
 

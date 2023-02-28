@@ -27,6 +27,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "peripherals/pwm.h"
+#include "common-hal/rp2pio/Dma.h"
+#include "common-hal/rp2pio/Pio.h"
+
 #include "supervisor/background_callback.h"
 #include "supervisor/board.h"
 #include "supervisor/port.h"
@@ -190,12 +194,9 @@ void reset_port(void) {
     rtc_reset();
     #endif
 
-    #if CIRCUITPY_AUDIOPWMIO
-    audiopwmout_reset();
-    #endif
-    #if CIRCUITPY_AUDIOCORE
-    audio_dma_reset();
-    #endif
+    peripherals_dma_reset();
+    peripherals_pwm_reset();
+    peripherals_pio_reset();
 
     #if CIRCUITPY_SSL
     ssl_reset();

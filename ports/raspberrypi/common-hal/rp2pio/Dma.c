@@ -28,6 +28,12 @@
 #include "py/gc.h"
 #include "src/rp2_common/hardware_irq/include/hardware/irq.h"
 
+STATIC uint _claimed_channel_mask;
+STATIC uint _never_reset_channel_mask;
+
+STATIC uint _claimed_timer_mask;
+STATIC uint _never_reset_timer_mask;
+
 typedef struct {
     rp2pio_dma_irq_handler_t handler;
     void *context;
@@ -42,7 +48,6 @@ STATIC rp2pio_dma_irq_t *_get_irq_entry(uint channel) {
 STATIC void _irq_handler(void) {
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
         if (dma_channel_get_irq1_status(i)) {
-            dma_channel_set_irq1_enabled(i, false);
             rp2pio_dma_irq_t *entry = _get_irq_entry(i);
             entry->handler(i, entry->context);
         }
@@ -56,33 +61,109 @@ void common_hal_rp2pio_dma_cinit(void) {
 
     _irq_table = m_new_ll(rp2pio_dma_irq_t, NUM_DMA_CHANNELS);
     gc_never_free(_irq_table);
+    rp2pio_dma_irq_t empty_entry = { NULL, NULL};
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
-        common_hal_rp2pio_dma_clear_irq(i);
+        *_get_irq_entry(i) = empty_entry;
     }
 
     irq_add_shared_handler(DMA_IRQ_1, _irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
     irq_set_enabled(DMA_IRQ_1, true);
 }
 
-void common_hal_rp2pio_dma_reset(void) {
-    if (_irq_table == NULL) {
-        return;
-    }
+void peripherals_dma_reset(void) {
+    // if (_irq_table != NULL) {
+    //     irq_set_enabled(DMA_IRQ_1, false);
+    //     irq_remove_handler(DMA_IRQ_1, _irq_handler);
+    //     if (irq_has_shared_handler(DMA_IRQ_1)) {
+    //         irq_set_enabled(DMA_IRQ_1, true);
+    //     }
 
-    irq_set_enabled(DMA_IRQ_1, false);
-    irq_remove_handler(DMA_IRQ_1, _irq_handler);
-    if (irq_has_shared_handler(DMA_IRQ_1)) {
-        irq_set_enabled(DMA_IRQ_1, true);
-    }
+    //     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
+    //         if (_get_irq_entry(i)->handler) {
+    //             dma_channel_set_irq1_enabled(i, false);
+    //         }
+    //     }
 
+    //     gc_free(_irq_table);
+    // }
+    // _irq_table = NULL;
+
+    uint reset_channel_mask = _claimed_channel_mask & ~_never_reset_channel_mask;
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
-        if (_get_irq_entry(i)->handler) {
-            dma_channel_set_irq1_enabled(i, false);
+        if (reset_channel_mask & (1u << i)) {
+            peripherals_dma_channel_unclaim(i);
         }
     }
+    _claimed_channel_mask &= _never_reset_channel_mask;
 
-    gc_free(_irq_table);
-    _irq_table = NULL;
+    uint reset_timer_mask = _claimed_timer_mask & ~_never_reset_timer_mask;
+    for (uint i = 0; i < NUM_DMA_TIMERS; i++) {
+        if (reset_timer_mask & (1u << i)) {
+            peripherals_dma_timer_unclaim(i);
+        }
+    }
+    _claimed_timer_mask &= _never_reset_timer_mask;
+}
+
+bool peripherals_dma_channel_claim(uint *channel) {
+    int c = dma_claim_unused_channel(false);
+    if (c == -1) {
+        return false;
+    }
+
+    *channel = c;
+    uint bit = 1u << *channel;
+    _claimed_channel_mask |= bit;
+    return true;
+}
+
+void peripherals_dma_channel_never_reset(uint channel) {
+    uint bit = 1u << channel;
+    assert(_claimed_channel_mask & bit);
+    _never_reset_channel_mask |= bit;
+}
+
+void peripherals_dma_channel_unclaim(uint channel) {
+    uint bit = 1u << channel;
+    assert(_claimed_channel_mask & bit);
+
+    if (_claimed_channel_mask & bit) {
+        common_hal_rp2pio_dma_clear_irq(channel);
+        dma_channel_abort(channel);
+        common_hal_rp2pio_dma_acknowledge_irq(channel);
+        dma_channel_unclaim(channel);
+    }
+    _claimed_channel_mask &= ~bit;
+    _never_reset_channel_mask &= ~bit;
+}
+
+bool peripherals_dma_timer_claim(uint *timer) {
+    int t = dma_claim_unused_timer(false);
+    if (t == -1) {
+        return false;
+    }
+
+    *timer = t;
+    uint bit = 1u << *timer;
+    _claimed_timer_mask |= bit;
+    return true;
+}
+
+void peripherals_dma_timer_never_reset(uint timer) {
+    uint bit = 1u << timer;
+    assert(_claimed_timer_mask & bit);
+    _never_reset_timer_mask |= bit;
+}
+
+void peripherals_dma_timer_unclaim(uint timer) {
+    uint bit = 1u << timer;
+    assert(_claimed_timer_mask & bit);
+
+    if (_claimed_timer_mask & bit) {
+        dma_timer_unclaim(timer);
+    }
+    _claimed_timer_mask &= ~bit;
+    _never_reset_timer_mask &= ~bit;
 }
 
 void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context) {
@@ -105,7 +186,7 @@ void common_hal_rp2pio_dma_acknowledge_irq(uint channel) {
 
 void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived) {
     size_t size = 1 << size_bits;
-    void *ptr = gc_alloc(size, 0, long_lived);
+    void *ptr = gc_alloc(2 * size, 0, long_lived);
     if (!ptr) {
         return NULL;
     }
@@ -114,17 +195,19 @@ void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived) {
     if (offset) {
         void *tmp = gc_realloc(ptr, offset, false);
         assert(tmp);
-        ptr = gc_alloc(size, 0, long_lived);
+        void *head = gc_alloc(size, 0, long_lived);
+        ptr = head;
+        while ((size_t)ptr & (size - 1)) {
+            ptr = *(void **)ptr = gc_alloc(size, 0, long_lived);
+        }
         gc_free(tmp);
-        if (!ptr) {
-            return NULL;
+        while (head != ptr) {
+            tmp = *(void **)head;
+            gc_free(head);
+            head = tmp;
         }
     }
 
-    if ((size_t)ptr & (size - 1)) {
-        gc_free(ptr);
-        return NULL;
-    }
     return ptr;
 }
 

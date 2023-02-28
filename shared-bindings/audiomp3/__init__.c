@@ -24,12 +24,8 @@
  * THE SOFTWARE.
  */
 
-#include <stdint.h>
-
-#include "py/obj.h"
-#include "py/runtime.h"
-
 #include "shared-bindings/audiomp3/MP3Decoder.h"
+
 
 //| """Support for MP3-compressed audio files
 //|

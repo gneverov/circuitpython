@@ -30,6 +30,17 @@
 
 PIO all_pios[NUM_PIOS] = { pio0, pio1 };
 
+STATIC uint _claimed_sm_mask[NUM_PIOS];
+STATIC uint _never_reset_sm_mask[NUM_PIOS];
+
+STATIC uint *_get_claimed_sm_mask(PIO pio) {
+    return &_claimed_sm_mask[pio_get_index(pio)];
+}
+
+STATIC uint *_get_never_reset_sm_mask(PIO pio) {
+    return &_never_reset_sm_mask[pio_get_index(pio)];
+}
+
 typedef struct {
     rp2pio_pio_irq_handler_t handler;
     void *context;
@@ -47,7 +58,6 @@ STATIC rp2pio_pio_irq_t *_get_irq_entry(PIO pio, enum pio_interrupt_source sourc
 STATIC void _irq_handler(PIO pio) {
     for (int i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
         if (pio->ints0 & (1 << i)) {
-            pio_set_irq0_source_enabled(pio, i, false);
             rp2pio_pio_irq_t *entry = _get_irq_entry(pio, i);
             entry->handler(pio, i, entry->context);
         }
@@ -70,13 +80,13 @@ STATIC void _cinit_pio(uint pio_index, uint irq, irq_handler_t irq_handler) {
         return;
     }
 
-    pio_clear_instruction_memory(pio);
     *irq_table = m_new_ll(rp2pio_pio_irq_t, NUM_PIO_INTERRUPT_SOURCES);
     gc_never_free(*irq_table);
-
+    rp2pio_pio_irq_t empty_entry = { NULL, NULL};
     for (uint i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
-        common_hal_rp2pio_pio_clear_irq(pio, i);
+        *_get_irq_entry(pio, i) = empty_entry;
     }
+
     irq_add_shared_handler(irq, irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
     irq_set_enabled(irq, true);
 }
@@ -89,23 +99,19 @@ void common_hal_rp2pio_pio_cinit(void) {
 STATIC void _reset_pio(uint pio_index, uint irq, irq_handler_t irq_handler) {
     assert(pio_index < NUM_PIOS);
     PIO pio = all_pios[pio_index];
-    rp2pio_pio_irq_t **irq_table = &_irq_table[pio_index];
-    if (*irq_table == NULL) {
-        return;
+
+    uint *claimed_sm_mask = _get_claimed_sm_mask(pio);
+    uint never_reset_sm_mask = *_get_never_reset_sm_mask(pio);
+    uint reset_sm_mask = *claimed_sm_mask & ~never_reset_sm_mask;
+    for (uint i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
+        if (reset_sm_mask & (1u << i)) {
+            peripherals_pio_sm_unclaim(pio, i);
+        }
     }
-
-    irq_set_enabled(irq, false);
-    irq_remove_handler(irq, irq_handler);
-
-    for (uint i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
-        pio_set_irq0_source_enabled(pio, i, false);
-    }
-
-    gc_free(*irq_table);
-    *irq_table = NULL;
+    *claimed_sm_mask &= never_reset_sm_mask;
 }
 
-void common_hal_rp2pio_pio_reset(void) {
+void peripherals_pio_reset(void) {
     _reset_pio(0, PIO0_IRQ_0, _irq_handler_pio0);
     _reset_pio(1, PIO0_IRQ_1, _irq_handler_pio1);
 
@@ -124,6 +130,39 @@ void common_hal_rp2pio_pio_clear_irq(PIO pio, enum pio_interrupt_source source) 
     rp2pio_pio_irq_t *entry = _get_irq_entry(pio, source);
     entry->handler = NULL;
     entry->context = NULL;
+}
+
+bool peripherals_pio_sm_claim(PIO pio, uint *sm) {
+    int c = pio_claim_unused_sm(pio, false);
+    if (c == -1) {
+        return false;
+    }
+
+    *sm = c;
+    uint bit = 1u << *sm;
+    *_get_claimed_sm_mask(pio) |= bit;
+    return true;
+}
+
+void peripherals_pio_sm_never_reset(PIO pio, uint sm) {
+    uint *sm_mask = _get_claimed_sm_mask(pio);
+    uint bit = 1u << sm;
+    assert(*sm_mask & bit);
+    *sm_mask |= bit;
+}
+
+void peripherals_pio_sm_unclaim(PIO pio, uint sm) {
+    uint *sm_mask = _get_claimed_sm_mask(pio);
+    uint bit = 1u << sm;
+    assert(*sm_mask & bit);
+
+    if (*sm_mask & bit) {
+        common_hal_rp2pio_pio_clear_irq(pio, sm);
+        pio_sm_set_enabled(pio, sm, false);
+        pio_sm_unclaim(pio, sm);
+    }
+    *sm_mask &= ~bit;
+    *_get_never_reset_sm_mask(pio) &= ~bit;
 }
 
 bool common_hal_rp2pio_pio_claim_pin(PIO pio, const mcu_pin_obj_t *pin) {

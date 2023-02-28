@@ -130,9 +130,6 @@ endif
 ifeq ($(CIRCUITPY_AUDIOPWMIO),1)
 SRC_PATTERNS += audiopwmio/%
 endif
-ifeq ($(CIRCUITPY_AUDIOCORE),1)
-SRC_PATTERNS += audiocore/%
-endif
 ifeq ($(CIRCUITPY_AUDIOMIXER),1)
 SRC_PATTERNS += audiomixer/%
 endif

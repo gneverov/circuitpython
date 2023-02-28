@@ -33,13 +33,28 @@ typedef void (*rp2pio_dma_irq_handler_t)(uint channel, void *context);
 
 void common_hal_rp2pio_dma_cinit(void);
 
-void common_hal_rp2pio_dma_reset(void);
+void peripherals_dma_reset(void);
 
 void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context);
 
 void common_hal_rp2pio_dma_clear_irq(uint channel);
 
 void common_hal_rp2pio_dma_acknowledge_irq(uint channel);
+
+
+bool peripherals_dma_channel_claim(uint *channel);
+
+void peripherals_dma_channel_never_reset(uint channel);
+
+void peripherals_dma_channel_unclaim(uint channel);
+
+
+bool peripherals_dma_timer_claim(uint *timer);
+
+void peripherals_dma_timer_never_reset(uint timer);
+
+void peripherals_dma_timer_unclaim(uint timer);
+
 
 void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived);
 

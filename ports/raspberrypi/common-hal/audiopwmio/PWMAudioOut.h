@@ -24,25 +24,47 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_AUDIOPWMIO_PWMAUDIOOUT_H
-#define MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_AUDIOPWMIO_PWMAUDIOOUT_H
+#pragma once
 
-#include "common-hal/pwmio/PWMOut.h"
-
-#include "audio_dma.h"
+#include "common-hal/rp2pio/DmaRingBuf.h"
+#include "peripherals/pins.h"
 
 typedef struct {
     mp_obj_base_t base;
-    pwmio_pwmout_obj_t left_pwm;
-    pwmio_pwmout_obj_t right_pwm;
-    audio_dma_t dma;
-    uint16_t quiescent_value;
-    uint8_t pacing_timer;
-    bool stereo;     // if false, only using left_pwm.
+    const mcu_pin_obj_t *a_channel;
+    const mcu_pin_obj_t *b_channel;
+    uint pwm_slice;
+    rp2pio_dmaringbuf_t ringbuf;
+    uint dma_timer;
+
+    uint channel_count;
+    uint input_bytes;
+    uint output_bits;
+    uint int_count;
 } audiopwmio_pwmaudioout_obj_t;
 
-void audiopwmout_reset(void);
+void common_hal_audiopwmio_pwmaudioout_init(audiopwmio_pwmaudioout_obj_t *self, const mp_obj_type_t *type);
 
-void audiopwmout_background(void);
+void common_hal_audiopwmio_pwmaudioout_construct(audiopwmio_pwmaudioout_obj_t *self, const mcu_pin_obj_t *a_channel, const mcu_pin_obj_t *b_channel, uint ring_size_bits, uint max_transfer_count, uint channel_count, uint sample_rate, uint input_bytes, uint output_bits, bool phase_correct);
 
-#endif  // MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_AUDIOPWMIO_PWMAUDIOOUT_H
+bool common_hal_audiopwmio_pwmaudioout_deinited(audiopwmio_pwmaudioout_obj_t *self);
+
+void common_hal_audiopwmio_pwmaudioout_deinit(audiopwmio_pwmaudioout_obj_t *self);
+
+mp_uint_t common_hal_audiopwmio_pwmaudioout_write(mp_obj_t self_obj, const void *buf, mp_uint_t size, int *errcode);
+
+mp_uint_t common_hal_audiopwmio_pwmaudioout_ioctl(mp_obj_t self_obj, mp_uint_t request, uintptr_t arg, int *errcode);
+
+size_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len);
+
+void common_hal_audiopwmio_pwmaudioout_stop(audiopwmio_pwmaudioout_obj_t *self);
+
+bool common_hal_audiopwmio_pwmaudioout_get_playing(audiopwmio_pwmaudioout_obj_t *self);
+
+uint common_hal_audiopwmio_pwmaudioout_get_stalled(audiopwmio_pwmaudioout_obj_t *self);
+
+uint common_hal_audiopwmio_pwmaudioout_get_available(audiopwmio_pwmaudioout_obj_t *self);
+
+#ifndef NDEBUG
+void common_hal_audiopwmio_pwmaudioout_debug(const mp_print_t *print, audiopwmio_pwmaudioout_obj_t *self);
+#endif

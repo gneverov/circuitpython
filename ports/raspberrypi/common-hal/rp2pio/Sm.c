@@ -139,7 +139,7 @@ bool common_hal_rp2pio_sm_configure_fifo(rp2pio_sm_obj_t *self, uint ring_size_b
 
     PIO pio = self->pio_slice->pio;
     const volatile void *fifo_addr = tx ? &pio->txf[self->sm] : &pio->rxf[self->sm];
-    if (!common_hal_rp2pio_dmaringbuf_alloc(ringbuf, ring_size_bits, pio_get_dreq(pio, self->sm, tx), transfer_size, bswap, (volatile void *)fifo_addr)) {
+    if (!common_hal_rp2pio_dmaringbuf_alloc(ringbuf, ring_size_bits, pio_get_dreq(pio, self->sm, tx), 0, transfer_size, bswap, (volatile void *)fifo_addr)) {
         common_hal_rp2pio_dmaringbuf_deinit(ringbuf);
         return false;
     }
