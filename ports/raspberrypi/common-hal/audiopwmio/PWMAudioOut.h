@@ -55,7 +55,7 @@ mp_uint_t common_hal_audiopwmio_pwmaudioout_write(mp_obj_t self_obj, const void 
 
 mp_uint_t common_hal_audiopwmio_pwmaudioout_ioctl(mp_obj_t self_obj, mp_uint_t request, uintptr_t arg, int *errcode);
 
-size_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len);
+mp_obj_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len);
 
 void common_hal_audiopwmio_pwmaudioout_stop(audiopwmio_pwmaudioout_obj_t *self);
 

@@ -180,7 +180,7 @@ STATIC mp_obj_t audiopwmio_pwmaudioout_obj_play(mp_obj_t self_in, mp_obj_t buffe
     mp_buffer_info_t buffer;
     mp_get_buffer_raise(buffer_obj, &buffer, MP_BUFFER_READ);
 
-    return mp_obj_new_int(common_hal_audiopwmio_pwmaudioout_play(self, buffer.buf, buffer.len));
+    return common_hal_audiopwmio_pwmaudioout_play(self, buffer.buf, buffer.len);
 }
 MP_DEFINE_CONST_FUN_OBJ_2(audiopwmio_pwmaudioout_play_obj, audiopwmio_pwmaudioout_obj_play);
 

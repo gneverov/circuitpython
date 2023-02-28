@@ -142,7 +142,7 @@ void common_hal_audiopwmio_pwmaudioout_deinit(audiopwmio_pwmaudioout_obj_t *self
 
 mp_uint_t common_hal_audiopwmio_pwmaudioout_write(mp_obj_t self_obj, const void *buf, mp_uint_t size, int *errcode) {
     audiopwmio_pwmaudioout_obj_t *self = MP_OBJ_TO_PTR(self_obj);
-    if (size < sizeof(self->input_bytes)) {
+    if (size < self->input_bytes) {
         *errcode = MP_EINVAL;
         return MP_STREAM_ERROR;
     }
@@ -190,13 +190,8 @@ mp_uint_t common_hal_audiopwmio_pwmaudioout_ioctl(mp_obj_t self_obj, mp_uint_t r
     }
 }
 
-size_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len) {
-    int errcode;
-    mp_uint_t result = mp_stream_write_exactly(MP_OBJ_FROM_PTR(self), buf, len, &errcode);
-    if (result == MP_STREAM_ERROR) {
-        mp_raise_OSError(errcode);
-    }
-
+mp_obj_t common_hal_audiopwmio_pwmaudioout_play(audiopwmio_pwmaudioout_obj_t *self, const void *buf, size_t len) {
+    mp_obj_t result = mp_stream_write(MP_OBJ_FROM_PTR(self), buf, len, MP_STREAM_RW_WRITE);
     common_hal_rp2pio_dmaringbuf_flush(&self->ringbuf);
     pwm_set_enabled(self->pwm_slice, true);
     return result;
