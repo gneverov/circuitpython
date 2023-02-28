@@ -31,5 +31,3 @@
 
 
 bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins);
-
-void common_hal_rp2pio_reset(void);

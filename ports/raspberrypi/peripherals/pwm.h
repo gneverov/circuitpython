@@ -1,3 +1,4 @@
+
 /*
  * This file is part of the MicroPython project, http://micropython.org/
  *
@@ -27,20 +28,15 @@
 #pragma once
 
 #include "py/mpprint.h"
-#include "src/rp2_common/hardware_dma/include/hardware/dma.h"
 
-typedef void (*rp2pio_dma_irq_handler_t)(uint channel, void *context);
+void peripherals_pwm_init(void);
 
-void common_hal_rp2pio_dma_cinit(void);
+void peripherals_pwm_reset(void);
 
-void common_hal_rp2pio_dma_reset(void);
+bool peripherals_pwm_claim(uint pwm_slice);
 
-void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context);
+void peripherals_pwm_never_reset(uint pwm_slice);
 
-void common_hal_rp2pio_dma_clear_irq(uint channel);
+void peripherals_pwm_unclaim(uint pwm_slice);
 
-void common_hal_rp2pio_dma_acknowledge_irq(uint channel);
-
-void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived);
-
-void common_hal_rp2pio_dma_debug(const mp_print_t *print, uint channel);
+void peripherals_pwm_debug(const mp_print_t *print, uint pwm_slice);

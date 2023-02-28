@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Jeff Epler for Adafruit Industries
+ * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,19 +24,38 @@
  * THE SOFTWARE.
  */
 
-#include "common-hal/rp2pio/__init__.h"
+#pragma once
+
+#include "py/obj.h"
+#include "shared-bindings/microcontroller/Pin.h"
+#include "src/rp2_common/hardware_pio/include/hardware/pio.h"
+
+#define NUM_PIO_INTERRUPT_SOURCES 12
+
+extern PIO all_pios[NUM_PIOS];
+
+typedef void (*peripherals_pio_irq_handler_t)(PIO pio, enum pio_interrupt_source source, void *context);
+
+void peripherals_pio_init(void);
+
+void peripherals_pio_reset(void);
+
+void peripherals_pio_set_irq(PIO pio, enum pio_interrupt_source source, peripherals_pio_irq_handler_t handler, void *context);
+
+void peripherals_pio_clear_irq(PIO pio, enum pio_interrupt_source source);
 
 
-bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins) {
-    if (len == 0) {
-        return true;
-    }
-    const mcu_pin_obj_t *last_pin = pins[0];
-    for (size_t i = 1; i < len; i++) {
-        const mcu_pin_obj_t *pin = pins[i];
-        if (pin->number != last_pin->number + 1) {
-            return false;
-        }
-    }
-    return true;
-}
+bool peripherals_pio_sm_claim(PIO pio, uint *sm);
+
+void peripherals_pio_sm_never_reset(PIO pio, uint sm);
+
+void peripherals_pio_sm_unclaim(PIO pio, uint sm);
+
+
+bool peripherals_pio_claim_pin(PIO pio, const mcu_pin_obj_t *pin);
+
+// void peripherals_pio_pin_never_reset_pin(uint timer);
+
+void peripherals_pio_unclaim_pin(PIO pio, const mcu_pin_obj_t *pin);
+
+void peripherals_pio_debug(const mp_print_t *print, PIO pio);

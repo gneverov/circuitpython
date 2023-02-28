@@ -26,31 +26,49 @@
 
 #pragma once
 
-#include "py/ringbuf.h"
+#include "py/mpprint.h"
 #include "src/rp2_common/hardware_dma/include/hardware/dma.h"
 
-typedef struct {
+typedef struct _rp2pio_dmaringbuf rp2pio_dmaringbuf_t;
+
+typedef void (*rp2pio_dmaringbuf_handler_t)(rp2pio_dmaringbuf_t *ringbuf);
+
+struct _rp2pio_dmaringbuf {
     uint channel;
-    ringbuf_t ringbuf;
-    uint32_t trans_count;
+    uint size;
+    void *buffer;
+    volatile uint next_read;
+    volatile uint next_write;
+    volatile uint trans_count;
     bool tx;
+    uint max_transfer_count;
     enum dma_channel_transfer_size transfer_size;
 
-    uint int_count;
-} rp2pio_dmaringbuf_t;
+    rp2pio_dmaringbuf_handler_t handler;
 
-void common_hal_rp2pio_dmaringbuf_reset(void);
+    uint int_count;
+};
 
 void common_hal_rp2pio_dmaringbuf_init(rp2pio_dmaringbuf_t *ringbuf, bool tx);
 
-bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_size_bits, uint dreq, enum dma_channel_transfer_size transfer_size, bool bswap, volatile void *target_addr);
+bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_size_bits, uint dreq, uint max_transfer_count, enum dma_channel_transfer_size transfer_size, bool bswap, volatile void *target_addr);
 
 void common_hal_rp2pio_dmaringbuf_deinit(rp2pio_dmaringbuf_t *ringbuf);
+
+void common_hal_rp2pio_dmaringbuf_sync(rp2pio_dmaringbuf_t *ringbuf);
+
+void common_hal_rp2pio_dmaringbuf_flush(rp2pio_dmaringbuf_t *ringbuf);
+
+size_t common_hal_rp2pio_dmaringbuf_acquire(rp2pio_dmaringbuf_t *ringbuf, void **buf);
+
+void common_hal_rp2pio_dmaringbuf_release(rp2pio_dmaringbuf_t *ringbuf, size_t bufsize);
 
 size_t common_hal_rp2pio_dmaringbuf_transfer(rp2pio_dmaringbuf_t *ringbuf, void *buf, size_t bufsize);
 
 void common_hal_rp2pio_dmaringbuf_clear(rp2pio_dmaringbuf_t *ringbuf);
 
 void common_hal_rp2pio_dmaringbuf_set_enabled(rp2pio_dmaringbuf_t *ringbuf, bool enable);
+
+void common_hal_rp2pio_dmaringbuf_set_handler(rp2pio_dmaringbuf_t *ringbuf, rp2pio_dmaringbuf_handler_t handler);
 
 void common_hal_rp2pio_dmaringbuf_debug(const mp_print_t *print, rp2pio_dmaringbuf_t *ringbuf);
