@@ -100,7 +100,8 @@
 	url = https://github.com/adafruit/Adafruit_CircuitPython_SD.git
 [submodule "lib/mp3"]
 	path = lib/mp3
-	url = https://github.com/adafruit/Adafruit_MP3
+	url = file:///home/gneverov/Adafruit_MP3/
+	branch = async_audio
 [submodule "ports/mimxrt10xx/sdk"]
 	path = ports/mimxrt10xx/sdk
 	url = https://github.com/adafruit/MIMXRT10xx_SDK
