@@ -26,36 +26,36 @@
 
 #pragma once
 
-#include "py/mpprint.h"
-#include "src/rp2_common/hardware_dma/include/hardware/dma.h"
+#include "py/obj.h"
+#include "shared-bindings/microcontroller/Pin.h"
+#include "src/rp2_common/hardware_pio/include/hardware/pio.h"
 
-typedef void (*rp2pio_dma_irq_handler_t)(uint channel, void *context);
+#define NUM_PIO_INTERRUPT_SOURCES 12
 
-void common_hal_rp2pio_dma_cinit(void);
+extern PIO all_pios[NUM_PIOS];
 
-void peripherals_dma_reset(void);
+typedef void (*peripherals_pio_irq_handler_t)(PIO pio, enum pio_interrupt_source source, void *context);
 
-void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context);
+void peripherals_pio_init(void);
 
-void common_hal_rp2pio_dma_clear_irq(uint channel);
+void peripherals_pio_reset(void);
 
-void common_hal_rp2pio_dma_acknowledge_irq(uint channel);
+void peripherals_pio_set_irq(PIO pio, enum pio_interrupt_source source, peripherals_pio_irq_handler_t handler, void *context);
 
-
-bool peripherals_dma_channel_claim(uint *channel);
-
-void peripherals_dma_channel_never_reset(uint channel);
-
-void peripherals_dma_channel_unclaim(uint channel);
+void peripherals_pio_clear_irq(PIO pio, enum pio_interrupt_source source);
 
 
-bool peripherals_dma_timer_claim(uint *timer);
+bool peripherals_pio_sm_claim(PIO pio, uint *sm);
 
-void peripherals_dma_timer_never_reset(uint timer);
+void peripherals_pio_sm_never_reset(PIO pio, uint sm);
 
-void peripherals_dma_timer_unclaim(uint timer);
+void peripherals_pio_sm_unclaim(PIO pio, uint sm);
 
 
-void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived);
+bool peripherals_pio_claim_pin(PIO pio, const mcu_pin_obj_t *pin);
 
-void common_hal_rp2pio_dma_debug(const mp_print_t *print, uint channel);
+// void peripherals_pio_pin_never_reset_pin(uint timer);
+
+void peripherals_pio_unclaim_pin(PIO pio, const mcu_pin_obj_t *pin);
+
+void peripherals_pio_debug(const mp_print_t *print, PIO pio);

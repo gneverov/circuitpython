@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-#include "common-hal/rp2pio/Dma.h"
+#include "peripherals/dma.h"
 #include "py/gc.h"
 #include "src/rp2_common/hardware_irq/include/hardware/irq.h"
 
@@ -35,33 +35,33 @@ STATIC uint _claimed_timer_mask;
 STATIC uint _never_reset_timer_mask;
 
 typedef struct {
-    rp2pio_dma_irq_handler_t handler;
+    peripherals_dma_irq_handler_t handler;
     void *context;
-} rp2pio_dma_irq_t;
+} peripherals_dma_irq_t;
 
-STATIC rp2pio_dma_irq_t *_irq_table;
+STATIC peripherals_dma_irq_t *_irq_table;
 
-STATIC rp2pio_dma_irq_t *_get_irq_entry(uint channel) {
+STATIC peripherals_dma_irq_t *_get_irq_entry(uint channel) {
     return &_irq_table[channel];
 }
 
 STATIC void _irq_handler(void) {
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
         if (dma_channel_get_irq1_status(i)) {
-            rp2pio_dma_irq_t *entry = _get_irq_entry(i);
+            peripherals_dma_irq_t *entry = _get_irq_entry(i);
             entry->handler(i, entry->context);
         }
     }
 }
 
-void common_hal_rp2pio_dma_cinit(void) {
+void peripherals_dma_init(void) {
     if (_irq_table != NULL) {
         return;
     }
 
-    _irq_table = m_new_ll(rp2pio_dma_irq_t, NUM_DMA_CHANNELS);
+    _irq_table = m_new_ll(peripherals_dma_irq_t, NUM_DMA_CHANNELS);
     gc_never_free(_irq_table);
-    rp2pio_dma_irq_t empty_entry = { NULL, NULL};
+    peripherals_dma_irq_t empty_entry = { NULL, NULL};
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
         *_get_irq_entry(i) = empty_entry;
     }
@@ -128,9 +128,9 @@ void peripherals_dma_channel_unclaim(uint channel) {
     assert(_claimed_channel_mask & bit);
 
     if (_claimed_channel_mask & bit) {
-        common_hal_rp2pio_dma_clear_irq(channel);
+        peripherals_dma_clear_irq(channel);
         dma_channel_abort(channel);
-        common_hal_rp2pio_dma_acknowledge_irq(channel);
+        peripherals_dma_acknowledge_irq(channel);
         dma_channel_unclaim(channel);
     }
     _claimed_channel_mask &= ~bit;
@@ -166,25 +166,25 @@ void peripherals_dma_timer_unclaim(uint timer) {
     _never_reset_timer_mask &= ~bit;
 }
 
-void common_hal_rp2pio_dma_set_irq(uint channel, rp2pio_dma_irq_handler_t handler, void *context) {
-    rp2pio_dma_irq_t *entry = _get_irq_entry(channel);
+void peripherals_dma_set_irq(uint channel, peripherals_dma_irq_handler_t handler, void *context) {
+    peripherals_dma_irq_t *entry = _get_irq_entry(channel);
     entry->handler = handler;
     entry->context = context;
     dma_channel_set_irq1_enabled(channel, true);
 }
 
-void common_hal_rp2pio_dma_clear_irq(uint channel) {
+void peripherals_dma_clear_irq(uint channel) {
     dma_channel_set_irq1_enabled(channel, false);
-    rp2pio_dma_irq_t *entry = _get_irq_entry(channel);
+    peripherals_dma_irq_t *entry = _get_irq_entry(channel);
     entry->handler = NULL;
     entry->context = NULL;
 }
 
-void common_hal_rp2pio_dma_acknowledge_irq(uint channel) {
+void peripherals_dma_acknowledge_irq(uint channel) {
     dma_channel_acknowledge_irq1(channel);
 }
 
-void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived) {
+void *peripherals_dma_alloc_aligned(int size_bits, bool long_lived) {
     size_t size = 1 << size_bits;
     void *ptr = gc_alloc(2 * size, 0, long_lived);
     if (!ptr) {
@@ -211,7 +211,7 @@ void *common_hal_rp2pio_dma_alloc_aligned(int size_bits, bool long_lived) {
     return ptr;
 }
 
-void common_hal_rp2pio_dma_debug(const mp_print_t *print, uint channel) {
+void peripherals_dma_debug(const mp_print_t *print, uint channel) {
     check_dma_channel_param(channel);
     dma_channel_hw_t *hw = &dma_hw->ch[channel];
     mp_printf(print, "dma channel %u\n", channel);
@@ -228,7 +228,7 @@ void common_hal_rp2pio_dma_debug(const mp_print_t *print, uint channel) {
     mp_printf(print, "  inte:        %d\n", !!(dma_hw->inte1 & bit));
     mp_printf(print, "  ints:        %d\n", !!(dma_hw->ints1 & bit));
 
-    rp2pio_dma_irq_t *entry = _get_irq_entry(channel);
+    peripherals_dma_irq_t *entry = _get_irq_entry(channel);
     mp_printf(print, "  handler:     %p\n", entry->handler);
     mp_printf(print, "  context:     %p\n", entry->context);
 }

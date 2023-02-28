@@ -31,8 +31,6 @@
 #include "bindings/rp2pio/Sm.h"
 #include "bindings/rp2pio/StateMachine.h"
 #include "common-hal/rp2pio/__init__.h"
-#include "common-hal/rp2pio/Dma.h"
-#include "common-hal/rp2pio/Pio.h"
 #include "shared-bindings/supervisor/Runtime.h"
 
 //| """Hardware interface to RP2 series' programmable IO (PIO) peripheral.
@@ -64,16 +62,8 @@ STATIC mp_obj_t rp2pio_pins_are_sequential(mp_obj_t pins_obj) {
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(rp2pio_pins_are_sequential_obj, rp2pio_pins_are_sequential);
 
-STATIC mp_obj_t rp2pio_init(void) {
-    common_hal_rp2pio_dma_cinit();
-    common_hal_rp2pio_pio_cinit();
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(rp2pio_init_obj, rp2pio_init);
-
 STATIC const mp_rom_map_elem_t rp2pio_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_rp2pio) },
-    { MP_ROM_QSTR(MP_QSTR___init__), MP_ROM_PTR(&rp2pio_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_StateMachine), MP_ROM_PTR(&rp2pio_statemachine_type) },
     { MP_ROM_QSTR(MP_QSTR_pins_are_sequential), MP_ROM_PTR(&rp2pio_pins_are_sequential_obj) },
     { MP_ROM_QSTR(MP_QSTR_dmachannel_transfer), MP_ROM_PTR(&rp2pio_dmachannel_transfer_obj) },

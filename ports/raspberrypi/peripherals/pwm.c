@@ -31,6 +31,9 @@
 STATIC uint _claimed_mask;
 STATIC uint _never_reset_mask;
 
+void peripherals_pwm_init(void) {
+}
+
 void peripherals_pwm_reset(void) {
     uint reset_mask = _claimed_mask & ~_never_reset_mask;
     for (uint i = 0; i < NUM_PWM_SLICES; i++) {

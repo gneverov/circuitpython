@@ -26,7 +26,7 @@
 
 #include "bindings/rp2pio/DmaChannel.h"
 #include "shared-bindings/_asyncio/Loop.h"
-#include "common-hal/rp2pio/Dma.h"
+#include "peripherals/dma.h"
 #include "shared-module/_asyncio/__init__.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
@@ -36,14 +36,14 @@ STATIC void _irq_handler(uint channel, mp_obj_t context_obj);
 
 STATIC mp_obj_t _loop_callback(mp_obj_t channel_obj, mp_obj_t future_obj) {
     int channel = MP_OBJ_SMALL_INT_VALUE(channel_obj);
-    dma_channel_acknowledge_irq1(channel);
+    peripherals_dma_acknowledge_irq(channel);
     if (dma_channel_is_busy(channel)) {
         // reset interrupt
         // return mp_const_none;
         mp_raise_RuntimeError(NULL);
     }
 
-    dma_channel_unclaim(channel);
+    peripherals_dma_channel_unclaim(channel);
     mp_obj_t args[3];
     mp_load_method(future_obj, MP_QSTR_set_result, args);
     args[2] = mp_const_none;
@@ -76,15 +76,15 @@ STATIC mp_obj_t rp2pio_dmachannel_transfer(mp_obj_t src_obj, mp_obj_t dst_obj) {
     mp_load_method(loop_obj, MP_QSTR_create_future, dest);
     mp_obj_t future_obj = mp_call_function_1(dest[0], dest[1]);
 
-    int channel = dma_claim_unused_channel(false);
-    if (channel == -1) {
+    uint channel;
+    if (!peripherals_dma_channel_claim(&channel)) {
         mp_raise_OSError(MP_EBUSY);
     }
 
     _asyncio_loop_obj_t *native_loop = _asyncio_get_native_loop(loop_obj);
     mp_obj_t args[] = {MP_OBJ_NEW_SMALL_INT(channel), future_obj };
     void *context = common_hal__asyncio_loop_call_soon_entry_alloc(native_loop, loop_obj, MP_OBJ_FROM_PTR(&_loop_callback_obj), 2, args);
-    common_hal_rp2pio_dma_set_irq(channel, _irq_handler, context);
+    peripherals_dma_set_irq(channel, _irq_handler, context);
 
     dma_channel_config c = dma_channel_get_default_config(channel);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_8);

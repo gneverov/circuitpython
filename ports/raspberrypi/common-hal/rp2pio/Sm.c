@@ -27,7 +27,6 @@
 #include "common-hal/rp2pio/Sm.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "shared-module/_asyncio/Loop.h"
-#include "common-hal/rp2pio/Pio.h"
 #include "py/mperrno.h"
 #include "src/rp2_common/hardware_clocks/include/hardware/clocks.h"
 #include "src/rp2_common/hardware_gpio/include/hardware/gpio.h"
@@ -154,12 +153,12 @@ void common_hal_rp2pio_sm_reset(rp2pio_sm_obj_t *self, uint initial_pc) {
     common_hal_rp2pio_dmaringbuf_clear(&self->rx_ringbuf);
 }
 
-bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_irq_handler_t handler, void *context) {
+bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, peripherals_pio_irq_handler_t handler, void *context) {
     rp2pio_dmaringbuf_t *ringbuf = tx ? &self->tx_ringbuf : &self->rx_ringbuf;
     bool *waiting = tx ? &self->tx_waiting : &self->rx_waiting;
     PIO pio = self->pio_slice->pio;
     enum pio_interrupt_source source = (tx ? pis_sm0_tx_fifo_not_full : pis_sm0_rx_fifo_not_empty) << self->sm;
-    common_hal_rp2pio_pio_clear_irq(pio, source);
+    peripherals_pio_clear_irq(pio, source);
 
     if (!*waiting) {
         common_hal_rp2pio_dmaringbuf_set_enabled(ringbuf, false);
@@ -171,7 +170,7 @@ bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_
         }
     }
     if (*waiting) {
-        common_hal_rp2pio_pio_set_irq(pio, source, handler, context);
+        peripherals_pio_set_irq(pio, source, handler, context);
     }
     return *waiting;
 }
@@ -180,7 +179,7 @@ void common_hal_rp2pio_sm_end_wait(rp2pio_sm_obj_t *self, bool tx) {
     rp2pio_dmaringbuf_t *ringbuf = tx ? &self->tx_ringbuf : &self->rx_ringbuf;
     bool *waiting = tx ? &self->tx_waiting : &self->rx_waiting;
     enum pio_interrupt_source source = (tx ? pis_sm0_tx_fifo_not_full : pis_sm0_rx_fifo_not_empty) << self->sm;
-    common_hal_rp2pio_pio_clear_irq(self->pio_slice->pio, source);
+    peripherals_pio_clear_irq(self->pio_slice->pio, source);
 
     *waiting = false;
     if (ringbuf->channel != -1u) {

@@ -27,7 +27,7 @@
 #pragma once
 
 #include "common-hal/rp2pio/DmaRingBuf.h"
-#include "common-hal/rp2pio/Pio.h"
+#include "peripherals/pio.h"
 #include "common-hal/rp2pio/PioSlice.h"
 #include "py/obj.h"
 #include "src/rp2_common/hardware_pio/include/hardware/pio.h"
@@ -65,7 +65,7 @@ bool common_hal_rp2pio_sm_configure_fifo(rp2pio_sm_obj_t *self, uint ring_size_b
 
 void common_hal_rp2pio_sm_reset(rp2pio_sm_obj_t *self, uint initial_pc);
 
-bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, rp2pio_pio_irq_handler_t handler, void *context);
+bool common_hal_rp2pio_sm_begin_wait(rp2pio_sm_obj_t *self, bool tx, peripherals_pio_irq_handler_t handler, void *context);
 
 void common_hal_rp2pio_sm_end_wait(rp2pio_sm_obj_t *self, bool tx);
 

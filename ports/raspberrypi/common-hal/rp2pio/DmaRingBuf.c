@@ -25,7 +25,7 @@
  */
 
 #include "common-hal/rp2pio/DmaRingBuf.h"
-#include "common-hal/rp2pio/Dma.h"
+#include "peripherals/dma.h"
 #include "py/gc.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
@@ -53,7 +53,7 @@ bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_
         return false;
     }
 
-    void *buffer = common_hal_rp2pio_dma_alloc_aligned(ring_size_bits, false);
+    void *buffer = peripherals_dma_alloc_aligned(ring_size_bits, false);
     if (!buffer) {
         errno = MP_ENOMEM;
         return false;
@@ -82,7 +82,7 @@ bool common_hal_rp2pio_dmaringbuf_alloc(rp2pio_dmaringbuf_t *ringbuf, uint ring_
         dma_channel_set_read_addr(channel, target_addr, false);
         dma_channel_set_write_addr(channel, ringbuf->buffer, false);
     }
-    common_hal_rp2pio_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
+    peripherals_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
     common_hal_rp2pio_dmaringbuf_flush(ringbuf);
     return true;
 }
@@ -121,7 +121,7 @@ STATIC uint _get_next(rp2pio_dmaringbuf_t *ringbuf) {
 
 STATIC void _irq_handler(uint channel, void *context) {
     rp2pio_dmaringbuf_t *ringbuf = context;
-    common_hal_rp2pio_dma_acknowledge_irq(ringbuf->channel);
+    peripherals_dma_acknowledge_irq(ringbuf->channel);
     ringbuf->int_count++;
 
     uint trans_count = _get_next(ringbuf);
@@ -140,10 +140,10 @@ void common_hal_rp2pio_dmaringbuf_sync(rp2pio_dmaringbuf_t *ringbuf) {
     if (!ringbuf->trans_count) {
         return;
     }
-    common_hal_rp2pio_dma_clear_irq(ringbuf->channel);
+    peripherals_dma_clear_irq(ringbuf->channel);
     uint trans_count = _get_next(ringbuf);
     ringbuf->trans_count = trans_count;
-    common_hal_rp2pio_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
+    peripherals_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
 }
 
 void common_hal_rp2pio_dmaringbuf_flush(rp2pio_dmaringbuf_t *ringbuf) {
@@ -195,9 +195,9 @@ size_t common_hal_rp2pio_dmaringbuf_transfer(rp2pio_dmaringbuf_t *ringbuf, void 
 }
 
 void common_hal_rp2pio_dmaringbuf_clear(rp2pio_dmaringbuf_t *ringbuf) {
-    common_hal_rp2pio_dma_clear_irq(ringbuf->channel);
+    peripherals_dma_clear_irq(ringbuf->channel);
     dma_channel_abort(ringbuf->channel);
-    common_hal_rp2pio_dma_acknowledge_irq(ringbuf->channel);
+    peripherals_dma_acknowledge_irq(ringbuf->channel);
 
     ringbuf->next_read = 0;
     ringbuf->next_write = 0;
@@ -209,7 +209,7 @@ void common_hal_rp2pio_dmaringbuf_clear(rp2pio_dmaringbuf_t *ringbuf) {
     ringbuf->trans_count = 0;
     dma_channel_set_trans_count(ringbuf->channel, 0, false);
 
-    common_hal_rp2pio_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
+    peripherals_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
 
     common_hal_rp2pio_dmaringbuf_set_enabled(ringbuf, true);
     common_hal_rp2pio_dmaringbuf_flush(ringbuf);
@@ -222,9 +222,9 @@ void common_hal_rp2pio_dmaringbuf_set_enabled(rp2pio_dmaringbuf_t *ringbuf, bool
 }
 
 void common_hal_rp2pio_dmaringbuf_set_handler(rp2pio_dmaringbuf_t *ringbuf, rp2pio_dmaringbuf_handler_t handler) {
-    common_hal_rp2pio_dma_clear_irq(ringbuf->channel);
+    peripherals_dma_clear_irq(ringbuf->channel);
     ringbuf->handler = handler;
-    common_hal_rp2pio_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
+    peripherals_dma_set_irq(ringbuf->channel, _irq_handler, ringbuf);
 }
 
 void common_hal_rp2pio_dmaringbuf_debug(const mp_print_t *print, rp2pio_dmaringbuf_t *ringbuf) {
@@ -239,6 +239,6 @@ void common_hal_rp2pio_dmaringbuf_debug(const mp_print_t *print, rp2pio_dmaringb
     mp_printf(print, "  int_count:   %u\n", ringbuf->int_count);
 
     if (ringbuf->channel != -1u) {
-        common_hal_rp2pio_dma_debug(print, ringbuf->channel);
+        peripherals_dma_debug(print, ringbuf->channel);
     }
 }

@@ -25,10 +25,6 @@
  */
 
 #include "common-hal/rp2pio/__init__.h"
-#include "common-hal/rp2pio/Dma.h"
-#include "common-hal/rp2pio/DmaRingBuf.h"
-#include "common-hal/rp2pio/Pio.h"
-#include "common-hal/rp2pio/PioSlice.h"
 
 
 bool common_hal_rp2pio_pins_are_sequential(size_t len, const mcu_pin_obj_t **pins) {

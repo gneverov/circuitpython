@@ -29,6 +29,8 @@
 
 #include "py/mpprint.h"
 
+void peripherals_pwm_init(void);
+
 void peripherals_pwm_reset(void);
 
 bool peripherals_pwm_claim(uint pwm_slice);

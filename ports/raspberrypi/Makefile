@@ -242,15 +242,15 @@ SRC_C += \
   bindings/rp2pio/Sm.c \
 	bindings/rp2pio/StateMachine.c \
 	bindings/rp2pio/__init__.c \
-  common-hal/rp2pio/Dma.c \
   common-hal/rp2pio/DmaRingBuf.c \
-  common-hal/rp2pio/Pio.c \
   common-hal/rp2pio/PioSlice.c \
   common-hal/rp2pio/Sm.c \
 	common-hal/rp2pio/StateMachine.c \
 	common-hal/rp2pio/__init__.c \
 	background.c \
+  peripherals/dma.c \
 	peripherals/pins.c \
+  peripherals/pio.c \
   peripherals/pwm.c \
 	lib/crypto-algorithms/sha256.c \
 	lib/tinyusb/src/portable/raspberrypi/rp2040/dcd_rp2040.c \

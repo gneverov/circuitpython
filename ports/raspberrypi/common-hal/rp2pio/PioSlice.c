@@ -25,8 +25,8 @@
  */
 
 #include "common-hal/rp2pio/PioSlice.h"
-#include "common-hal/rp2pio/Pio.h"
 #include "common-hal/microcontroller/__init__.h"
+#include "peripherals/pio.h"
 #include "py/mperrno.h"
 
 
@@ -71,7 +71,7 @@ bool common_hal_rp2pio_pioslice_claim(rp2pio_pioslice_obj_t *self, const mp_obj_
         }
         for (uint j = 0; j < num_pins; j++) {
             mcu_pin_obj_t *pin = MP_OBJ_TO_PTR(pins[j]);
-            if (!common_hal_rp2pio_pio_claim_pin(self->pio, pin)) {
+            if (!peripherals_pio_claim_pin(self->pio, pin)) {
                 goto cleanup;
             }
             uint pin_num = common_hal_mcu_pin_number(pin);
@@ -100,7 +100,7 @@ void common_hal_rp2pio_pioslice_release_pin(rp2pio_pioslice_obj_t *self, uint pi
     uint bit = 1u << pin;
     if (self->pin_mask & bit) {
         const mcu_pin_obj_t *pin_obj = mcu_get_pin_by_number(pin);
-        common_hal_rp2pio_pio_unclaim_pin(self->pio, pin_obj);
+        peripherals_pio_unclaim_pin(self->pio, pin_obj);
         self->pin_mask &= ~bit;
     }
 }

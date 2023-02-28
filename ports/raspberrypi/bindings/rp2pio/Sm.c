@@ -26,10 +26,10 @@
 
 #include "bindings/rp2pio/Sm.h"
 #include "shared-bindings/_asyncio/Loop.h"
-#include "common-hal/rp2pio/Dma.h"
+// #include "peripherals/dma.h"
 #include "common-hal/rp2pio/DmaRingBuf.h"
 #include "shared-module/_asyncio/__init__.h"
-#include "common-hal/rp2pio/Pio.h"
+// #include "peripherals/pio.h"
 #include "common-hal/rp2pio/Sm.h"
 #include "py/gc.h"
 #include "py/mperrno.h"
@@ -266,7 +266,7 @@ STATIC mp_obj_t rp2pio_sm_debug(mp_obj_t self_obj, mp_obj_t tx_obj) {
     rp2pio_dmaringbuf_t *dma_ringbuf = tx ? &self->tx_ringbuf : &self->rx_ringbuf;
     common_hal_rp2pio_dmaringbuf_debug(&mp_plat_print, dma_ringbuf);
 
-    common_hal_rp2pio_pio_debug(&mp_plat_print, self->pio_slice->pio);
+    peripherals_pio_debug(&mp_plat_print, self->pio_slice->pio);
 
     return result;
 }
