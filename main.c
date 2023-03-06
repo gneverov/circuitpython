@@ -1154,6 +1154,8 @@ void gc_collect(void) {
     common_hal_wifi_gc_collect();
     #endif
 
+    port_gc_collect();
+
     // This naively collects all object references from an approximate stack
     // range.
     gc_collect_root((void **)sp, ((mp_uint_t)port_stack_get_top() - sp) / sizeof(mp_uint_t));

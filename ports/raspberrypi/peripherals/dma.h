@@ -35,6 +35,8 @@ void peripherals_dma_init(void);
 
 void peripherals_dma_reset(void);
 
+void peripherals_dma_gc_collect(void);
+
 void peripherals_dma_set_irq(uint channel, peripherals_dma_irq_handler_t handler, void *context);
 
 void peripherals_dma_clear_irq(uint channel);

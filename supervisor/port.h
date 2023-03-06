@@ -43,6 +43,8 @@ extern uint32_t _ebss;
 
 safe_mode_t port_init(void);
 
+void port_gc_collect(void);
+
 // Reset the microcontroller completely.
 void reset_cpu(void) NORETURN;
 

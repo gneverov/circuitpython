@@ -39,9 +39,10 @@ typedef struct {
     void *context;
 } peripherals_dma_irq_t;
 
-STATIC peripherals_dma_irq_t *_irq_table;
+STATIC peripherals_dma_irq_t _irq_table[NUM_DMA_CHANNELS];
 
 STATIC peripherals_dma_irq_t *_get_irq_entry(uint channel) {
+    assert(channel < NUM_DMA_CHANNELS);
     return &_irq_table[channel];
 }
 
@@ -55,39 +56,11 @@ STATIC void _irq_handler(void) {
 }
 
 void peripherals_dma_init(void) {
-    if (_irq_table != NULL) {
-        return;
-    }
-
-    _irq_table = m_new_ll(peripherals_dma_irq_t, NUM_DMA_CHANNELS);
-    gc_never_free(_irq_table);
-    peripherals_dma_irq_t empty_entry = { NULL, NULL};
-    for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
-        *_get_irq_entry(i) = empty_entry;
-    }
-
     irq_add_shared_handler(DMA_IRQ_1, _irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
     irq_set_enabled(DMA_IRQ_1, true);
 }
 
 void peripherals_dma_reset(void) {
-    // if (_irq_table != NULL) {
-    //     irq_set_enabled(DMA_IRQ_1, false);
-    //     irq_remove_handler(DMA_IRQ_1, _irq_handler);
-    //     if (irq_has_shared_handler(DMA_IRQ_1)) {
-    //         irq_set_enabled(DMA_IRQ_1, true);
-    //     }
-
-    //     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
-    //         if (_get_irq_entry(i)->handler) {
-    //             dma_channel_set_irq1_enabled(i, false);
-    //         }
-    //     }
-
-    //     gc_free(_irq_table);
-    // }
-    // _irq_table = NULL;
-
     uint reset_channel_mask = _claimed_channel_mask & ~_never_reset_channel_mask;
     for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
         if (reset_channel_mask & (1u << i)) {
@@ -103,6 +76,12 @@ void peripherals_dma_reset(void) {
         }
     }
     _claimed_timer_mask &= _never_reset_timer_mask;
+}
+
+void peripherals_dma_gc_collect(void) {
+    for (uint i = 0; i < NUM_DMA_CHANNELS; i++) {
+        gc_collect_ptr(_irq_table[i].context);
+    }
 }
 
 bool peripherals_dma_channel_claim(uint *channel) {
