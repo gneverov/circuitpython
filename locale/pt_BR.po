@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-01-04 12:55-0600\n"
-"PO-Revision-Date: 2023-02-17 20:38+0000\n"
+"PO-Revision-Date: 2023-02-26 06:37+0000\n"
 "Last-Translator: Wellington Terumi Uemura <wellingtonuemura@gmail.com>\n"
 "Language-Team: \n"
 "Language: pt_BR\n"
@@ -31,6 +31,18 @@ msgid ""
 msgstr ""
 "\n"
 "O código parou pela recarga automática. Recarregando em breve.\n"
+
+#: main.c
+msgid ""
+"\n"
+"Invalid CIRCUITPY_PYSTACK_SIZE\n"
+"\n"
+"\r"
+msgstr ""
+"\n"
+"CIRCUITPY_PYSTACK_SIZE inválido\n"
+"\n"
+"\n"
 
 #: supervisor/shared/safe_mode.c
 msgid ""
@@ -193,6 +205,10 @@ msgstr "%q deve ser <= %d"
 msgid "%q must be >= %d"
 msgstr "o %q deve ser >= %d"
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+msgid "%q must be array of type 'H'"
+msgstr "%q deve ser uma matriz do tipo 'H'"
+
 #: shared-bindings/analogbufio/BufferedIn.c
 msgid "%q must be a bytearray or array of type 'H' or 'B'"
 msgstr "%q deve ser um bytearray ou uma matriz do tipo 'H' ou 'B'"
@@ -226,10 +242,6 @@ msgstr "%q fora dos limites"
 #: shared-bindings/canio/Match.c
 msgid "%q out of range"
 msgstr "%q fora do alcance"
-
-#: ports/atmel-samd/common-hal/microcontroller/Pin.c
-msgid "%q pin invalid"
-msgstr "%q pino inválido"
 
 #: py/objrange.c py/objslice.c shared-bindings/random/__init__.c
 msgid "%q step cannot be zero"
@@ -1255,9 +1267,11 @@ msgid "Interrupt error."
 msgstr "Erro de interrupção."
 
 #: py/argcheck.c shared-bindings/digitalio/DigitalInOut.c
+#: shared-bindings/displayio/EPaperDisplay.c
 msgid "Invalid %q"
 msgstr "%q Inválido"
 
+#: ports/atmel-samd/common-hal/microcontroller/Pin.c
 #: shared-bindings/microcontroller/Pin.c
 msgid "Invalid %q pin"
 msgstr "Pino do %q inválido"
@@ -2041,10 +2055,6 @@ msgstr "O estéreo à direita deve estar no canal PWM B"
 msgid "Stopping AP is not supported."
 msgstr "Não há suporte para a interrupção do AP."
 
-#: ports/mimxrt10xx/common-hal/busio/UART.c ports/stm/common-hal/busio/UART.c
-msgid "Supply at least one UART pin"
-msgstr "Forneça pelo menos um pino UART"
-
 #: shared-bindings/alarm/time/TimeAlarm.c
 msgid "Supply one of monotonic_time or epoch_time"
 msgstr "Forneça um de monotonic_time ou de epoch_time"
@@ -2177,7 +2187,7 @@ msgstr "inicialização do UART"
 
 #: ports/raspberrypi/common-hal/busio/UART.c
 msgid "UART peripheral in use"
-msgstr ""
+msgstr "Periférico UART em uso"
 
 #: ports/stm/common-hal/busio/UART.c
 msgid "UART re-init"
@@ -2231,6 +2241,11 @@ msgstr "Não é possível alocar buffers para conversão assinada"
 msgid "Unable to allocate the heap."
 msgstr "Não é possível alocar a área de alocação dinâmica de variáveis."
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to configure ADC DMA controller, ErrorCode:%d"
+msgstr "Não foi possível configurar o controlador ADC DMA, ErrorCode:%d"
+
 #: ports/espressif/common-hal/busio/I2C.c
 msgid "Unable to create lock"
 msgstr "Não é possível criar um lock"
@@ -2249,9 +2264,19 @@ msgstr "Não é possível encontrar GCLK livre"
 msgid "Unable to init parser"
 msgstr "Não foi possível iniciar o analisador"
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to initialize ADC DMA controller, ErrorCode:%d"
+msgstr "Não foi possível inicializar o controlador ADC DMA, ErrorCode:%d"
+
 #: shared-module/displayio/OnDiskBitmap.c
 msgid "Unable to read color palette data"
 msgstr "Não foi possível ler os dados da paleta de cores"
+
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to start ADC DMA controller, ErrorCode:%d"
+msgstr "Não foi possível iniciar o controlador ADC DMA, ErrorCode:%d"
 
 #: ports/espressif/common-hal/mdns/Server.c
 #: ports/raspberrypi/common-hal/mdns/Server.c
@@ -2463,6 +2488,14 @@ msgstr "Você pressionou o botão A na inicialização."
 #: supervisor/shared/safe_mode.c
 msgid "You pressed the BOOT button at start up"
 msgstr "Você pressionou o botão BOOT na inicialização"
+
+#: ports/espressif/boards/adafruit_huzzah32_breakout/mpconfigboard.h
+msgid "You pressed the GPIO0 button at start up."
+msgstr "Você pressionou o botão GPIO0 durante a inicialização."
+
+#: ports/espressif/boards/espressif_esp32_lyrat/mpconfigboard.h
+msgid "You pressed the Rec button at start up."
+msgstr "Você pressionou o botão Rec durante a inicialização."
 
 #: ports/espressif/boards/adafruit_feather_esp32_v2/mpconfigboard.h
 msgid "You pressed the SW38 button at start up."
@@ -4219,8 +4252,6 @@ msgstr "o twai_driver_install retornou um erro esp-idf #%d"
 msgid "twai_start returned esp-idf error #%d"
 msgstr "o twai_start retornou um erro esp-idf #%d"
 
-#: ports/atmel-samd/common-hal/busio/UART.c
-#: ports/espressif/common-hal/busio/UART.c ports/nrf/common-hal/busio/UART.c
 #: shared-bindings/busio/UART.c shared-bindings/canio/CAN.c
 msgid "tx and rx cannot both be None"
 msgstr "TX e RX não podem ser ambos"
@@ -4441,6 +4472,12 @@ msgstr "zi deve ser de um tipo float"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "zi deve estar na forma (n_section, 2)"
+
+#~ msgid "Supply at least one UART pin"
+#~ msgstr "Forneça pelo menos um pino UART"
+
+#~ msgid "%q pin invalid"
+#~ msgstr "%q pino inválido"
 
 #~ msgid ""
 #~ "\n"

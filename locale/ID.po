@@ -30,6 +30,14 @@ msgid ""
 "Code stopped by auto-reload. Reloading soon.\n"
 msgstr ""
 
+#: main.c
+msgid ""
+"\n"
+"Invalid CIRCUITPY_PYSTACK_SIZE\n"
+"\n"
+"\r"
+msgstr ""
+
 #: supervisor/shared/safe_mode.c
 msgid ""
 "\n"
@@ -183,6 +191,10 @@ msgstr "%q harus <= %d"
 msgid "%q must be >= %d"
 msgstr "%q harus >= %d"
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+msgid "%q must be array of type 'H'"
+msgstr ""
+
 #: shared-bindings/analogbufio/BufferedIn.c
 msgid "%q must be a bytearray or array of type 'H' or 'B'"
 msgstr ""
@@ -216,10 +228,6 @@ msgstr ""
 #: shared-bindings/canio/Match.c
 msgid "%q out of range"
 msgstr "%q di luar jangkauan"
-
-#: ports/atmel-samd/common-hal/microcontroller/Pin.c
-msgid "%q pin invalid"
-msgstr "pin %q tidak valid"
 
 #: py/objrange.c py/objslice.c shared-bindings/random/__init__.c
 msgid "%q step cannot be zero"
@@ -1225,9 +1233,11 @@ msgid "Interrupt error."
 msgstr ""
 
 #: py/argcheck.c shared-bindings/digitalio/DigitalInOut.c
+#: shared-bindings/displayio/EPaperDisplay.c
 msgid "Invalid %q"
 msgstr ""
 
+#: ports/atmel-samd/common-hal/microcontroller/Pin.c
 #: shared-bindings/microcontroller/Pin.c
 msgid "Invalid %q pin"
 msgstr "%q pada tidak valid"
@@ -2008,10 +2018,6 @@ msgstr ""
 msgid "Stopping AP is not supported."
 msgstr ""
 
-#: ports/mimxrt10xx/common-hal/busio/UART.c ports/stm/common-hal/busio/UART.c
-msgid "Supply at least one UART pin"
-msgstr "Berikan setidaknya satu pin UART"
-
 #: shared-bindings/alarm/time/TimeAlarm.c
 msgid "Supply one of monotonic_time or epoch_time"
 msgstr ""
@@ -2191,6 +2197,11 @@ msgstr "Tidak dapat mengalokasikan buffer untuk signed conversion"
 msgid "Unable to allocate the heap."
 msgstr ""
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to configure ADC DMA controller, ErrorCode:%d"
+msgstr ""
+
 #: ports/espressif/common-hal/busio/I2C.c
 msgid "Unable to create lock"
 msgstr ""
@@ -2209,9 +2220,19 @@ msgstr "Tidak dapat menemukan GCLK yang kosong"
 msgid "Unable to init parser"
 msgstr "Tidak dapat memulai parser"
 
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to initialize ADC DMA controller, ErrorCode:%d"
+msgstr ""
+
 #: shared-module/displayio/OnDiskBitmap.c
 msgid "Unable to read color palette data"
 msgstr "Tidak dapat membaca data palet warna"
+
+#: ports/espressif/common-hal/analogbufio/BufferedIn.c
+#, c-format
+msgid "Unable to start ADC DMA controller, ErrorCode:%d"
+msgstr ""
 
 #: ports/espressif/common-hal/mdns/Server.c
 #: ports/raspberrypi/common-hal/mdns/Server.c
@@ -2413,6 +2434,14 @@ msgstr ""
 
 #: supervisor/shared/safe_mode.c
 msgid "You pressed the BOOT button at start up"
+msgstr ""
+
+#: ports/espressif/boards/adafruit_huzzah32_breakout/mpconfigboard.h
+msgid "You pressed the GPIO0 button at start up."
+msgstr ""
+
+#: ports/espressif/boards/espressif_esp32_lyrat/mpconfigboard.h
+msgid "You pressed the Rec button at start up."
 msgstr ""
 
 #: ports/espressif/boards/adafruit_feather_esp32_v2/mpconfigboard.h
@@ -4149,8 +4178,6 @@ msgstr ""
 msgid "twai_start returned esp-idf error #%d"
 msgstr ""
 
-#: ports/atmel-samd/common-hal/busio/UART.c
-#: ports/espressif/common-hal/busio/UART.c ports/nrf/common-hal/busio/UART.c
 #: shared-bindings/busio/UART.c shared-bindings/canio/CAN.c
 msgid "tx and rx cannot both be None"
 msgstr "tx dan rx keduanya tidak boleh kosong"
@@ -4371,6 +4398,12 @@ msgstr "zi harus berjenis float"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "Zi harus berbentuk (n_section, 2)"
+
+#~ msgid "Supply at least one UART pin"
+#~ msgstr "Berikan setidaknya satu pin UART"
+
+#~ msgid "%q pin invalid"
+#~ msgstr "pin %q tidak valid"
 
 #~ msgid ""
 #~ "\n"
