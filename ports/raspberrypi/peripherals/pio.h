@@ -40,6 +40,8 @@ void peripherals_pio_init(void);
 
 void peripherals_pio_reset(void);
 
+void peripherals_pio_gc_collect(void);
+
 void peripherals_pio_set_irq(PIO pio, enum pio_interrupt_source source, peripherals_pio_irq_handler_t handler, void *context);
 
 void peripherals_pio_clear_irq(PIO pio, enum pio_interrupt_source source);

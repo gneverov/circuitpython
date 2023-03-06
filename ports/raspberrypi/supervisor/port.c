@@ -176,6 +176,11 @@ safe_mode_t port_init(void) {
     return SAFE_MODE_NONE;
 }
 
+void port_gc_collect(void) {
+    peripherals_dma_gc_collect();
+    peripherals_pio_gc_collect();
+}
+
 void reset_port(void) {
     #if CIRCUITPY_BUSIO
     reset_i2c();

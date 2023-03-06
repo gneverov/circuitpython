@@ -46,11 +46,12 @@ typedef struct {
     void *context;
 } peripherals_pio_irq_t;
 
-STATIC peripherals_pio_irq_t *_irq_table[NUM_PIOS];
+STATIC peripherals_pio_irq_t _irq_table[NUM_PIOS][NUM_PIO_INTERRUPT_SOURCES];
 
 STATIC uint8_t _used_pins[NUM_PIOS][NUM_BANK0_GPIOS];
 
 STATIC peripherals_pio_irq_t *_get_irq_entry(PIO pio, enum pio_interrupt_source source) {
+    assert(source < NUM_PIO_INTERRUPT_SOURCES);
     uint index = pio_get_index(pio);
     return &_irq_table[index][source];
 }
@@ -74,19 +75,6 @@ STATIC void _irq_handler_pio1(void) {
 
 STATIC void _init_pio(uint pio_index, uint irq, irq_handler_t irq_handler) {
     assert(pio_index < NUM_PIOS);
-    PIO pio = all_pios[pio_index];
-    peripherals_pio_irq_t **irq_table = &_irq_table[pio_index];
-    if (*irq_table != NULL) {
-        return;
-    }
-
-    *irq_table = m_new_ll(peripherals_pio_irq_t, NUM_PIO_INTERRUPT_SOURCES);
-    gc_never_free(*irq_table);
-    peripherals_pio_irq_t empty_entry = { NULL, NULL};
-    for (uint i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
-        *_get_irq_entry(pio, i) = empty_entry;
-    }
-
     irq_add_shared_handler(irq, irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
     irq_set_enabled(irq, true);
 }
@@ -116,6 +104,14 @@ void peripherals_pio_reset(void) {
     _reset_pio(1, PIO0_IRQ_1, _irq_handler_pio1);
 
     memset(&_used_pins, 0, sizeof(_used_pins));
+}
+
+void peripherals_pio_gc_collect(void) {
+    for (uint i = 0; i < NUM_PIOS; i++) {
+        for (uint j = 0; j < NUM_PIO_INTERRUPT_SOURCES; j++) {
+            gc_collect_ptr(_irq_table[i][j].context);
+        }
+    }
 }
 
 void peripherals_pio_set_irq(PIO pio, enum pio_interrupt_source source, peripherals_pio_irq_handler_t handler, void *context) {
