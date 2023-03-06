@@ -26,7 +26,7 @@
 
 #include "common-hal/audiopwmio/PWMAudioOut.h"
 
-#include "common-hal/rp2pio/Dma.h"
+#include "peripherals/dma.h"
 #include "peripherals/pwm.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
