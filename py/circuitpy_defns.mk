@@ -602,6 +602,7 @@ SRC_SHARED_MODULE_ALL = \
 	getpass/__init__.c \
 	gifio/__init__.c \
 	gifio/GifWriter.c \
+	gifio/OnDiskGif.c \
 	imagecapture/ParallelImageCapture.c \
 	ipaddress/IPv4Address.c \
 	ipaddress/__init__.c \
@@ -705,6 +706,13 @@ SRC_MOD += $(addprefix lib/protomatter/src/, \
 	core.c \
 )
 $(BUILD)/lib/protomatter/src/core.o: CFLAGS += -include "shared-module/rgbmatrix/allocator.h" -DCIRCUITPY -Wno-missing-braces -Wno-missing-prototypes
+endif
+
+ifeq ($(CIRCUITPY_GIFIO),1)
+SRC_MOD += $(addprefix lib/AnimatedGIF/, \
+	gif.c \
+)
+$(BUILD)/lib/AnimatedGIF/gif.o: CFLAGS += -DCIRCUITPY
 endif
 
 ifeq ($(CIRCUITPY_ZLIB),1)
