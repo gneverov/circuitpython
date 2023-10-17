@@ -59,7 +59,7 @@ typedef struct _mp_obj_match_t {
 
 STATIC mp_obj_t mod_re_compile(size_t n_args, const mp_obj_t *args);
 #if !MICROPY_ENABLE_DYNRUNTIME
-STATIC const mp_obj_type_t re_type;
+extern const mp_obj_type_t re_type;
 #endif
 
 STATIC void match_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -412,7 +412,7 @@ STATIC const mp_rom_map_elem_t re_locals_dict_table[] = {
 
 STATIC MP_DEFINE_CONST_DICT(re_locals_dict, re_locals_dict_table);
 
-STATIC MP_DEFINE_CONST_OBJ_TYPE(
+MP_DEFINE_CONST_OBJ_TYPE(
     re_type,
     MP_QSTR_re,
     MP_TYPE_FLAG_NONE,

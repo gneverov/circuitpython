@@ -107,7 +107,7 @@ STATIC void bound_meth_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 #define BOUND_METH_TYPE_ATTR
 #endif
 
-STATIC MP_DEFINE_CONST_OBJ_TYPE(
+MP_DEFINE_CONST_OBJ_TYPE(
     mp_type_bound_meth,
     MP_QSTR_bound_method,
     MP_TYPE_FLAG_NONE,

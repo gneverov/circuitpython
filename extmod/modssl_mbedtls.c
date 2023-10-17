@@ -34,7 +34,7 @@
 #include <errno.h> // needed because mp_is_nonblocking_error uses system error codes
 
 #include "py/runtime.h"
-#include "py/stream.h"
+#include "py/stream_poll.h"
 #include "py/objstr.h"
 
 // mbedtls_time_t
@@ -486,16 +486,6 @@ STATIC mp_uint_t socket_write(mp_obj_t o_in, const void *buf, mp_uint_t size, in
     return MP_STREAM_ERROR;
 }
 
-STATIC mp_obj_t socket_setblocking(mp_obj_t self_in, mp_obj_t flag_in) {
-    mp_obj_ssl_socket_t *o = MP_OBJ_TO_PTR(self_in);
-    mp_obj_t sock = o->sock;
-    mp_obj_t dest[3];
-    mp_load_method(sock, MP_QSTR_setblocking, dest);
-    dest[2] = flag_in;
-    return mp_call_method_n_kw(1, 0, dest);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_setblocking_obj, socket_setblocking);
-
 STATIC mp_uint_t socket_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(o_in);
     mp_uint_t ret = 0;
@@ -534,14 +524,10 @@ STATIC mp_uint_t socket_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, i
                 }
             }
         }
-    } else {
-        // Unsupported ioctl.
-        *errcode = MP_EINVAL;
-        return MP_STREAM_ERROR;
     }
 
     // Pass all requests down to the underlying socket
-    ret |= mp_get_stream(sock)->ioctl(sock, request, arg, errcode);
+    ret |= mp_stream_ioctl(sock, request, arg, errcode);
 
     if (request == MP_STREAM_POLL) {
         // The direction the library needed is available, return a fake result to the caller so that
@@ -558,7 +544,8 @@ STATIC const mp_rom_map_elem_t ssl_socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&mp_stream_write_obj) },
-    { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&socket_setblocking_obj) },
+    { MP_ROM_QSTR(MP_QSTR_settimeout), MP_ROM_PTR(&mp_stream_settimeout_obj) },
+    { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&mp_stream_setblocking_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_stream_close_obj) },
     #if MICROPY_PY_SSL_FINALISER
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_stream_close_obj) },
@@ -574,6 +561,7 @@ STATIC const mp_stream_p_t ssl_socket_stream_p = {
     .read = socket_read,
     .write = socket_write,
     .ioctl = socket_ioctl,
+    .can_poll = 1,
 };
 
 STATIC MP_DEFINE_CONST_OBJ_TYPE(

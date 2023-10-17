@@ -76,7 +76,9 @@
 #define MBEDTLS_PKCS5_C
 #define MBEDTLS_PK_C
 #define MBEDTLS_PK_PARSE_C
+#if !MICROPY_FREERTOS
 #define MBEDTLS_PLATFORM_C
+#endif
 #define MBEDTLS_RSA_C
 #define MBEDTLS_SHA1_C
 #define MBEDTLS_SHA256_C

@@ -37,6 +37,8 @@ typedef struct _mp_obj_instance_t {
     // TODO maybe cache __getattr__ and __setattr__ for efficient lookup of them
 } mp_obj_instance_t;
 
+int instance_count_native_bases(const mp_obj_type_t *type, const mp_obj_type_t **last_native_base);
+
 #if MICROPY_CPYTHON_COMPAT
 // this is needed for object.__new__
 mp_obj_instance_t *mp_obj_new_instance(const mp_obj_type_t *cls, const mp_obj_type_t **native_base);

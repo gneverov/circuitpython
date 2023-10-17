@@ -204,6 +204,10 @@ typedef struct _mp_module_constants_t {
     qstr source_file;
     #endif
     mp_obj_t *obj_table;
+    #if MICROPY_PERSISTENT_CODE_SAVE
+    size_t n_qstr;
+    size_t n_obj;
+    #endif
 } mp_module_constants_t;
 
 // State associated with a module.
@@ -305,6 +309,10 @@ static inline void mp_module_context_alloc_tables(mp_module_context_t *context, 
     } else {
         context->constants.obj_table = m_new(mp_obj_t, n_obj);
     }
+    #endif
+    #if MICROPY_PERSISTENT_CODE_SAVE
+    context->constants.n_qstr = n_qstr;
+    context->constants.n_obj = n_obj;
     #endif
 }
 

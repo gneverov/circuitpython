@@ -103,7 +103,7 @@
 #define MP_ENOMEM           ENOMEM
 #define MP_EACCES           EACCES
 #define MP_EFAULT           EFAULT
-#define MP_ENOTBLK          ENOTBLK
+// #define MP_ENOTBLK          ENOTBLK
 #define MP_EBUSY            EBUSY
 #define MP_EEXIST           EEXIST
 #define MP_EXDEV            EXDEV
@@ -145,7 +145,7 @@
 
 #include "py/obj.h"
 
-qstr mp_errno_to_str(mp_obj_t errno_val);
+mp_obj_t mp_errno_to_str(int errcode);
 
 #endif
 

@@ -49,7 +49,7 @@ STATIC mp_obj_t static_class_method_make_new(const mp_obj_type_t *self_in, size_
 /******************************************************************************/
 // instance object
 
-STATIC int instance_count_native_bases(const mp_obj_type_t *type, const mp_obj_type_t **last_native_base) {
+int instance_count_native_bases(const mp_obj_type_t *type, const mp_obj_type_t **last_native_base) {
     int count = 0;
     for (;;) {
         if (type == &mp_type_object) {

@@ -78,13 +78,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &pin_board_pins_locals_dict
     );
 
-typedef struct _machine_pin_irq_obj_t {
-    mp_irq_obj_t base;
-    uint32_t flags;
-    uint32_t trigger;
-} machine_pin_irq_obj_t;
-
-STATIC const mp_irq_methods_t machine_pin_irq_methods;
 extern const machine_pin_obj_t *machine_pin_cpu_pins[NUM_BANK0_GPIOS];
 
 // Mask with "1" indicating that the corresponding pin is in simulated open-drain mode.
@@ -97,45 +90,6 @@ STATIC inline bool is_ext_pin(__unused const machine_pin_obj_t *self) {
 #else
 #define is_ext_pin(x) false
 #endif
-
-STATIC void gpio_irq(void) {
-    for (int i = 0; i < 4; ++i) {
-        uint32_t intr = iobank0_hw->intr[i];
-        if (intr) {
-            for (int j = 0; j < 8; ++j) {
-                if (intr & 0xf) {
-                    uint32_t gpio = 8 * i + j;
-                    gpio_acknowledge_irq(gpio, intr & 0xf);
-                    machine_pin_irq_obj_t *irq = MP_STATE_PORT(machine_pin_irq_obj[gpio]);
-                    if (irq != NULL && (intr & irq->trigger)) {
-                        irq->flags = intr & irq->trigger;
-                        mp_irq_handler(&irq->base);
-                    }
-                }
-                intr >>= 4;
-            }
-        }
-    }
-}
-
-void machine_pin_init(void) {
-    memset(MP_STATE_PORT(machine_pin_irq_obj), 0, sizeof(MP_STATE_PORT(machine_pin_irq_obj)));
-    irq_add_shared_handler(IO_IRQ_BANK0, gpio_irq, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
-    irq_set_enabled(IO_IRQ_BANK0, true);
-    #if MICROPY_HW_PIN_EXT_COUNT
-    machine_pin_ext_init();
-    #endif
-}
-
-void machine_pin_deinit(void) {
-    for (int i = 0; i < NUM_BANK0_GPIOS; ++i) {
-        if (MICROPY_HW_PIN_RESERVED(i)) {
-            continue;
-        }
-        gpio_set_irq_enabled(i, GPIO_IRQ_ALL, false);
-    }
-    irq_remove_handler(IO_IRQ_BANK0, gpio_irq);
-}
 
 const machine_pin_obj_t *machine_pin_find_named(const mp_obj_dict_t *named_pins, mp_obj_t name) {
     const mp_map_t *named_map = &named_pins->map;
@@ -422,70 +376,6 @@ STATIC mp_obj_t machine_pin_toggle(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_pin_toggle_obj, machine_pin_toggle);
 
-STATIC machine_pin_irq_obj_t *machine_pin_get_irq(mp_hal_pin_obj_t pin) {
-    // Get the IRQ object.
-    machine_pin_irq_obj_t *irq = MP_STATE_PORT(machine_pin_irq_obj[pin]);
-
-    // Allocate the IRQ object if it doesn't already exist.
-    if (irq == NULL) {
-        irq = m_new_obj(machine_pin_irq_obj_t);
-        irq->base.base.type = &mp_irq_type;
-        irq->base.methods = (mp_irq_methods_t *)&machine_pin_irq_methods;
-        irq->base.parent = MP_OBJ_FROM_PTR(machine_pin_cpu_pins[pin]);
-        irq->base.handler = mp_const_none;
-        irq->base.ishard = false;
-        MP_STATE_PORT(machine_pin_irq_obj[pin]) = irq;
-    }
-    return irq;
-}
-
-void mp_hal_pin_interrupt(mp_hal_pin_obj_t pin, mp_obj_t handler, mp_uint_t trigger, bool hard) {
-    machine_pin_irq_obj_t *irq = machine_pin_get_irq(pin);
-
-    // Disable all IRQs while data is updated.
-    gpio_set_irq_enabled(pin, GPIO_IRQ_ALL, false);
-
-    // Update IRQ data.
-    irq->base.handler = handler;
-    irq->base.ishard = hard;
-    irq->flags = 0;
-    irq->trigger = trigger;
-
-    // Enable IRQ if a handler is given.
-    if (handler != mp_const_none && trigger != MP_HAL_PIN_TRIGGER_NONE) {
-        gpio_set_irq_enabled(pin, trigger, true);
-    }
-}
-
-// pin.irq(handler=None, trigger=IRQ_FALLING|IRQ_RISING, hard=False)
-STATIC mp_obj_t machine_pin_irq(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_handler, ARG_trigger, ARG_hard };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_handler, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
-        { MP_QSTR_trigger, MP_ARG_INT, {.u_int = MP_HAL_PIN_TRIGGER_FALL | MP_HAL_PIN_TRIGGER_RISE} },
-        { MP_QSTR_hard, MP_ARG_BOOL, {.u_bool = false} },
-    };
-    machine_pin_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
-    if (is_ext_pin(self)) {
-        mp_raise_ValueError(MP_ERROR_TEXT("expecting a regular GPIO Pin"));
-    }
-
-    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
-
-    machine_pin_irq_obj_t *irq = machine_pin_get_irq(self->id);
-
-    if (n_args > 1 || kw_args->used != 0) {
-        // Update IRQ data.
-        mp_obj_t handler = args[ARG_handler].u_obj;
-        mp_uint_t trigger = args[ARG_trigger].u_int;
-        bool hard = args[ARG_hard].u_bool;
-        mp_hal_pin_interrupt(self->id, handler, trigger, hard);
-    }
-    return MP_OBJ_FROM_PTR(irq);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_pin_irq_obj, 1, machine_pin_irq);
-
 STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
     // instance methods
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&machine_pin_init_obj) },
@@ -495,7 +385,6 @@ STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_off), MP_ROM_PTR(&machine_pin_low_obj) },
     { MP_ROM_QSTR(MP_QSTR_on), MP_ROM_PTR(&machine_pin_high_obj) },
     { MP_ROM_QSTR(MP_QSTR_toggle), MP_ROM_PTR(&machine_pin_toggle_obj) },
-    { MP_ROM_QSTR(MP_QSTR_irq), MP_ROM_PTR(&machine_pin_irq_obj) },
 
     // class attributes
     { MP_ROM_QSTR(MP_QSTR_board), MP_ROM_PTR(&pin_board_pins_obj_type) },
@@ -508,8 +397,6 @@ STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ALT), MP_ROM_INT(MACHINE_PIN_MODE_ALT) },
     { MP_ROM_QSTR(MP_QSTR_PULL_UP), MP_ROM_INT(GPIO_PULL_UP) },
     { MP_ROM_QSTR(MP_QSTR_PULL_DOWN), MP_ROM_INT(GPIO_PULL_DOWN) },
-    { MP_ROM_QSTR(MP_QSTR_IRQ_RISING), MP_ROM_INT(GPIO_IRQ_EDGE_RISE) },
-    { MP_ROM_QSTR(MP_QSTR_IRQ_FALLING), MP_ROM_INT(GPIO_IRQ_EDGE_FALL) },
 
     // Pins alternate functions
     { MP_ROM_QSTR(MP_QSTR_ALT_SPI), MP_ROM_INT(GPIO_FUNC_SPI) },
@@ -524,38 +411,6 @@ STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(machine_pin_locals_dict, machine_pin_locals_dict_table);
 
-STATIC mp_uint_t pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
-    (void)errcode;
-    machine_pin_obj_t *self = self_in;
-
-    switch (request) {
-        case MP_PIN_READ: {
-            if (is_ext_pin(self)) {
-                #if MICROPY_HW_PIN_EXT_COUNT
-                return machine_pin_ext_get(self);
-                #endif
-            } else {
-                return gpio_get(self->id);
-            }
-        }
-        case MP_PIN_WRITE: {
-            if (is_ext_pin(self)) {
-                #if MICROPY_HW_PIN_EXT_COUNT
-                machine_pin_ext_set(self, arg);
-                #endif
-            } else {
-                gpio_put(self->id, arg);
-            }
-            return 0;
-        }
-    }
-    return -1;
-}
-
-STATIC const mp_pin_p_t pin_pin_p = {
-    .ioctl = pin_ioctl,
-};
-
 MP_DEFINE_CONST_OBJ_TYPE(
     machine_pin_type,
     MP_QSTR_Pin,
@@ -563,35 +418,9 @@ MP_DEFINE_CONST_OBJ_TYPE(
     make_new, mp_pin_make_new,
     print, machine_pin_print,
     call, machine_pin_call,
-    protocol, &pin_pin_p,
+    // protocol, &pin_pin_p,
     locals_dict, &machine_pin_locals_dict
     );
-
-STATIC mp_uint_t machine_pin_irq_trigger(mp_obj_t self_in, mp_uint_t new_trigger) {
-    machine_pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    machine_pin_irq_obj_t *irq = MP_STATE_PORT(machine_pin_irq_obj[self->id]);
-    gpio_set_irq_enabled(self->id, GPIO_IRQ_ALL, false);
-    irq->flags = 0;
-    irq->trigger = new_trigger;
-    gpio_set_irq_enabled(self->id, new_trigger, true);
-    return 0;
-}
-
-STATIC mp_uint_t machine_pin_irq_info(mp_obj_t self_in, mp_uint_t info_type) {
-    machine_pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    machine_pin_irq_obj_t *irq = MP_STATE_PORT(machine_pin_irq_obj[self->id]);
-    if (info_type == MP_IRQ_INFO_FLAGS) {
-        return irq->flags;
-    } else if (info_type == MP_IRQ_INFO_TRIGGERS) {
-        return irq->trigger;
-    }
-    return 0;
-}
-
-STATIC const mp_irq_methods_t machine_pin_irq_methods = {
-    .trigger = machine_pin_irq_trigger,
-    .info = machine_pin_irq_info,
-};
 
 mp_hal_pin_obj_t mp_hal_get_pin_obj(mp_obj_t obj) {
     const machine_pin_obj_t *pin = machine_pin_find(obj);

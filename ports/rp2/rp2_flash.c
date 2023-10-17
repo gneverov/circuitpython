@@ -46,6 +46,8 @@ static_assert(MICROPY_HW_FLASH_STORAGE_BYTES % 4096 == 0, "Flash storage size mu
 static_assert(MICROPY_HW_FLASH_STORAGE_BYTES <= PICO_FLASH_SIZE_BYTES, "MICROPY_HW_FLASH_STORAGE_BYTES too big");
 static_assert(MICROPY_HW_FLASH_STORAGE_BASE + MICROPY_HW_FLASH_STORAGE_BYTES <= PICO_FLASH_SIZE_BYTES, "MICROPY_HW_FLASH_STORAGE_BYTES too big");
 
+uint32_t tusb_config_flash_offset = MICROPY_HW_FLASH_STORAGE_BASE - 4096;
+
 typedef struct _rp2_flash_obj_t {
     mp_obj_base_t base;
     uint32_t flash_base;
@@ -120,11 +122,6 @@ STATIC mp_obj_t rp2_flash_readblocks(size_t n_args, const mp_obj_t *args) {
         offset += mp_obj_get_int(args[3]);
     }
     memcpy(bufinfo.buf, (void *)(XIP_BASE + self->flash_base + offset), bufinfo.len);
-    // MICROPY_EVENT_POLL_HOOK_FAST is called here to avoid a fail in registering
-    // USB at boot time, if the board is busy loading files or scanning the file
-    // system. MICROPY_EVENT_POLL_HOOK_FAST calls tud_task(). As the alternative
-    // tud_task() should be called in the USB IRQ. See discussion in PR #10423.
-    MICROPY_EVENT_POLL_HOOK_FAST;
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2_flash_readblocks_obj, 3, 4, rp2_flash_readblocks);
@@ -139,7 +136,6 @@ STATIC mp_obj_t rp2_flash_writeblocks(size_t n_args, const mp_obj_t *args) {
         mp_uint_t atomic_state = MICROPY_BEGIN_ATOMIC_SECTION();
         flash_range_erase(self->flash_base + offset, bufinfo.len);
         MICROPY_END_ATOMIC_SECTION(atomic_state);
-        MICROPY_EVENT_POLL_HOOK_FAST;
         // TODO check return value
     } else {
         offset += mp_obj_get_int(args[3]);
@@ -148,11 +144,21 @@ STATIC mp_obj_t rp2_flash_writeblocks(size_t n_args, const mp_obj_t *args) {
     mp_uint_t atomic_state = MICROPY_BEGIN_ATOMIC_SECTION();
     flash_range_program(self->flash_base + offset, bufinfo.buf, bufinfo.len);
     MICROPY_END_ATOMIC_SECTION(atomic_state);
-    MICROPY_EVENT_POLL_HOOK_FAST;
     // TODO check return value
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2_flash_writeblocks_obj, 3, 4, rp2_flash_writeblocks);
+
+STATIC mp_obj_t rp2_flash_mmapblocks(size_t n_args, const mp_obj_t *args) {
+    rp2_flash_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    uint32_t offset = mp_obj_get_int(args[1]) * BLOCK_SIZE_BYTES;
+    uint32_t len = mp_obj_get_int(args[2]);
+    if (n_args == 4) {
+        offset += mp_obj_get_int(args[3]);
+    }
+    return mp_obj_new_memoryview('B', len, (void *)(XIP_BASE + self->flash_base + offset));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2_flash_mmapblocks_obj, 3, 4, rp2_flash_mmapblocks);
 
 STATIC mp_obj_t rp2_flash_ioctl(mp_obj_t self_in, mp_obj_t cmd_in, mp_obj_t arg_in) {
     rp2_flash_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -186,6 +192,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_3(rp2_flash_ioctl_obj, rp2_flash_ioctl);
 STATIC const mp_rom_map_elem_t rp2_flash_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_readblocks), MP_ROM_PTR(&rp2_flash_readblocks_obj) },
     { MP_ROM_QSTR(MP_QSTR_writeblocks), MP_ROM_PTR(&rp2_flash_writeblocks_obj) },
+    { MP_ROM_QSTR(MP_QSTR_mmapblocks), MP_ROM_PTR(&rp2_flash_mmapblocks_obj) },
     { MP_ROM_QSTR(MP_QSTR_ioctl), MP_ROM_PTR(&rp2_flash_ioctl_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(rp2_flash_locals_dict, rp2_flash_locals_dict_table);

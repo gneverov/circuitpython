@@ -388,6 +388,9 @@ mp_obj_t mp_obj_new_fun_bc(const mp_obj_t *def_args, const byte *code, const mp_
     o->bytecode = code;
     o->context = context;
     o->child_table = child_table;
+    #if MICROPY_PERSISTENT_CODE_SAVE
+    o->n_extra_args = n_extra_args;
+    #endif
     if (def_pos_args != NULL) {
         memcpy(o->extra_args, def_pos_args->items, n_def_args * sizeof(mp_obj_t));
     }

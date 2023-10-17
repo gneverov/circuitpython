@@ -58,6 +58,25 @@ STATIC bool repl_display_debugging_info = 0;
 #define EXEC_FLAG_SOURCE_IS_FILENAME    (1 << 5)
 #define EXEC_FLAG_SOURCE_IS_READER      (1 << 6)
 #define EXEC_FLAG_NO_INTERRUPT          (1 << 7)
+#define EXEC_FLAG_ALLOW_AWAIT           (1 << 8)
+
+STATIC mp_obj_t call_mp_compile(const void *source, mp_parse_input_kind_t input_kind, mp_uint_t exec_flags) {
+    mp_lexer_t *lex;
+    if (exec_flags & EXEC_FLAG_SOURCE_IS_VSTR) {
+        const vstr_t *vstr = source;
+        lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, vstr->buf, vstr->len, 0);
+    } else if (exec_flags & EXEC_FLAG_SOURCE_IS_READER) {
+        lex = mp_lexer_new(MP_QSTR__lt_stdin_gt_, *(mp_reader_t *)source);
+    } else if (exec_flags & EXEC_FLAG_SOURCE_IS_FILENAME) {
+        lex = mp_lexer_new_from_file(source);
+    } else {
+        lex = (mp_lexer_t *)source;
+    }
+    // source is a lexer, parse and compile the script
+    qstr source_name = lex->source_name;
+    mp_parse_tree_t parse_tree = mp_parse(lex, input_kind);
+    return mp_compile(&parse_tree, source_name, exec_flags & EXEC_FLAG_IS_REPL);
+}
 
 // parses, compiles and executes the code in the lexer
 // frees the lexer before returning
@@ -93,21 +112,7 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         #endif
         {
             #if MICROPY_ENABLE_COMPILER
-            mp_lexer_t *lex;
-            if (exec_flags & EXEC_FLAG_SOURCE_IS_VSTR) {
-                const vstr_t *vstr = source;
-                lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, vstr->buf, vstr->len, 0);
-            } else if (exec_flags & EXEC_FLAG_SOURCE_IS_READER) {
-                lex = mp_lexer_new(MP_QSTR__lt_stdin_gt_, *(mp_reader_t *)source);
-            } else if (exec_flags & EXEC_FLAG_SOURCE_IS_FILENAME) {
-                lex = mp_lexer_new_from_file(source);
-            } else {
-                lex = (mp_lexer_t *)source;
-            }
-            // source is a lexer, parse and compile the script
-            qstr source_name = lex->source_name;
-            mp_parse_tree_t parse_tree = mp_parse(lex, input_kind);
-            module_fun = mp_compile(&parse_tree, source_name, exec_flags & EXEC_FLAG_IS_REPL);
+            module_fun = call_mp_compile(source, input_kind, exec_flags);
             #else
             mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("script compilation not supported"));
             #endif
@@ -120,7 +125,17 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         #if MICROPY_REPL_INFO
         start = mp_hal_ticks_ms();
         #endif
-        mp_call_function_0(module_fun);
+        mp_obj_t result = mp_call_function_0(module_fun);
+        if ((result != mp_const_none) && (exec_flags & EXEC_FLAG_ALLOW_AWAIT)) {
+            mp_store_global(MP_QSTR_aes, result);
+            vstr_t new_source;
+            new_source.buf = "asyncio.repl_runner.run(aes)";
+            new_source.alloc = new_source.len = strlen(new_source.buf);
+            new_source.fixed_buf = 1;
+            module_fun = call_mp_compile(&new_source, MP_PARSE_SINGLE_INPUT, exec_flags & ~EXEC_FLAG_ALLOW_AWAIT);
+            result = mp_call_function_0(module_fun);
+            mp_delete_global(MP_QSTR_aes);
+        }
         mp_hal_set_interrupt_char(-1); // disable interrupt
         mp_handle_pending(true); // handle any pending exceptions (and any callbacks)
         nlr_pop();
@@ -373,7 +388,7 @@ STATIC int pyexec_friendly_repl_process_char(int c) {
         } else if (c == CHAR_CTRL_D) {
             // end of input
             mp_hal_stdout_tx_str("\r\n");
-            int ret = parse_compile_execute(MP_STATE_VM(repl_line), MP_PARSE_FILE_INPUT, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
+            int ret = parse_compile_execute(MP_STATE_VM(repl_line), MP_PARSE_FILE_INPUT, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR | EXEC_FLAG_ALLOW_AWAIT);
             if (ret & PYEXEC_FORCED_EXIT) {
                 return ret;
             }
@@ -464,7 +479,7 @@ STATIC int pyexec_friendly_repl_process_char(int c) {
         }
 
     exec:;
-        int ret = parse_compile_execute(MP_STATE_VM(repl_line), MP_PARSE_SINGLE_INPUT, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
+        int ret = parse_compile_execute(MP_STATE_VM(repl_line), MP_PARSE_SINGLE_INPUT, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR | EXEC_FLAG_ALLOW_AWAIT);
         if (ret & PYEXEC_FORCED_EXIT) {
             return ret;
         }
@@ -672,7 +687,7 @@ friendly_repl_reset:
             }
         }
 
-        ret = parse_compile_execute(&line, parse_input_kind, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
+        ret = parse_compile_execute(&line, parse_input_kind, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR | EXEC_FLAG_ALLOW_AWAIT);
         if (ret & PYEXEC_FORCED_EXIT) {
             return ret;
         }

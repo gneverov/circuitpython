@@ -40,6 +40,8 @@ typedef struct _mp_obj_exception_t {
 void mp_obj_exception_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t kind);
 void mp_obj_exception_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest);
 
+bool mp_obj_is_os_error(mp_obj_t exc, int *errcode);
+
 #define MP_DEFINE_EXCEPTION(exc_name, base_name) \
     MP_DEFINE_CONST_OBJ_TYPE(mp_type_##exc_name, MP_QSTR_##exc_name, MP_TYPE_FLAG_NONE, \
     make_new, mp_obj_exception_make_new, \

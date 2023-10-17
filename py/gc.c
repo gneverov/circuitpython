@@ -1264,19 +1264,23 @@ void gc_dump_alloc_table(const mp_print_t *print) {
                         c = 'B';
                     } else if (*ptr == &mp_type_module) {
                         c = 'M';
+                    } else if (*ptr == &mp_type_type) {
+                        c = 'C';
+                    } else if (gc_verify_ptr(*ptr)) {
+                        c = 'O';
                     } else {
                         c = 'h';
                         #if 0
                         // This code prints "Q" for qstr-pool data, and "q" for qstr-str
                         // data.  It can be useful to see how qstrs are being allocated,
                         // but is disabled by default because it is very slow.
-                        for (qstr_pool_t *pool = MP_STATE_VM(last_pool); c == 'h' && pool != NULL; pool = pool->prev) {
+                        for (const qstr_pool_t *pool = MP_STATE_VM(last_pool); c == 'h' && pool != NULL; pool = pool->prev) {
                             if ((qstr_pool_t *)ptr == pool) {
                                 c = 'Q';
                                 break;
                             }
-                            for (const byte **q = pool->qstrs, **q_top = pool->qstrs + pool->len; q < q_top; q++) {
-                                if ((const byte *)ptr == *q) {
+                            for (const char *const *q = pool->qstrs, *const *q_top = pool->qstrs + pool->len; q < q_top; q++) {
+                                if ((char *)ptr == *q) {
                                     c = 'q';
                                     break;
                                 }
@@ -1298,6 +1302,32 @@ void gc_dump_alloc_table(const mp_print_t *print) {
         mp_print_str(print, "\n");
     }
     GC_EXIT();
+}
+
+void gc_find_ptrs(const mp_print_t *print, void *addr) {
+    void **begin = (void **)MP_STATE_MEM(area).gc_pool_start;
+    void **end = (void **)MP_STATE_MEM(area).gc_pool_end;
+    for (void **ptr = begin; ptr < end; ptr++) {
+        if (*ptr == addr) {
+            mp_printf(print, "%p, ", ptr);
+        }
+    }
+    mp_print_str(print, "\n");
+}
+
+void *gc_verify_ptr(void *ptr) {
+    if (!VERIFY_PTR(ptr)) {
+        return NULL;
+    }
+    void *type = *(void **)ptr;
+    if (!VERIFY_PTR(type) && (type < (void *)0x10000000 || type >= (void *)0x20000000)) {
+        return NULL;
+    }
+    void *type_type = *(void **)type;
+    if (type_type != &mp_type_type) {
+        return NULL;
+    }
+    return ptr;
 }
 
 #if 0

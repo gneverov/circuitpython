@@ -38,27 +38,52 @@
 #define MICROPY_PY_ERRNO_LIST \
     X(EPERM) \
     X(ENOENT) \
+    X(ESRCH) \
+    X(EINTR) \
     X(EIO) \
+    X(ENXIO) \
+    X(E2BIG) \
+    X(ENOEXEC) \
     X(EBADF) \
+    X(ECHILD) \
     X(EAGAIN) \
     X(ENOMEM) \
     X(EACCES) \
+    X(EFAULT) \
+    X(EBUSY) \
     X(EEXIST) \
+    X(EXDEV) \
     X(ENODEV) \
+    X(ENOTDIR) \
     X(EISDIR) \
     X(EINVAL) \
+    X(ENFILE) \
+    X(EMFILE) \
+    X(ENOTTY) \
+    X(ETXTBSY) \
+    X(EFBIG) \
+    X(ENOSPC) \
+    X(ESPIPE) \
+    X(EROFS) \
+    X(EMLINK) \
+    X(EPIPE) \
+    X(EDOM) \
+    X(ERANGE) \
+    X(EWOULDBLOCK) \
     X(EOPNOTSUPP) \
+    X(EAFNOSUPPORT) \
     X(EADDRINUSE) \
     X(ECONNABORTED) \
     X(ECONNRESET) \
     X(ENOBUFS) \
+    X(EISCONN) \
     X(ENOTCONN) \
     X(ETIMEDOUT) \
     X(ECONNREFUSED) \
     X(EHOSTUNREACH) \
     X(EALREADY) \
     X(EINPROGRESS) \
-
+    X(ECANCELED)
 #endif
 
 #if MICROPY_PY_ERRNO_ERRORCODE
@@ -101,23 +126,26 @@ const mp_obj_module_t mp_module_errno = {
 
 MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_errno, mp_module_errno);
 
-qstr mp_errno_to_str(mp_obj_t errno_val) {
-    #if MICROPY_PY_ERRNO_ERRORCODE
+mp_obj_t mp_errno_to_str(int errcode) {
+    #if MICROPY_FREERTOS
+    const char *errstr = strerror(errcode);
+    return mp_obj_new_str(errstr, strlen(errstr));
+    #elif MICROPY_PY_ERRNO_ERRORCODE
     // We have the errorcode dict so can do a lookup using the hash map
-    mp_map_elem_t *elem = mp_map_lookup((mp_map_t *)&errorcode_dict.map, errno_val, MP_MAP_LOOKUP);
+    mp_map_elem_t *elem = mp_map_lookup((mp_map_t *)&errorcode_dict.map, MP_OBJ_NEW_SMALL_INT(errcode), MP_MAP_LOOKUP);
     if (elem == NULL) {
-        return MP_QSTRnull;
+        return MP_OBJ_NEW_QSTR(MP_QSTRnull);
     } else {
-        return MP_OBJ_QSTR_VALUE(elem->value);
+        return elem->value;
     }
     #else
     // We don't have the errorcode dict so do a simple search in the modules dict
-    for (size_t i = 0; i < MP_ARRAY_SIZE(mp_module_errno_globals_table); ++i) {
-        if (errno_val == mp_module_errno_globals_table[i].value) {
-            return MP_OBJ_QSTR_VALUE(mp_module_errno_globals_table[i].key);
+    for (size_t i = 0; i < MP_ARRAY_SIZE(mp_module_uerrno_globals_table); ++i) {
+        if (MP_OBJ_NEW_SMALL_INT(errcode) == mp_module_errno_globals_table[i].value) {
+            return mp_module_errno_globals_table[i].key;
         }
     }
-    return MP_QSTRnull;
+    return MP_OBJ_NEW_QSTR(MP_QSTRnull);
     #endif
 }
 

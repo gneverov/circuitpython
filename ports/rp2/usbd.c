@@ -27,10 +27,7 @@
 #include "py/mpconfig.h"
 
 #if MICROPY_HW_ENABLE_USBDEV
-
-#include "mp_usbd.h"
-#include "string.h"
-#include "tusb.h"
+#include "py/misc.h"
 #include "pico/unique_id.h"
 
 void mp_usbd_port_get_serial_number(char *serial_buf) {

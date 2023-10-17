@@ -42,10 +42,4 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     return 0;
 }
 
-time_t rp2_rtctime_seconds(time_t *timer) {
-    datetime_t t;
-    rtc_get_datetime(&t);
-    return timeutils_seconds_since_epoch(t.year, t.month, t.day, t.hour, t.min, t.sec);
-}
-
 #endif

@@ -4,6 +4,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2016 Damien P. George on behalf of Pycom Ltd
+ * Copyright (c) 2023 Gregory Neverov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -47,6 +48,66 @@
 
 STATIC const mp_obj_type_t mp_type_thread_lock;
 
+#if MICROPY_FREERTOS
+#include "FreeRTOS.h"
+#include "semphr.h"
+
+#include <errno.h>
+
+
+typedef struct _mp_obj_thread_lock_t {
+    mp_obj_base_t base;
+    SemaphoreHandle_t lock;
+    StaticSemaphore_t lock_buffer;
+} mp_obj_thread_lock_t;
+
+STATIC mp_obj_thread_lock_t *mp_obj_new_thread_lock(void) {
+    mp_obj_thread_lock_t *self = mp_obj_malloc(mp_obj_thread_lock_t, &mp_type_thread_lock);
+    self->lock = xSemaphoreCreateBinaryStatic(&self->lock_buffer);
+    xSemaphoreGive(self->lock);
+    return self;
+}
+
+STATIC mp_obj_t thread_lock_acquire(size_t n_args, const mp_obj_t *args) {
+    mp_obj_thread_lock_t *self = MP_OBJ_TO_PTR(args[0]);
+    bool wait = true;
+    if (n_args > 1) {
+        wait = mp_obj_get_int(args[1]);
+        // TODO support timeout arg
+    }
+
+    BaseType_t ok = xSemaphoreTake(self->lock, 0);
+    while (!ok && wait) {
+        if (task_check_interrupted()) {
+            mp_handle_pending(true);
+        }
+
+        MP_THREAD_GIL_EXIT();
+        task_enable_interrupt();
+        ok = xSemaphoreTake(self->lock, portMAX_DELAY);
+        task_disable_interrupt();
+        MP_THREAD_GIL_ENTER();
+    }
+
+    return mp_obj_new_bool(ok);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(thread_lock_acquire_obj, 1, 3, thread_lock_acquire);
+
+STATIC mp_obj_t thread_lock_release(mp_obj_t self_in) {
+    mp_obj_thread_lock_t *self = MP_OBJ_TO_PTR(self_in);
+    if (!xSemaphoreGive(self->lock)) {
+        mp_raise_msg(&mp_type_RuntimeError, NULL);
+    }
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(thread_lock_release_obj, thread_lock_release);
+
+STATIC mp_obj_t thread_lock_locked(mp_obj_t self_in) {
+    mp_obj_thread_lock_t *self = MP_OBJ_TO_PTR(self_in);
+    return mp_obj_new_bool(!uxSemaphoreGetCount(self->lock));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(thread_lock_locked_obj, thread_lock_locked);
+#else
 typedef struct _mp_obj_thread_lock_t {
     mp_obj_base_t base;
     mp_thread_mutex_t mutex;
@@ -99,6 +160,7 @@ STATIC mp_obj_t thread_lock_locked(mp_obj_t self_in) {
     return mp_obj_new_bool(self->locked);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(thread_lock_locked_obj, thread_lock_locked);
+#endif
 
 STATIC mp_obj_t thread_lock___exit__(size_t n_args, const mp_obj_t *args) {
     (void)n_args; // unused
@@ -159,7 +221,7 @@ STATIC void *thread_entry(void *args_in) {
 
     thread_entry_args_t *args = (thread_entry_args_t *)args_in;
 
-    mp_state_thread_t ts;
+    mp_state_thread_t ts = { 0 };
     mp_thread_set_state(&ts);
 
     mp_stack_set_top(&ts + 1); // need to include ts in root-pointer scan

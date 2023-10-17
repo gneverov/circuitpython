@@ -112,14 +112,14 @@ void mp_map_init_fixed_table(mp_map_t *map, size_t n, const mp_obj_t *table) {
 // Differentiate from mp_map_clear() - semantics is different
 void mp_map_deinit(mp_map_t *map) {
     if (!map->is_fixed) {
-        m_del(mp_map_elem_t, map->table, map->alloc);
+        // m_del(mp_map_elem_t, map->table, map->alloc);
     }
     map->used = map->alloc = 0;
 }
 
 void mp_map_clear(mp_map_t *map) {
     if (!map->is_fixed) {
-        m_del(mp_map_elem_t, map->table, map->alloc);
+        // m_del(mp_map_elem_t, map->table, map->alloc);
     }
     map->alloc = 0;
     map->used = 0;
@@ -144,7 +144,7 @@ STATIC void mp_map_rehash(mp_map_t *map) {
             mp_map_lookup(map, old_table[i].key, MP_MAP_LOOKUP_ADD_IF_NOT_FOUND)->value = old_table[i].value;
         }
     }
-    m_del(mp_map_elem_t, old_table, old_alloc);
+    // m_del(mp_map_elem_t, old_table, old_alloc);
 }
 
 // MP_MAP_LOOKUP behaviour:
@@ -343,7 +343,7 @@ STATIC void mp_set_rehash(mp_set_t *set) {
             mp_set_lookup(set, old_table[i], MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
         }
     }
-    m_del(mp_obj_t, old_table, old_alloc);
+    // m_del(mp_obj_t, old_table, old_alloc);
 }
 
 mp_obj_t mp_set_lookup(mp_set_t *set, mp_obj_t index, mp_map_lookup_kind_t lookup_kind) {
@@ -438,7 +438,7 @@ mp_obj_t mp_set_remove_first(mp_set_t *set) {
 }
 
 void mp_set_clear(mp_set_t *set) {
-    m_del(mp_obj_t, set->table, set->alloc);
+    // m_del(mp_obj_t, set->table, set->alloc);
     set->alloc = 0;
     set->used = 0;
     set->table = NULL;

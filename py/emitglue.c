@@ -207,7 +207,7 @@ mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, const mp_module
                 ((mp_obj_base_t *)MP_OBJ_TO_PTR(fun))->type = &mp_type_gen_wrap;
             }
 
-            #if MICROPY_PY_SYS_SETTRACE
+            #if MICROPY_PY_SYS_SETTRACE || MICROPY_PERSISTENT_CODE_SAVE
             mp_obj_fun_bc_t *self_fun = (mp_obj_fun_bc_t *)MP_OBJ_TO_PTR(fun);
             self_fun->rc = rc;
             #endif

@@ -43,6 +43,7 @@
 #define MP_STREAM_GET_DATA_OPTS (8)  // Get data/message options
 #define MP_STREAM_SET_DATA_OPTS (9)  // Set data/message options
 #define MP_STREAM_GET_FILENO    (10) // Get fileno of underlying file
+#define MP_STREAM_POLL_CTL      (11) // poll_ctl
 
 // These poll ioctl values are compatible with Linux
 #define MP_STREAM_POLL_RD       (0x0001)
@@ -73,6 +74,7 @@ typedef struct _mp_stream_p_t {
     mp_uint_t (*write)(mp_obj_t obj, const void *buf, mp_uint_t size, int *errcode);
     mp_uint_t (*ioctl)(mp_obj_t obj, mp_uint_t request, uintptr_t arg, int *errcode);
     mp_uint_t is_text : 1; // default is bytes, set this for text stream
+    mp_uint_t can_poll : 1; //
 } mp_stream_p_t;
 
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_read_obj);
@@ -87,6 +89,8 @@ MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream___exit___obj);
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_seek_obj);
 MP_DECLARE_CONST_FUN_OBJ_1(mp_stream_tell_obj);
 MP_DECLARE_CONST_FUN_OBJ_1(mp_stream_flush_obj);
+MP_DECLARE_CONST_FUN_OBJ_2(mp_stream_settimeout_obj);
+MP_DECLARE_CONST_FUN_OBJ_2(mp_stream_setblocking_obj);
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_ioctl_obj);
 
 // these are for mp_get_stream_raise and can be or'd together

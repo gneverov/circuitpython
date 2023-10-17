@@ -71,6 +71,9 @@ MP_DECLARE_CONST_FUN_OBJ_KW(mp_builtin_open_obj);
 mp_obj_t mp_builtin___import__(size_t n_args, const mp_obj_t *args);
 mp_obj_t mp_builtin___import___default(size_t n_args, const mp_obj_t *args);
 
+mp_obj_t mp_module_get_frozen(qstr module_name, mp_obj_t outer_module_obj);
+mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_module_obj);
+
 mp_obj_t mp_micropython_mem_info(size_t n_args, const mp_obj_t *args);
 
 MP_DECLARE_CONST_FUN_OBJ_VAR(mp_builtin___build_class___obj);

@@ -34,14 +34,7 @@
 #define MBEDTLS_GCM_C
 #define MBEDTLS_HAVE_TIME
 #define MBEDTLS_HAVE_TIME_DATE
-
-// Time hook
-#include <time.h>
-time_t rp2_rtctime_seconds(time_t *timer);
-#define MBEDTLS_PLATFORM_TIME_MACRO rp2_rtctime_seconds
-
-// Set MicroPython-specific options.
-#define MICROPY_MBEDTLS_CONFIG_BARE_METAL (1)
+#define MBEDTLS_ENTROPY_HARDWARE_ALT
 
 // Include common mbedtls configuration.
 #include "extmod/mbedtls/mbedtls_config_common.h"

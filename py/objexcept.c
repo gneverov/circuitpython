@@ -158,6 +158,14 @@ STATIC void decompress_error_text_maybe(mp_obj_exception_t *o) {
     #endif
 }
 
+bool mp_obj_is_os_error(mp_obj_t exc, int *errcode) {
+    const mp_obj_type_t *exc_type = mp_obj_get_type(exc);
+    if (!mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(exc_type), MP_OBJ_FROM_PTR(&mp_type_OSError))) {
+        return false;
+    }
+    return mp_obj_get_int_maybe(mp_obj_exception_get_value(exc), errcode);
+}
+
 void mp_obj_exception_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t kind) {
     mp_obj_exception_t *o = MP_OBJ_TO_PTR(o_in);
     mp_print_kind_t k = kind & ~PRINT_EXC_SUBCLASS;
@@ -180,16 +188,15 @@ void mp_obj_exception_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kin
 
         #if MICROPY_PY_ERRNO
         // try to provide a nice OSError error message
-        if (o->base.type == &mp_type_OSError && o->args->len > 0 && o->args->len < 3 && mp_obj_is_small_int(o->args->items[0])) {
-            qstr qst = mp_errno_to_str(o->args->items[0]);
-            if (qst != MP_QSTRnull) {
-                mp_printf(print, "[Errno " INT_FMT "] %q", MP_OBJ_SMALL_INT_VALUE(o->args->items[0]), qst);
-                if (o->args->len > 1) {
-                    mp_print_str(print, ": ");
-                    mp_obj_print_helper(print, o->args->items[1], PRINT_STR);
-                }
-                return;
+        int errcode;
+        if (mp_obj_is_os_error(o, &errcode)) {
+            mp_obj_t errstr = mp_errno_to_str(errcode);
+            mp_printf(print, "[Errno " INT_FMT "] %s", errcode, mp_obj_str_get_str(errstr));
+            if (o->args->len > 1) {
+                mp_print_str(print, ": ");
+                mp_obj_print_helper(print, o->args->items[1], PRINT_STR);
             }
+            return;
         }
         #endif
 

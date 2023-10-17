@@ -1838,6 +1838,10 @@ typedef double mp_float_t;
 #define MICROPY_END_ATOMIC_SECTION(state) (void)(state)
 #endif
 
+#ifndef MICROPY_FREERTOS
+#define MICROPY_FREERTOS (0)
+#endif
+
 // Allow to override static modifier for global objects, e.g. to use with
 // object code analysis tools which don't support static symbols.
 #ifndef STATIC

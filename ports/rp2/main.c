@@ -4,6 +4,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2020-2021 Damien P. George
+ * Copyright (c) 2023 Gregory Neverov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +25,24 @@
  * THE SOFTWARE.
  */
 
+#include <malloc.h>
+#include <signal.h>
 #include <stdio.h>
+
+#include "FreeRTOS.h"
+#include "task.h"
+
+#include "freertos/task_helper.h"
+#include "lwip/lwip_init.h"
+#include "newlib/newlib.h"
+#include "pico/dma.h"
+#include "pico/gpio.h"
+#include "pico/pio.h"
+#include "pico/terminal.h"
+#include "tinyusb/net_device_lwip.h"
+#include "tinyusb/terminal.h"
+#include "tinyusb/tusb_config.h"
+#include "tinyusb/tusb_lock.h"
 
 #include "py/compile.h"
 #include "py/runtime.h"
@@ -34,33 +52,26 @@
 #include "py/stackctrl.h"
 #include "extmod/modbluetooth.h"
 #include "extmod/modnetwork.h"
+#include "extmod/freeze/freeze.h"
+#include "extmod/modsignal.h"
 #include "shared/readline/readline.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
 #include "tusb.h"
-#include "uart.h"
 #include "modmachine.h"
 #include "modrp2.h"
 #include "mpbthciport.h"
-#include "mpnetworkport.h"
 #include "genhdr/mpversion.h"
-#include "mp_usbd.h"
 
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/unique_id.h"
 #include "hardware/rtc.h"
 #include "hardware/structs/rosc.h"
-#if MICROPY_PY_LWIP
-#include "lwip/init.h"
-#include "lwip/apps/mdns.h"
-#endif
 #if MICROPY_PY_NETWORK_CYW43
-#include "lib/cyw43-driver/src/cyw43.h"
+#include "pico/cyw43_driver.h"
 #endif
 
-extern uint8_t __StackTop, __StackBottom;
-extern uint8_t __GcHeapStart, __GcHeapEnd;
 
 // Embed version info in the binary in machine readable form
 bi_decl(bi_program_version_string(MICROPY_GIT_TAG));
@@ -71,27 +82,19 @@ bi_decl(bi_program_feature_group_with_flags(BINARY_INFO_TAG_MICROPYTHON,
     BINARY_INFO_ID_MP_FROZEN, "frozen modules",
     BI_NAMED_GROUP_SEPARATE_COMMAS | BI_NAMED_GROUP_SORT_ALPHA));
 
-int main(int argc, char **argv) {
+void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, uint8_t *gc_heap_end) {
     #if MICROPY_HW_ENABLE_UART_REPL
     bi_decl(bi_program_feature("UART REPL"))
-    setup_default_uart();
-    mp_uart_init();
-    #else
-    #ifndef NDEBUG
-    stdio_init_all();
-    #endif
     #endif
 
-    #if MICROPY_HW_ENABLE_USBDEV
     #if MICROPY_HW_USB_CDC
     bi_decl(bi_program_feature("USB REPL"))
-    #endif
-    tusb_init();
     #endif
 
     #if MICROPY_PY_THREAD
     bi_decl(bi_program_feature("thread support"))
     mp_thread_init();
+    mp_thread_set_state(&mp_state_ctx.thread);
     #endif
 
     // Start and initialise the RTC
@@ -109,66 +112,28 @@ int main(int argc, char **argv) {
     mp_hal_time_ns_set_from_rtc();
 
     // Initialise stack extents and GC heap.
-    mp_stack_set_top(&__StackTop);
-    mp_stack_set_limit(&__StackTop - &__StackBottom - 256);
-    gc_init(&__GcHeapStart, &__GcHeapEnd);
-
-    #if MICROPY_PY_LWIP
-    // lwIP doesn't allow to reinitialise itself by subsequent calls to this function
-    // because the system timeout list (next_timeout) is only ever reset by BSS clearing.
-    // So for now we only init the lwIP stack once on power-up.
-    lwip_init();
-    #if LWIP_MDNS_RESPONDER
-    mdns_resp_init();
-    #endif
-    #endif
-
-    #if MICROPY_PY_NETWORK_CYW43 || MICROPY_PY_BLUETOOTH_CYW43
-    {
-        cyw43_init(&cyw43_state);
-        cyw43_irq_init();
-        cyw43_post_poll_hook(); // enable the irq
-        uint8_t buf[8];
-        memcpy(&buf[0], "PICO", 4);
-
-        // MAC isn't loaded from OTP yet, so use unique id to generate the default AP ssid.
-        const char hexchr[16] = "0123456789ABCDEF";
-        pico_unique_board_id_t pid;
-        pico_get_unique_board_id(&pid);
-        buf[4] = hexchr[pid.id[7] >> 4];
-        buf[5] = hexchr[pid.id[6] & 0xf];
-        buf[6] = hexchr[pid.id[5] >> 4];
-        buf[7] = hexchr[pid.id[4] & 0xf];
-        cyw43_wifi_ap_set_ssid(&cyw43_state, 8, buf);
-        cyw43_wifi_ap_set_auth(&cyw43_state, CYW43_AUTH_WPA2_AES_PSK);
-        cyw43_wifi_ap_set_password(&cyw43_state, 8, (const uint8_t *)"picoW123");
-    }
-    #endif
+    mp_stack_set_top(stack_top);
+    mp_stack_set_limit(stack_top - stack_bottom - 256);
 
     for (;;) {
+        gc_init(gc_heap_start, gc_heap_end);
 
         // Initialise MicroPython runtime.
         mp_init();
         mp_obj_list_append(mp_sys_path, MP_OBJ_NEW_QSTR(MP_QSTR__slash_lib));
+        freeze_init();
 
         // Initialise sub-systems.
         readline_init0();
-        machine_pin_init();
-        rp2_pio_init();
-        machine_i2s_init0();
 
         #if MICROPY_PY_BLUETOOTH
         mp_bluetooth_hci_init();
         #endif
-        #if MICROPY_PY_NETWORK
-        mod_network_init();
-        #endif
-        #if MICROPY_PY_LWIP
-        mod_network_lwip_init();
-        #endif
+
+        signal_init();
 
         // Execute _boot.py to set up the filesystem.
-        #if MICROPY_VFS_FAT && MICROPY_HW_USB_MSC
+        #if MICROPY_VFS_FAT
         pyexec_frozen_module("_boot_fat.py", false);
         #else
         pyexec_frozen_module("_boot.py", false);
@@ -200,22 +165,121 @@ int main(int argc, char **argv) {
 
     soft_reset_exit:
         mp_printf(MP_PYTHON_PRINTER, "MPY: soft reboot\n");
-        #if MICROPY_PY_NETWORK
-        mod_network_deinit();
-        #endif
-        rp2_pio_deinit();
+        signal_deinit();
         #if MICROPY_PY_BLUETOOTH
         mp_bluetooth_deinit();
         #endif
         machine_pwm_deinit_all();
-        machine_pin_deinit();
         #if MICROPY_PY_THREAD
         mp_thread_deinit();
         #endif
         gc_sweep_all();
         mp_deinit();
     }
+}
 
+StaticTask_t mp_taskdef;
+const volatile __in_flash("gc_heap_size") size_t mp_gc_heap_size = 96 << 10;
+
+void mp_task(void *params) {
+    task_init();
+    size_t gc_heap_size = mp_gc_heap_size;
+    uint8_t *gc_heap = malloc(gc_heap_size);
+    while (!gc_heap) {
+        gc_heap_size /= 2;
+        gc_heap = malloc(gc_heap_size);
+    }
+
+    fd_close();
+    bool has_terminal = false;
+
+    #if MICROPY_HW_USB_CDC
+    const tusb_config_t *tusb_config = tusb_config_get();
+    if (!has_terminal && tusb_config && tusb_config->device && (tusb_config->cdc_itf != 255) && !tusb_config->disconnect) {
+        while (!tud_inited()) {
+            portYIELD();
+        }
+        has_terminal = !terminal_usb_open(tusb_config->cdc_itf);
+    }
+    #endif
+
+    #if MICROPY_HW_ENABLE_UART_REPL
+    if (!has_terminal) {
+        has_terminal = !terminal_uart_open();
+    }
+    #endif
+    assert(has_terminal);
+
+    mp_main((uint8_t *)&__MpStackBottom, (uint8_t *)&__MpStackTop, gc_heap, gc_heap + gc_heap_size);
+
+    free(gc_heap);
+    task_deinit();
+    vTaskDelete(NULL);
+}
+
+#if CFG_TUD_ENABLED
+void mp_tud_task(void *params) {
+    const tusb_config_t *tusb_config = tusb_config_get();
+
+    tud_lock_init();
+    tud_init(TUD_OPT_RHPORT);
+
+    if (!tusb_config || tusb_config->disconnect) {
+        tud_disconnect();
+    }
+
+    #if CFG_TUD_ECM_RNDIS || CFG_TUD_NCM
+    lwip_wait();
+    tud_network_init();
+    #endif
+
+    while (1) {
+        tud_task();
+    }
+    vTaskDelete(NULL);
+}
+#endif
+
+#if CFG_TUH_ENABLED
+void mp_tuh_task(void *params) {
+    // const tusb_config_t *tusb_config = tusb_config_get();
+
+    tuh_init(TUH_OPT_RHPORT);
+
+    while (1) {
+        tuh_task();
+    }
+    vTaskDelete(NULL);
+}
+#endif
+
+int main(int argc, char **argv) {
+    pico_dma_init();
+    pico_gpio_init();
+    pico_pio_init();
+
+    terminal_boot_open();
+
+    #if MICROPY_PY_NETWORK_CYW43
+    cyw43_driver_init();
+    #endif
+
+    lwip_helper_init();
+
+    const tusb_config_t *tusb_config = tusb_config_get();
+    #if CFG_TUD_ENABLED
+    if (tusb_config && tusb_config->device) {
+        xTaskCreate(mp_tud_task, "tud", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+    }
+    #endif
+    #if CFG_TUH_ENABLED
+    if (tusb_config && tusb_config->host) {
+        xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+    }
+    #endif
+
+    xTaskCreateStatic(mp_task, "mp", (&__MpStackTop - &__MpStackBottom) / sizeof(StackType_t), NULL, 1, (StackType_t *)&__MpStackBottom, &mp_taskdef);
+    vTaskStartScheduler();
     return 0;
 }
 
@@ -225,6 +289,7 @@ void gc_collect(void) {
     #if MICROPY_PY_THREAD
     mp_thread_gc_others();
     #endif
+    freeze_gc();
     gc_collect_end();
 }
 

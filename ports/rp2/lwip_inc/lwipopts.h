@@ -3,12 +3,7 @@
 
 #include <stdint.h>
 
-// This protection is not needed, instead protect lwIP code with flags
-#define SYS_ARCH_DECL_PROTECT(lev) do { } while (0)
-#define SYS_ARCH_PROTECT(lev) do { } while (0)
-#define SYS_ARCH_UNPROTECT(lev) do { } while (0)
-
-#define NO_SYS                          1
+#define NO_SYS                          0
 #define SYS_LIGHTWEIGHT_PROT            1
 #define MEM_ALIGNMENT                   4
 
@@ -35,9 +30,7 @@
 #define LWIP_MDNS_RESPONDER             1
 #define LWIP_IGMP                       1
 
-#define LWIP_NUM_NETIF_CLIENT_DATA      LWIP_MDNS_RESPONDER
-#define MEMP_NUM_UDP_PCB                (4 + LWIP_MDNS_RESPONDER)
-#define MEMP_NUM_SYS_TIMEOUT            (LWIP_NUM_SYS_TIMEOUT_INTERNAL + LWIP_MDNS_RESPONDER)
+#define LWIP_NUM_NETIF_CLIENT_DATA      (1 + LWIP_MDNS_RESPONDER)
 
 #define SO_REUSE                        1
 #define TCP_LISTEN_BACKLOG              1
@@ -45,13 +38,28 @@
 extern uint32_t rosc_random_u32(void);
 #define LWIP_RAND() rosc_random_u32()
 
-// lwip takes 26700 bytes
-#define MEM_SIZE (8000)
-#define TCP_MSS (800)
+#define MEM_SIZE (256 << 10)
+#define TCP_MSS (1460)
 #define TCP_WND (8 * TCP_MSS)
 #define TCP_SND_BUF (8 * TCP_MSS)
-#define MEMP_NUM_TCP_SEG (32)
 
 typedef uint32_t sys_prot_t;
+
+#define MEM_LIBC_MALLOC                 1
+#define MEMP_MEM_MALLOC                 1
+#define LWIP_ERRNO_STDINCLUDE           1
+#define TCPIP_MBOX_SIZE                 8
+#define TCPIP_THREAD_STACKSIZE          1024
+#define TCPIP_THREAD_PRIO               2
+
+#define LWIP_FREERTOS_CHECK_CORE_LOCKING 1
+void sys_mark_tcpip_thread(void);
+#define LWIP_MARK_TCPIP_THREAD()   sys_mark_tcpip_thread()
+void sys_check_core_locking(void);
+#define LWIP_ASSERT_CORE_LOCKED()  sys_check_core_locking()
+void sys_lock_tcpip_core(void);
+#define LOCK_TCPIP_CORE()          sys_lock_tcpip_core()
+void sys_unlock_tcpip_core(void);
+#define UNLOCK_TCPIP_CORE()        sys_unlock_tcpip_core()
 
 #endif // MICROPY_INCLUDED_RP2_LWIP_LWIPOPTS_H

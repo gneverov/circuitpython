@@ -29,15 +29,13 @@
 #include <stdint.h>
 #include "hardware/flash.h"
 #include "hardware/spi.h"
-#include "hardware/sync.h"
 #include "pico/binary_info.h"
-#include "pico/multicore.h"
 #include "mpconfigboard.h"
 
 // Board and hardware specific configuration
 #define MICROPY_HW_MCU_NAME                     "RP2040"
 #ifndef MICROPY_HW_ENABLE_UART_REPL
-#define MICROPY_HW_ENABLE_UART_REPL             (0) // useful if there is no USB
+#define MICROPY_HW_ENABLE_UART_REPL             (1) // useful if there is no USB
 #endif
 #ifndef MICROPY_HW_ENABLE_USBDEV
 #define MICROPY_HW_ENABLE_USBDEV                (1)
@@ -50,8 +48,23 @@
 #endif
 // Enable USB Mass Storage with FatFS filesystem.
 #ifndef MICROPY_HW_USB_MSC
-#define MICROPY_HW_USB_MSC (0)
+#define MICROPY_HW_USB_MSC (1)
 #endif
+
+// Enable USB ECM/RNDIS networking
+#ifndef MICROPY_HW_USB_ECM_RNDIS
+#define MICROPY_HW_USB_ECM_RNDIS (1)
+#endif
+
+// Disable USB NCM networking
+#ifndef MICROPY_HW_USB_NCM
+#define MICROPY_HW_USB_NCM (0)
+#endif
+
+#ifndef MICROPY_HW_USB_DESC_STR_MAX
+#define MICROPY_HW_USB_DESC_STR_MAX (20)
+#endif
+
 #endif
 
 #ifndef MICROPY_CONFIG_ROM_LEVEL
@@ -69,36 +82,32 @@
 #define MICROPY_EMIT_THUMB_ARMV7M               (0)
 #define MICROPY_EMIT_INLINE_THUMB               (1)
 #define MICROPY_EMIT_INLINE_THUMB_FLOAT         (0)
+#define MICROPY_PERSISTENT_CODE_SAVE            (1)
 
 // Optimisations
 #define MICROPY_OPT_COMPUTED_GOTO               (1)
 
 // Python internal features
-#define MICROPY_TRACKED_ALLOC                   (MICROPY_SSL_MBEDTLS || MICROPY_BLUETOOTH_BTSTACK)
+#define MICROPY_TRACKED_ALLOC                   (MICROPY_BLUETOOTH_BTSTACK)
 #define MICROPY_READER_VFS                      (1)
 #define MICROPY_ENABLE_GC                       (1)
 #define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF  (1)
 #define MICROPY_LONGINT_IMPL                    (MICROPY_LONGINT_IMPL_MPZ)
 #define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
-#define MICROPY_SCHEDULER_DEPTH                 (8)
-#define MICROPY_SCHEDULER_STATIC_NODES          (1)
-#ifndef MICROPY_USE_INTERNAL_ERRNO
-#define MICROPY_USE_INTERNAL_ERRNO              (1)
-#endif
+#define MICROPY_ENABLE_SCHEDULER                (1)
+#define MICROPY_USE_INTERNAL_ERRNO              (0)
+#define MICROPY_USE_INTERNAL_PRINTF             (0)
 
 // Fine control over Python builtins, classes, modules, etc
 #define MICROPY_PY_BUILTINS_HELP_TEXT           rp2_help_text
 #define MICROPY_PY_SYS_PLATFORM                 "rp2"
 #define MICROPY_PY_THREAD                       (1)
-#define MICROPY_PY_THREAD_GIL                   (0)
-#define MICROPY_THREAD_YIELD()                  mp_handle_pending(true)
+#define MICROPY_PY_THREAD_GIL                   (1)
 
 // Extended modules
 #define MICROPY_EPOCH_IS_1970                   (1)
 #define MICROPY_PY_OS_INCLUDEFILE               "ports/rp2/modos.c"
-#ifndef MICROPY_PY_OS_DUPTERM
-#define MICROPY_PY_OS_DUPTERM                   (1)
-#endif
+#define MICROPY_PY_OS_DUPTERM                   (0)
 #define MICROPY_PY_OS_SYNC                      (1)
 #define MICROPY_PY_OS_UNAME                     (1)
 #define MICROPY_PY_OS_URANDOM                   (1)
@@ -128,6 +137,7 @@
 #define MICROPY_VFS_FAT                         (1)
 #define MICROPY_SSL_MBEDTLS                     (1)
 #define MICROPY_PY_LWIP_SOCK_RAW                (MICROPY_PY_LWIP)
+#define MICROPY_PY_FREEZE                       (1)
 
 // fatfs configuration
 #define MICROPY_FATFS_ENABLE_LFN                (1)
@@ -147,10 +157,6 @@
 
 // By default networking should include sockets, ssl, websockets, webrepl, dupterm.
 #if MICROPY_PY_NETWORK
-#ifndef MICROPY_PY_NETWORK_HOSTNAME_DEFAULT
-#define MICROPY_PY_NETWORK_HOSTNAME_DEFAULT "mpy-rp2"
-#endif
-
 #ifndef MICROPY_PY_SOCKET
 #define MICROPY_PY_SOCKET               (1)
 #endif
@@ -166,6 +172,7 @@
 #endif
 
 #if MICROPY_PY_NETWORK_CYW43
+#include "cyw43.h"
 extern const struct _mp_obj_type_t mp_network_cyw43_type;
 #define MICROPY_HW_NIC_CYW43 \
     { MP_ROM_QSTR(MP_QSTR_WLAN), MP_ROM_PTR(&mp_network_cyw43_type) }, \
@@ -207,11 +214,6 @@ extern const struct _mp_obj_type_t mod_network_nic_type_wiznet5k;
     MICROPY_HW_NIC_WIZNET5K \
     MICROPY_BOARD_NETWORK_INTERFACES \
 
-// Additional entries for use with pendsv_schedule_dispatch.
-#ifndef MICROPY_BOARD_PENDSV_ENTRIES
-#define MICROPY_BOARD_PENDSV_ENTRIES
-#endif
-
 #define MP_STATE_PORT MP_STATE_VM
 
 // Miscellaneous settings
@@ -232,38 +234,7 @@ extern uint32_t mp_thread_begin_atomic_section(void);
 extern void mp_thread_end_atomic_section(uint32_t);
 #define MICROPY_BEGIN_ATOMIC_SECTION()     mp_thread_begin_atomic_section()
 #define MICROPY_END_ATOMIC_SECTION(state)  mp_thread_end_atomic_section(state)
-
-// Prevent the "lwIP task" from running when unsafe to do so.
-#define MICROPY_PY_LWIP_ENTER   lwip_lock_acquire();
-#define MICROPY_PY_LWIP_REENTER lwip_lock_acquire();
-#define MICROPY_PY_LWIP_EXIT    lwip_lock_release();
-
-#if MICROPY_HW_ENABLE_USBDEV
-#define MICROPY_HW_USBDEV_TASK_HOOK extern void usbd_task(void); usbd_task();
-#define MICROPY_VM_HOOK_COUNT (10)
-#define MICROPY_VM_HOOK_INIT static uint vm_hook_divisor = MICROPY_VM_HOOK_COUNT;
-#define MICROPY_VM_HOOK_POLL if (get_core_num() == 0 && --vm_hook_divisor == 0) { \
-        vm_hook_divisor = MICROPY_VM_HOOK_COUNT; \
-        MICROPY_HW_USBDEV_TASK_HOOK \
-}
-#define MICROPY_VM_HOOK_LOOP MICROPY_VM_HOOK_POLL
-#define MICROPY_VM_HOOK_RETURN MICROPY_VM_HOOK_POLL
-#else
-#define MICROPY_HW_USBDEV_TASK_HOOK
-#endif
-
-#define MICROPY_EVENT_POLL_HOOK_FAST \
-    do { \
-        if (get_core_num() == 0) { MICROPY_HW_USBDEV_TASK_HOOK } \
-        extern void mp_handle_pending(bool); \
-        mp_handle_pending(true); \
-    } while (0)
-
-#define MICROPY_EVENT_POLL_HOOK \
-    do { \
-        MICROPY_EVENT_POLL_HOOK_FAST; \
-        best_effort_wfe_or_timeout(make_timeout_time_ms(1)); \
-    } while (0);
+#define MICROPY_FREERTOS (1)
 
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
 
@@ -280,11 +251,3 @@ typedef intptr_t mp_off_t;
 #define MICROPY_FROZEN_LIST_ITEM(name, file) bi_decl(bi_string(BINARY_INFO_TAG_MICROPYTHON, BINARY_INFO_ID_MP_FROZEN, name))
 
 extern uint32_t rosc_random_u32(void);
-extern void lwip_lock_acquire(void);
-extern void lwip_lock_release(void);
-
-#if MICROPY_PY_BLUETOOTH || MICROPY_PY_BLUETOOTH_CYW43
-// Bluetooth code only runs in the scheduler, no locking/mutex required.
-#define MICROPY_PY_BLUETOOTH_ENTER uint32_t atomic_state = 0;
-#define MICROPY_PY_BLUETOOTH_EXIT (void)atomic_state;
-#endif

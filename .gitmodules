@@ -55,7 +55,13 @@
 	url = https://github.com/georgerobotics/cyw43-driver.git
 [submodule "lib/micropython-lib"]
 	path = lib/micropython-lib
-	url = https://github.com/micropython/micropython-lib.git
+	url = https://github.com/gneverov/micropython-lib.git
 [submodule "lib/protobuf-c"]
 	path = lib/protobuf-c
 	url = https://github.com/protobuf-c/protobuf-c.git
+[submodule "lib/freertos"]
+	path = lib/freertos
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+[submodule "lib/audio"]
+	path = lib/audio
+	url = https://github.com/gneverov/ESP8266Audio.git

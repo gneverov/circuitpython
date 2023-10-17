@@ -348,6 +348,14 @@ STATIC void unregister_module_from_nlr_jump_callback(void *ctx_in) {
     mp_map_lookup(mp_loaded_modules_map, MP_OBJ_NEW_QSTR(ctx->name), MP_MAP_LOOKUP_REMOVE_IF_FOUND);
 }
 
+__attribute((weak)) mp_obj_t mp_module_get_frozen(qstr module_name, mp_obj_t outer_module_obj) {
+    return MP_OBJ_NULL;
+}
+
+__attribute((weak)) mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_module_obj) {
+    return module_obj;
+}
+
 // Load a module at the specified absolute path, possibly as a submodule of the given outer module.
 // full_mod_name:    The full absolute path up to this level (e.g. "foo.bar.baz").
 // level_mod_name:   The final component of the path (e.g. "baz").
@@ -373,6 +381,17 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
         if (elem) {
             return elem->value;
         }
+
+        #if MICROPY_FREERTOS
+        mp_obj_t module_obj = mp_module_get_frozen(full_mod_name, outer_module_obj);
+        if (module_obj) {
+            if (outer_module_obj != MP_OBJ_NULL) {
+                // If it's a sub-module then make it available on the parent module.
+                mp_store_attr(outer_module_obj, level_mod_name, module_obj);
+            }
+            return module_obj;
+        }
+        #endif
     }
 
     VSTR_FIXED(path, MICROPY_ALLOC_PATH_MAX);
@@ -508,6 +527,10 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
         // process_import_at_level will detect that it doesn't have
         // a __path__ attribute, and not attempt to stat it.
     }
+
+    #if MICROPY_FREERTOS
+    module_obj = mp_module_freeze(full_mod_name, module_obj, outer_module_obj);
+    #endif
 
     if (outer_module_obj != MP_OBJ_NULL) {
         // If it's a sub-module then make it available on the parent module.

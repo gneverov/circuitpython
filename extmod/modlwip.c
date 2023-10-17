@@ -35,7 +35,7 @@
 #include "py/mperrno.h"
 #include "py/mphal.h"
 
-#if MICROPY_PY_LWIP
+#if MICROPY_PY_LWIP & !MICROPY_FREERTOS
 
 #include "shared/netutils/netutils.h"
 

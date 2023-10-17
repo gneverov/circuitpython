@@ -2749,7 +2749,7 @@ STATIC void compile_yield_expr(compiler_t *comp, mp_parse_node_struct_t *pns) {
 
 #if MICROPY_PY_ASYNC_AWAIT
 STATIC void compile_atom_expr_await(compiler_t *comp, mp_parse_node_struct_t *pns) {
-    if (comp->scope_cur->kind != SCOPE_FUNCTION && comp->scope_cur->kind != SCOPE_LAMBDA) {
+    if ((!comp->is_repl || comp->scope_cur->kind != SCOPE_MODULE) && comp->scope_cur->kind != SCOPE_FUNCTION && comp->scope_cur->kind != SCOPE_LAMBDA) {
         compile_syntax_error(comp, (mp_parse_node_t)pns, MP_ERROR_TEXT("'await' outside function"));
         return;
     }

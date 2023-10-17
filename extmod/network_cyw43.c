@@ -26,6 +26,10 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#include "FreeRTOS.h"
+#include "timers.h"
+
 #include "py/runtime.h"
 #include "py/objstr.h"
 #include "py/mphal.h"
@@ -140,9 +144,105 @@ STATIC mp_obj_t network_cyw43_active(size_t n_args, const mp_obj_t *args) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_active_obj, 1, 2, network_cyw43_active);
 
-STATIC int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
-    mp_obj_t list = MP_OBJ_FROM_PTR(env);
+typedef struct {
+    cyw43_t *cyw;
+    TaskHandle_t task;
+    struct pbuf *results;
+    bool scan_active;
+    SemaphoreHandle_t mutex;
+    StaticSemaphore_t mutex_buffer;
+} network_cyw43_scan_t;
 
+STATIC int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
+    struct pbuf *result = pbuf_alloc(PBUF_RAW, sizeof(*res), PBUF_RAM);
+    if (!result) {
+        return 1;
+    }
+    pbuf_take(result, res, sizeof(*res));
+
+    struct pbuf *pbuf = env;
+    network_cyw43_scan_t *pcb = pbuf->payload;
+
+    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    if (pcb->task) {
+        struct pbuf **results = &pcb->results;
+        while (*results) {
+            results = &(*results)->next;
+        }
+        *results = result;
+        // xTaskNotifyGive(pcb->task);
+    } else {
+        pbuf_free(result);
+    }
+    xSemaphoreGive(pcb->mutex);
+
+    return 0;
+}
+
+void network_cyw43_scan_timer(TimerHandle_t xTimer) {
+    struct pbuf *pbuf = pvTimerGetTimerID(xTimer);
+    network_cyw43_scan_t *pcb = pbuf->payload;
+
+    bool scan_active = cyw43_wifi_scan_active(pcb->cyw);
+
+    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    if (pcb->task) {
+        pcb->scan_active = scan_active;
+        xTaskNotifyGive(pcb->task);
+    }
+    xSemaphoreGive(pcb->mutex);
+
+    if (!scan_active) {
+        pbuf_free(pbuf);
+        xTimerDelete(xTimer, portMAX_DELAY);
+    }
+}
+
+STATIC void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
+    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    pcb->task = NULL;
+    if (pcb->results) {
+        pbuf_free(pcb->results);
+        pcb->results = NULL;
+    }
+    xSemaphoreGive(pcb->mutex);
+}
+
+STATIC void network_cyw43_scan_init(network_cyw43_scan_t *pcb, cyw43_t *cyw, cyw43_wifi_scan_options_t *opts) {
+    pcb->cyw = cyw;
+    pcb->task = xTaskGetCurrentTaskHandle();
+    pcb->results = NULL;
+    pcb->scan_active = false;
+    pcb->mutex = xSemaphoreCreateMutexStatic(&pcb->mutex_buffer);
+    xTaskNotifyStateClear(NULL);
+}
+
+STATIC struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_t timeout) {
+    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    TimeOut_t xTimeOut;
+    vTaskSetTimeOutState(&xTimeOut);
+    while (pcb->scan_active && !xTaskCheckForTimeOut(&xTimeOut, &timeout)) {
+        xSemaphoreGive(pcb->mutex);
+        if (task_check_interrupted()) {
+            mp_handle_pending(true);
+        }
+
+        MP_THREAD_GIL_EXIT();
+        task_enable_interrupt();
+        ulTaskNotifyTake(pdTRUE, timeout);
+        task_disable_interrupt();
+        MP_THREAD_GIL_ENTER();
+
+        xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    }
+
+    struct pbuf *results = pcb->results;
+    pcb->results = NULL;
+    xSemaphoreGive(pcb->mutex);
+    return results;
+}
+
+STATIC void network_cyw43_scan_process(mp_obj_t list, const cyw43_ev_scan_result_t *res) {
     // Search for existing BSSID to remove duplicates
     bool found = false;
     size_t len;
@@ -173,8 +273,6 @@ STATIC int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
         };
         mp_obj_list_append(list, mp_obj_new_tuple(6, tuple));
     }
-
-    return 0; // continue scan
 }
 
 STATIC mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -213,20 +311,50 @@ STATIC mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_m
         memcpy(opts.bssid, bssid.buf, sizeof(opts.bssid));
     }
 
-    mp_obj_t res = mp_obj_new_list(0, NULL);
-    int scan_res = cyw43_wifi_scan(self->cyw, &opts, MP_OBJ_TO_PTR(res), network_cyw43_scan_cb);
+    if (cyw43_wifi_scan_active(self->cyw)) {
+        mp_raise_ValueError(MP_ERROR_TEXT("Scan already active"));
+    }
+
+    struct pbuf *pbuf = pbuf_alloc(PBUF_RAW, sizeof(network_cyw43_scan_t), PBUF_RAM);
+    if (!pbuf) {
+        mp_raise_type(&mp_type_MemoryError);
+    }
+    network_cyw43_scan_t *pcb = pbuf->payload;
+    network_cyw43_scan_init(pcb, self->cyw, &opts);
+
+    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    int scan_res = cyw43_wifi_scan(self->cyw, &opts, pbuf, network_cyw43_scan_cb);
+    if (scan_res >= 0) {
+        pcb->scan_active = true;
+        pbuf_ref(pbuf);
+        TimerHandle_t timer = xTimerCreate("cyw43_scan", pdMS_TO_TICKS(50), true, pbuf, network_cyw43_scan_timer);
+        xTimerStart(timer, portMAX_DELAY);
+    }
+    xSemaphoreGive(pcb->mutex);
+
+    struct pbuf *results = NULL;
+    if (scan_res >= 0) {
+        results = network_cyw43_scan_wait(pcb, pdMS_TO_TICKS(10000));
+    }
+
+    network_cyw43_scan_deinit(pcb);
+    pbuf_free(pbuf);
 
     if (scan_res < 0) {
         mp_raise_OSError(-scan_res);
     }
 
-    // Wait for scan to finish, with a 10s timeout
-    uint32_t start = mp_hal_ticks_ms();
-    while (cyw43_wifi_scan_active(self->cyw) && mp_hal_ticks_ms() - start < 10000) {
-        MICROPY_EVENT_POLL_HOOK
+    mp_obj_t list = mp_obj_new_list(0, NULL);
+    struct pbuf *result = results;
+    while (result) {
+        cyw43_ev_scan_result_t *next = result->payload;
+        network_cyw43_scan_process(list, next);
+        result = result->next;
     }
-
-    return res;
+    if (results) {
+        pbuf_free(results);
+    }
+    return list;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_scan_obj, 1, network_cyw43_scan);
 

@@ -4,6 +4,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2013, 2014 Damien P. George
+ * Copyright (c) 2023 Gregory Neverov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +32,14 @@
 #include "py/runtime.h"
 #include "py/gc.h"
 #include "py/mphal.h"
+
+#if MICROPY_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+
+#include <malloc.h>
+#include <string.h>
+#endif
 
 #if MICROPY_PY_MICROPYTHON
 
@@ -92,6 +101,65 @@ mp_obj_t mp_micropython_mem_info(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_micropython_mem_info_obj, 0, 1, mp_micropython_mem_info);
+
+#ifndef NDEBUG
+mp_obj_t mp_micropython_find_ptrs(mp_obj_t addr_in) {
+    void *addr = (void *)mp_obj_get_int(addr_in);
+    gc_find_ptrs(&mp_plat_print, addr);
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_micropython_find_ptrs_obj, mp_micropython_find_ptrs);
+
+mp_obj_t mp_micropython_from_ptr(mp_obj_t ptr_in) {
+    void *ptr = (void *)mp_obj_get_int(ptr_in);
+    ptr = gc_verify_ptr(ptr);
+    return ptr ? MP_OBJ_FROM_PTR(ptr) : mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_micropython_from_ptr_obj, mp_micropython_from_ptr);
+
+mp_obj_t mp_micropython_to_ptr(mp_obj_t obj_in) {
+    if (!mp_obj_is_obj(obj_in)) {
+        mp_raise_TypeError(NULL);
+    }
+    return mp_obj_new_int((intptr_t)MP_OBJ_TO_PTR(obj_in));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_micropython_to_ptr_obj, mp_micropython_to_ptr);
+
+mp_obj_t mp_micropython_from_qstr(mp_obj_t qstr_in) {
+    mp_int_t qst = mp_obj_get_int(qstr_in);
+    const qstr_pool_t *pool = MP_STATE_VM(last_pool);
+    if (qst >= pool->total_prev_len + pool->len) {
+        mp_raise_ValueError(NULL);
+    }
+    return MP_OBJ_NEW_QSTR(qst);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_micropython_from_qstr_obj, mp_micropython_from_qstr);
+
+STATIC mp_obj_t mp_micropython_debug_break(void) {
+    __breakpoint();
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_micropython_debug_break_obj, mp_micropython_debug_break);
+#endif
+
+#if MICROPY_FREERTOS
+mp_obj_t mp_micropython_malloc_stats() {
+    malloc_stats();
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_micropython_malloc_stats_obj, mp_micropython_malloc_stats);
+
+mp_obj_t mp_micropython_tasks() {
+    UBaseType_t n_tasks = uxTaskGetNumberOfTasks();
+    vstr_t vstr;
+    vstr_init(&vstr, 40 * n_tasks);
+    vTaskList(vstr.buf);
+    vstr.len = strlen(vstr.buf);
+    mp_print_str(&mp_plat_print, vstr.buf);
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_micropython_tasks_obj, mp_micropython_tasks);
+#endif
 
 STATIC mp_obj_t mp_micropython_qstr_info(size_t n_args, const mp_obj_t *args) {
     (void)args;
@@ -180,6 +248,17 @@ STATIC const mp_rom_map_elem_t mp_module_micropython_globals_table[] = {
     #endif
     { MP_ROM_QSTR(MP_QSTR_mem_info), MP_ROM_PTR(&mp_micropython_mem_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_qstr_info), MP_ROM_PTR(&mp_micropython_qstr_info_obj) },
+    #ifndef NDEBUG
+    { MP_ROM_QSTR(MP_QSTR_find_ptrs), MP_ROM_PTR(&mp_micropython_find_ptrs_obj) },
+    { MP_ROM_QSTR(MP_QSTR_from_ptr), MP_ROM_PTR(&mp_micropython_from_ptr_obj) },
+    { MP_ROM_QSTR(MP_QSTR_to_ptr), MP_ROM_PTR(&mp_micropython_to_ptr_obj) },
+    { MP_ROM_QSTR(MP_QSTR_from_qstr), MP_ROM_PTR(&mp_micropython_from_qstr_obj) },
+    { MP_ROM_QSTR(MP_QSTR_debug_break), MP_ROM_PTR(&mp_micropython_debug_break_obj) },
+    #endif
+    #if MICROPY_FREERTOS
+    { MP_ROM_QSTR(MP_QSTR_malloc_stats), MP_ROM_PTR(&mp_micropython_malloc_stats_obj) },
+    { MP_ROM_QSTR(MP_QSTR_tasks), MP_ROM_PTR(&mp_micropython_tasks_obj) },
+    #endif
     #endif
     #if MICROPY_PY_MICROPYTHON_STACK_USE
     { MP_ROM_QSTR(MP_QSTR_stack_use), MP_ROM_PTR(&mp_micropython_stack_use_obj) },

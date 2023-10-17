@@ -32,7 +32,7 @@
 #include "py/runtime.h"
 #include "py/mphal.h"
 
-#if MICROPY_PY_NETWORK
+#if MICROPY_PY_NETWORK && !MICROPY_FREERTOS
 
 #include "shared/netutils/netutils.h"
 #include "extmod/modnetwork.h"

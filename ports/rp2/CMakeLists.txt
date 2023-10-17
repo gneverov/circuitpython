@@ -14,13 +14,6 @@ else()
     set(PICO_SDK_PATH ../../lib/pico-sdk)
 endif()
 
-# Use the local tinyusb instead of the one in pico-sdk
-set(PICO_TINYUSB_PATH ${MICROPY_DIR}/lib/tinyusb)
-# Use the local lwip instead of the one in pico-sdk
-set(PICO_LWIP_PATH ${MICROPY_DIR}/lib/lwip)
-# Use the local btstack instead of the one in pico-sdk
-set(PICO_BTSTACK_PATH ${MICROPY_DIR}/lib/btstack)
-
 # Set the location of this port's directory.
 set(MICROPY_PORT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
@@ -48,24 +41,24 @@ if(NOT PICO_BOARD)
     string(TOLOWER ${MICROPY_BOARD} PICO_BOARD)
 endif()
 
+set(MICROPY_FREERTOS ON)
+set(MICROPY_PY_AUDIO_MP3 ON)
+
 # Set the amount of C heap, if it's not already set.
 # If a board uses malloc then it must set this to at least 4096.
-if(NOT MICROPY_C_HEAP_SIZE)
-    set(MICROPY_C_HEAP_SIZE 0)
-endif()
 
 # Enable extmod components that will be configured by extmod.cmake.
 # A board may also have enabled additional components.
 set(MICROPY_SSL_MBEDTLS ON)
 
-# Use the local cyw43_driver instead of the one in pico-sdk
+# Use the pico-sdk cyw43_driver instead of the local one
 if (MICROPY_PY_NETWORK_CYW43)
-    set(PICO_CYW43_DRIVER_PATH ${MICROPY_DIR}/lib/cyw43-driver)
+    # set(PICO_CYW43_DRIVER_PATH ${MICROPY_DIR}/lib/cyw43-driver)
 endif()
 
 # Necessary submodules for all boards.
 string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/mbedtls)
-string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
+# string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
 
 # Include component cmake fragments
 include(${MICROPY_DIR}/py/py.cmake)
@@ -75,9 +68,43 @@ include(${PICO_SDK_PATH}/pico_sdk_init.cmake)
 # Define the top-level project
 project(${MICROPY_TARGET})
 
+set(PICO_STDIO_UART OFF)
 pico_sdk_init()
 
+function(target_remove_property_value target property)
+    get_target_property(_ ${target} ${property})
+    list(REMOVE_ITEM _ ${ARGN})
+    set_target_properties(${target} PROPERTIES ${property} "${_}")
+endfunction()
+
+# pico-sdk is "wrong" about a few things. Patch its CMake targets.
+target_remove_property_value(pico_stdlib INTERFACE_LINK_LIBRARIES pico_stdio)
+target_remove_property_value(pico_stdlib_headers INTERFACE_LINK_LIBRARIES pico_stdio_headers)
+target_include_directories(pico_stdlib_headers INTERFACE "${PICO_SDK_PATH}/src/rp2_common/pico_stdio/include")
+
+target_remove_property_value(pico_runtime INTERFACE_LINK_LIBRARIES pico_printf pico_malloc)
+target_remove_property_value(pico_runtime_headers INTERFACE_LINK_LIBRARIES pico_printf_headers pico_malloc_headers)
+
+target_remove_property_value(pico_runtime INTERFACE_LINK_OPTIONS "--specs=nosys.specs")
+target_link_options(pico_runtime INTERFACE "--specs=nano.specs")
+target_compile_options(pico_runtime INTERFACE "--specs=nano.specs")
+
+target_remove_property_value(tinyusb_common_base INTERFACE_COMPILE_DEFINITIONS CFG_TUSB_OS=OPT_OS_PICO)
+target_compile_definitions(tinyusb_common_base INTERFACE
+    CFG_TUSB_OS=OPT_OS_FREERTOS
+    )
+
 include(${MICROPY_DIR}/py/usermod.cmake)
+
+add_subdirectory(${MICROPY_PORT_DIR}/freertos)
+add_subdirectory(${MICROPY_DIR}/lib/freertos/portable/ThirdParty/GCC/RP2040 freetros)
+string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
+
+add_subdirectory(${MICROPY_PORT_DIR}/lwip)
+add_subdirectory(${MICROPY_PORT_DIR}/newlib)
+add_subdirectory(${MICROPY_PORT_DIR}/pico)
+add_subdirectory(${MICROPY_PORT_DIR}/tinyusb)
+
 
 add_executable(${MICROPY_TARGET})
 
@@ -99,14 +126,10 @@ set(MICROPY_SOURCE_LIB
     ${MICROPY_DIR}/shared/runtime/gchelper_thumb1.s
     ${MICROPY_DIR}/shared/runtime/gchelper_native.c
     ${MICROPY_DIR}/shared/runtime/interrupt_char.c
-    ${MICROPY_DIR}/shared/runtime/mpirq.c
     ${MICROPY_DIR}/shared/runtime/pyexec.c
     ${MICROPY_DIR}/shared/runtime/stdout_helpers.c
     ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
     ${MICROPY_DIR}/shared/timeutils/timeutils.c
-    ${MICROPY_DIR}/shared/tinyusb/mp_cdc_common.c
-    ${MICROPY_DIR}/shared/tinyusb/mp_usbd.c
-    ${MICROPY_DIR}/shared/tinyusb/mp_usbd_descriptor.c
 )
 
 set(MICROPY_SOURCE_DRIVERS
@@ -120,23 +143,21 @@ set(MICROPY_SOURCE_PORT
     machine_adc.c
     machine_bitstream.c
     machine_i2c.c
-    machine_i2s.c
     machine_pin.c
     machine_rtc.c
     machine_spi.c
     machine_timer.c
-    machine_uart.c
     machine_wdt.c
+    machine/audio_out_pwm.c
+    machine/pin.c
+    machine/pio_sm.c
+    machine/uart.c
     main.c
     modmachine.c
     modrp2.c
     mphalport.c
-    mpnetworkport.c
     mpthreadport.c
-    pendsv.c
     rp2_flash.c
-    rp2_pio.c
-    uart.c
     usbd.c
     msc_disk.c
     mbedtls/mbedtls_port.c
@@ -150,18 +171,20 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
     ${MICROPY_PORT_DIR}/machine_adc.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
-    ${MICROPY_PORT_DIR}/machine_i2s.c
     ${MICROPY_PORT_DIR}/machine_pin.c
     ${MICROPY_PORT_DIR}/machine_rtc.c
     ${MICROPY_PORT_DIR}/machine_spi.c
     ${MICROPY_PORT_DIR}/machine_timer.c
-    ${MICROPY_PORT_DIR}/machine_uart.c
     ${MICROPY_PORT_DIR}/machine_wdt.c
+    ${MICROPY_PORT_DIR}/machine/audio_out_pwm.c
+    ${MICROPY_PORT_DIR}/machine/pin.c
+    ${MICROPY_PORT_DIR}/machine/pio_sm.c
+    ${MICROPY_PORT_DIR}/machine/uart.c
     ${MICROPY_PORT_DIR}/modmachine.c
     ${MICROPY_PORT_DIR}/modrp2.c
     ${MICROPY_PORT_DIR}/modos.c
+    ${MICROPY_PORT_DIR}/mpthreadport.c
     ${MICROPY_PORT_DIR}/rp2_flash.c
-    ${MICROPY_PORT_DIR}/rp2_pio.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
 
@@ -190,26 +213,45 @@ set(PICO_SDK_COMPONENTS
     pico_base_headers
     pico_binary_info
     pico_bootrom
-    pico_multicore
     pico_platform
-    pico_stdio
     pico_stdlib
-    pico_sync
-    pico_time
     pico_unique_id
     pico_util
     tinyusb_common
     tinyusb_device
 )
 
+# Patch the tinyusb_device project to support networking
+target_include_directories(tinyusb_device INTERFACE 
+    ${PICO_TINYUSB_PATH}/lib/networking
+)
+target_sources(tinyusb_device INTERFACE 
+    ${PICO_TINYUSB_PATH}/lib/networking/rndis_reports.c
+)
+
 if (MICROPY_PY_LWIP)
-    target_link_libraries(${MICROPY_TARGET} micropy_lib_lwip)
+    list(APPEND PICO_SDK_COMPONENTS 
+        pico_lwip_freertos
+        pico_lwip_mdns
+    )
 
     target_include_directories(${MICROPY_TARGET} PRIVATE
         lwip_inc
     )
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_LWIP=1
+    )
+
+    if (CMAKE_BUILD_TYPE MATCHES Debug)
+        target_compile_definitions(${MICROPY_TARGET} PRIVATE
+            LWIP_DEBUG=1
+        )
+    endif()
+endif()
+
+if (MICROPY_PY_AUDIO_MP3)
+    target_link_libraries(${MICROPY_TARGET}
+        micropy_lib_audio_mp3
     )
 endif()
 
@@ -276,11 +318,6 @@ if(MICROPY_BLUETOOTH_NIMBLE)
     list(APPEND MICROPY_INC_CORE ${NIMBLE_INCLUDE})
 endif()
 
-# tinyusb helper
-target_include_directories(${MICROPY_TARGET} PRIVATE
-    ${MICROPY_DIR}/shared/tinyusb/
-)
-
 if (MICROPY_PY_NETWORK_CYW43)
     string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/cyw43-driver)
     if((NOT (${ECHO_SUBMODULES})) AND NOT EXISTS ${MICROPY_DIR}/lib/cyw43-driver/src/cyw43.h)
@@ -290,6 +327,7 @@ if (MICROPY_PY_NETWORK_CYW43)
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_NETWORK_CYW43=1
         MICROPY_PY_SOCKET_DEFAULT_TIMEOUT_MS=30000 # default socket timeout
+        CYW43_CONFIG_FILE="${PICO_SDK_PATH}/src/rp2_common/pico_cyw43_driver/include/cyw43_configport.h"
     )
     if (CMAKE_BUILD_TYPE MATCHES Debug)
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
@@ -301,14 +339,9 @@ if (MICROPY_PY_NETWORK_CYW43)
         machine_pin_cyw43.c
     )
 
-    target_link_libraries(${MICROPY_TARGET}
-        cyw43_driver_picow
-        cmsis_core
-    )
-    target_include_directories(${MICROPY_TARGET} PRIVATE
-        ${MICROPY_DIR}/lib/cyw43-driver/
-    )
+    list(APPEND PICO_SDK_COMPONENTS cyw43_driver_picow)
 
+    target_remove_property_value(cyw43_driver INTERFACE_SOURCES ${PICO_CYW43_DRIVER_PATH}/src/cyw43_lwip.c)
 endif()
 
 if (MICROPY_PY_NETWORK_NINAW10)
@@ -367,6 +400,21 @@ if (MICROPY_PY_NETWORK_WIZNET5K)
     )
 endif()
 
+if(NOT TARGET FreeRTOS-Kernel)
+    message(FATAL_ERROR "no freertos")
+endif()
+target_link_libraries(${MICROPY_TARGET} 
+    FreeRTOS-Kernel 
+    freertos_config
+)
+
+target_link_libraries(${MICROPY_TARGET} 
+    lwip_helper 
+    newlib_helper 
+    pico_helper 
+    tinyusb_helper
+)
+
 # Add qstr sources for extmod and usermod, in case they are modified by components above.
 list(APPEND MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_EXTMOD}
@@ -409,22 +457,11 @@ target_compile_options(${MICROPY_TARGET} PRIVATE
     -g  # always include debug information in the ELF
 )
 
-target_link_options(${MICROPY_TARGET} PRIVATE
-    -Wl,--defsym=__micropy_c_heap_size__=${MICROPY_C_HEAP_SIZE}
-)
-
 set_source_files_properties(
     ${PICO_SDK_PATH}/src/rp2_common/pico_double/double_math.c
     ${PICO_SDK_PATH}/src/rp2_common/pico_float/float_math.c
     PROPERTIES
     COMPILE_OPTIONS "-Wno-error=uninitialized"
-)
-
-set_source_files_properties(
-    ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/dcd_rp2040.c
-    ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/rp2040_usb.c
-    PROPERTIES
-    COMPILE_OPTIONS "-Wno-error=array-bounds;-Wno-error=unused-but-set-variable"
 )
 
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
@@ -439,6 +476,8 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     MICROPY_BUILD_TYPE="${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION} ${CMAKE_BUILD_TYPE}"
     PICO_NO_BI_STDIO_UART=1 # we call it UART REPL
     PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
+    PICO_INT64_OPS_IN_RAM=1
+    PICO_MAX_SHARED_IRQ_HANDLERS=8
 )
 
 target_link_libraries(${MICROPY_TARGET}
@@ -468,12 +507,6 @@ add_custom_command(TARGET ${MICROPY_TARGET}
     COMMAND ${PICO_COMPILER_SIZE} --format=berkeley ${PROJECT_BINARY_DIR}/${MICROPY_TARGET}.elf
     VERBATIM
 )
-
-# Collect all the include directories and compile definitions for the pico-sdk components.
-foreach(comp ${PICO_SDK_COMPONENTS})
-    micropy_gather_target_properties(${comp})
-    micropy_gather_target_properties(${comp}_headers)
-endforeach()
 
 # Include the main MicroPython cmake rules.
 include(${MICROPY_DIR}/py/mkrules.cmake)

@@ -56,6 +56,71 @@ set(MICROPY_SOURCE_EXTMOD
     ${MICROPY_EXTMOD_DIR}/nimble/modbluetooth_nimble.c
 )
 
+if(MICROPY_FREERTOS)
+    list(APPEND MICROPY_SOURCE_EXTMOD   
+        ${MICROPY_EXTMOD_DIR}/modselect_freertos.c
+        ${MICROPY_EXTMOD_DIR}/modsignal.c
+    )
+
+    list(APPEND MICROPY_SOURCE_EXTMOD
+        ${MICROPY_EXTMOD_DIR}/socket/modsocket.c
+        ${MICROPY_EXTMOD_DIR}/socket/socket.c
+        ${MICROPY_EXTMOD_DIR}/socket/error.c
+        ${MICROPY_EXTMOD_DIR}/socket/dns.c
+        ${MICROPY_EXTMOD_DIR}/socket/tcp.c        
+        ${MICROPY_EXTMOD_DIR}/socket/udp.c
+        ${MICROPY_EXTMOD_DIR}/socket/netif.c
+    )
+    list(APPEND MICROPY_SOURCE_EXTMOD   
+        ${MICROPY_EXTMOD_DIR}/usb/modusb.c
+        ${MICROPY_EXTMOD_DIR}/usb/usb_cdc.c
+        ${MICROPY_EXTMOD_DIR}/usb/usb_config.c
+    )
+ 
+    list(APPEND MICROPY_SOURCE_EXTMOD
+        ${MICROPY_EXTMOD_DIR}/freeze/cache.c
+        ${MICROPY_EXTMOD_DIR}/freeze/flash.c
+        ${MICROPY_EXTMOD_DIR}/freeze/freeze.c
+        ${MICROPY_EXTMOD_DIR}/freeze/modfreeze.c
+    )
+endif()
+
+if (MICROPY_PY_AUDIO_MP3)
+    list(APPEND MICROPY_SOURCE_EXTMOD
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/modaudio_mp3.c
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/mp3_decoder.c
+    )
+
+    set(MICROPY_LIB_AUDIO_MP3_DIR "${MICROPY_DIR}/lib/audio/src")
+    add_library(micropy_lib_audio_mp3 INTERFACE)
+
+    target_include_directories(micropy_lib_audio_mp3 SYSTEM INTERFACE
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/include
+    )
+
+    target_compile_definitions(micropy_lib_audio_mp3 INTERFACE
+        ARDUINO
+    )
+
+    target_sources(micropy_lib_audio_mp3 INTERFACE
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/bitstream.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/buffers.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/dct32.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/dequant.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/dqchan.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/huffman.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/hufftabs.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/imdct.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/mp3dec.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/mp3tabs.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/polyphase.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/scalfact.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/stproc.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/subband.c
+        ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/trigtabs.c
+    )
+endif()
+
 # Library for btree module and associated code
 
 if(MICROPY_PY_BTREE)
@@ -219,7 +284,7 @@ endif()
 
 # Library for lwIP network stack
 
-if(MICROPY_PY_LWIP)
+if(MICROPY_PY_LWIP AND !MICROPY_FREERTOS)
     add_library(micropy_lib_lwip INTERFACE)
 
     set(MICROPY_LIB_LWIP_DIR "${MICROPY_DIR}/lib/lwip/src")

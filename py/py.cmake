@@ -102,6 +102,7 @@ set(MICROPY_SOURCE_PY
     ${MICROPY_PY_DIR}/opmethods.c
     ${MICROPY_PY_DIR}/pairheap.c
     ${MICROPY_PY_DIR}/parse.c
+    ${MICROPY_PY_DIR}/parseargs.c    
     ${MICROPY_PY_DIR}/parsenum.c
     ${MICROPY_PY_DIR}/parsenumbase.c
     ${MICROPY_PY_DIR}/persistentcode.c
@@ -125,6 +126,13 @@ set(MICROPY_SOURCE_PY
     ${MICROPY_PY_DIR}/vstr.c
     ${MICROPY_PY_DIR}/warning.c
 )
+
+if(MICROPY_FREERTOS)
+    list(APPEND MICROPY_SOURCE_PY
+        ${MICROPY_PY_DIR}/poll.c    
+        ${MICROPY_PY_DIR}/stream_poll.c
+    )
+endif()
 
 # Helper macro to collect include directories and compile definitions for qstr processing.
 macro(micropy_gather_target_properties targ)

@@ -243,22 +243,21 @@ SECTIONS
     } > FLASH
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
-    __StackLimit = __bss_end__ + __micropy_c_heap_size__;
+    __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
 
-    /* Define start and end of GC heap */
-    __GcHeapStart = __StackLimit; /* after the C heap (sbrk limit) */
-    __GcHeapEnd = ORIGIN(RAM) + LENGTH(RAM);
-
-    /* Define memory for the C stack */
-    __StackOneTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X);
-    __StackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
-    __StackOneBottom = __StackOneTop - SIZEOF(.stack1_dummy);
+    /* These stack ranges are only relevant before FreeRTOS is initialized. 
+     * Once vTaskStartScheduler is called, the stacks defined here are invalid.
+     */
+    __StackTop = ORIGIN(RAM) + LENGTH(RAM);
     __StackBottom = __StackTop - SIZEOF(.stack_dummy);
     PROVIDE(__stack = __StackTop);
 
-    /* Check GC heap is at least 128 KB */
-    /* On a RP2040 using all SRAM this should always be the case. */
-    ASSERT((__GcHeapEnd - __GcHeapStart) > 128*1024, "GcHeap is too small")
+    /* Check if data + heap + stack exceeds RAM limit */
+    ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
+
+    /* The stack range for the main MicroPython task. */
+    __MpStackBottom = ORIGIN(SCRATCH_X);
+    __MpStackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
 
     ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
     /* todo assert on extra code */

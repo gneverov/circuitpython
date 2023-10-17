@@ -33,7 +33,7 @@
 #include "py/stream.h"
 #include "py/mperrno.h"
 
-#if MICROPY_PY_NETWORK && MICROPY_PY_SOCKET && !MICROPY_PY_LWIP
+#if MICROPY_PY_NETWORK && MICROPY_PY_SOCKET && !MICROPY_PY_LWIP && !MICROPY_FREERTOS
 
 #include "shared/netutils/netutils.h"
 #include "modnetwork.h"

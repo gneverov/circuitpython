@@ -33,7 +33,7 @@
 #include "py/mperrno.h"
 #include "py/mphal.h"
 
-#if MICROPY_PY_SELECT
+#if MICROPY_PY_SELECT && !MICROPY_FREERTOS
 
 #if MICROPY_PY_SELECT_SELECT && MICROPY_PY_SELECT_POSIX_OPTIMISATIONS
 #error "select.select is not supported with MICROPY_PY_SELECT_POSIX_OPTIMISATIONS"
