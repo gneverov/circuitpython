@@ -36,18 +36,22 @@ Interoperability means the ease at which non-Python (e.g., C) code can be integr
 ## Getting Started ##
 ### Download
 Pre-built firmware is available for:
-- RPI PICO
-- RPI PICO W
+- [RPI PICO](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0/rpi_pico.uf2)
+- [RPI PICO W](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0/rpi_pico_w.uf2)
 
-Installing firmware is the same as MicroPython:
-1. Press and hold down BOOTSEL button while connecting the board to USB.
-1. A USB drive should appear. Copy the downloaded UF2 file to this drive.
-1. Connect to the device using [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) or other terminal program.
+> [!CAUTION]
+> Unlike MicroPython firmware from other sources, these UF2 files contain a full flash image including a filesystem with files for the demo apps. Flashing these UF2 files will erase any existing filesystem on your device.
 
 The default builds are configured as follows:
 - One USB MSC device that accesses a FAT file system. The file system is readonly to MicroPython and read/write to the USB host. Similar to how [CircuitPython](https://github.com/adafruit/circuitpython) works, where you can write your py files directly to the board and run them.
 - One USB CDC device that is used as stdio.
 - One USB RNDIS device for the possibility of USB networking.
+
+### Installing
+Installing firmware is the same as MicroPython:
+1. Press and hold down BOOTSEL button while connecting the board to USB.
+1. A USB drive should appear. Copy the downloaded UF2 file to this drive.
+1. Connect to the device using [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) or other terminal program.
 
 ### Building
 Building MicroPythonRT is the same as MicroPython. Refer to the MicroPython building [guide](https://docs.micropython.org/en/latest/develop/gettingstarted.html).
