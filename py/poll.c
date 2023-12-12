@@ -118,10 +118,6 @@ mp_uint_t mp_poll_block(mp_obj_t stream_obj, void *buf, mp_uint_t size, int *err
 
     mp_uint_t total_ret = ret;
     do {
-        if (!mp_poll_wait(&poll, &xTicksToWait)) {
-            // timeout expired
-            break;
-        }
         ret = func(stream_obj, buf, size, errcode);
         if (ret == MP_STREAM_ERROR) {
             if (!mp_is_nonblocking_error(*errcode)) {
@@ -132,11 +128,15 @@ mp_uint_t mp_poll_block(mp_obj_t stream_obj, void *buf, mp_uint_t size, int *err
         } else {
             // valid result, update our total
             total_ret = (total_ret == MP_STREAM_ERROR ? 0 : total_ret) + ret;
+            if ((ret >= size) || !greedy) {
+                // we processed all the data, or we are not greedy
+                break;
+            }
             buf += ret;
             size -= ret;
         }
     }
-    while ((total_ret == MP_STREAM_ERROR) || ((size > 0) && greedy));
+    while (mp_poll_wait(&poll, &xTicksToWait));
 
     mp_poll_deinit(&poll);
     return total_ret;

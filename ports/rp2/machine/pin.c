@@ -195,7 +195,7 @@ STATIC mp_obj_t pin_wait(mp_obj_t self_in, mp_obj_t event_in) {
     }
 
     int errcode;
-    mp_uint_t ret = mp_poll_block(self_in, &event, sizeof(event), &errcode, pin_wait_nonblock, MP_STREAM_POLL_RD, self->timeout, false);
+    mp_uint_t ret = mp_poll_block(self_in, &event, 0, &errcode, pin_wait_nonblock, MP_STREAM_POLL_RD, self->timeout, false);
     return mp_stream_return(ret, errcode);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(pin_wait_obj, pin_wait);
