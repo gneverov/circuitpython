@@ -163,7 +163,12 @@ bool mp_obj_is_os_error(mp_obj_t exc, int *errcode) {
     if (!mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(exc_type), MP_OBJ_FROM_PTR(&mp_type_OSError))) {
         return false;
     }
-    return mp_obj_get_int_maybe(mp_obj_exception_get_value(exc), errcode);
+    mp_int_t value;
+    if (!mp_obj_get_int_maybe(mp_obj_exception_get_value(exc), &value)) {
+        return false;
+    }
+    *errcode = value;
+    return true;
 }
 
 void mp_obj_exception_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t kind) {

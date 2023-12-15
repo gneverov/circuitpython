@@ -30,7 +30,7 @@
 
 #include "py/runtime.h"
 #include "py/builtin.h"
-#include "py/stream_poll.h"
+#include "py/stream.h"
 #include "py/binary.h"
 #include "py/objarray.h"
 #include "py/objstringio.h"

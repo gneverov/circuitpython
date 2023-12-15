@@ -34,7 +34,7 @@ STATIC mp_obj_t mp_call_function_protected_handler(nlr_buf_t *nlr) {
         nlr_jump(nlr->ret_val);
     }
     #endif
-    mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr->ret_val));
+    mp_obj_print_exception(&mp_plat_print, exc);
     return MP_OBJ_NULL;
 }
 
