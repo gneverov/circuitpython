@@ -4,12 +4,15 @@ add_library(tinyusb_helper INTERFACE)
 
 target_sources(tinyusb_helper INTERFACE
     cdc_device_cb.c
-    net_device_lwip.c
     terminal_usb.c
     tusb_config.c
     tusb_lock.c
     usbd_cb.c
 )
+
+if (MICROPY_PY_LWIP)
+    target_sources(tinyusb_helper INTERFACE net_device_lwip.c)
+endif()
 
 target_include_directories(tinyusb_helper INTERFACE include)
 

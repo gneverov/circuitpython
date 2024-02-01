@@ -40,10 +40,10 @@ STATIC void pin_irq_handler(uint gpio, uint32_t events, void *context) {
     }
     if (self->event_mask & GPIO_IRQ_PULSE_UP) {
         if ((events & GPIO_IRQ_EDGE_RISE) && (self->pulse_up >= 0)) {
-            self->pulse_down = -now;
+            self->pulse_up = -now;
         }
         if ((events & GPIO_IRQ_EDGE_FALL) && (self->pulse_up < 0)) {
-            self->pulse_down += now;
+            self->pulse_up += now;
             events |= GPIO_IRQ_PULSE_UP;
         }
     }
@@ -67,6 +67,7 @@ void pin_init(pin_obj_t *self, const mp_obj_type_t *type) {
     mp_stream_poll_init(&self->poll);
     self->timeout = portMAX_DELAY;
     self->events = 0;
+    self->event_mask = 0;
     self->int_count = 0;
 }
 
@@ -91,7 +92,7 @@ pin_obj_t *pin_get_raise(mp_obj_t self_in) {
 }
 
 STATIC mp_obj_t pin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    const qstr kws[] = { MP_QSTR_, MP_QSTR_, MP_QSTR_pin, 0 };
+    const qstr kws[] = { MP_QSTR_pin, 0 };
     mp_hal_pin_obj_t pin;
     parse_args_and_kw(n_args, n_kw, args, "O&", kws, mp_hal_get_pin_obj, &pin);
 
@@ -133,6 +134,14 @@ STATIC mp_obj_t pin_set_pulls(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pin_set_pulls_obj, 1, 3, pin_set_pulls);
+
+STATIC mp_obj_t pin_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
+    pin_obj_t *self = pin_get_raise(self_in);
+    if (op == MP_UNARY_OP_INT_MAYBE) {
+        return MP_OBJ_NEW_SMALL_INT(self->pin);
+    }
+    return mp_const_none;
+}
 
 STATIC void pin_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     switch (attr) {
@@ -180,6 +189,12 @@ STATIC mp_uint_t pin_wait_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, 
         }
     } else {
         self->event_mask |= event;
+        if (event & GPIO_IRQ_PULSE_DOWN) {
+            self->pulse_down = 0;
+        }
+        if (event & GPIO_IRQ_PULSE_UP) {
+            self->pulse_up = 0;
+        }
         *errcode = MP_EAGAIN;
         ret = MP_STREAM_ERROR;
     }
@@ -225,6 +240,7 @@ STATIC mp_uint_t pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, i
     }
     return ret;
 }
+
 #ifndef NDEBUG
 #include <stdio.h>
 
@@ -276,6 +292,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_Pin,
     MP_TYPE_FLAG_ITER_IS_STREAM,
     make_new, pin_make_new,
+    unary_op, pin_unary_op,
     attr, pin_attr,
     protocol, &pin_stream_p,
     locals_dict, &pin_locals_dict

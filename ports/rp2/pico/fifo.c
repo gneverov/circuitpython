@@ -259,6 +259,11 @@ void pico_fifo_set_enabled(pico_fifo_t *fifo, bool enable) {
     dma_channel_set_config(fifo->channel, &c, enable);
 }
 
+bool pico_fifo_get_enabled(pico_fifo_t *fifo) {
+    dma_channel_config c = dma_get_channel_config(fifo->channel);
+    return channel_config_get_ctrl_value(&c) & DMA_CH0_CTRL_TRIG_EN_BITS;
+}
+
 void pico_fifo_set_handler(pico_fifo_t *fifo, pico_fifo_handler_t handler) {
     pico_fifo_acquire(fifo);
     fifo->handler = handler;

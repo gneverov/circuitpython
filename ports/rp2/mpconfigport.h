@@ -32,6 +32,8 @@
 #include "pico/binary_info.h"
 #include "mpconfigboard.h"
 
+#define MICROPY_FREERTOS (1)
+
 // Board and hardware specific configuration
 #define MICROPY_HW_MCU_NAME                     "RP2040"
 #ifndef MICROPY_HW_ENABLE_UART_REPL
@@ -52,8 +54,11 @@
 #endif
 
 // Enable USB ECM/RNDIS networking
+#ifndef MICROPY_PY_LWIP
+#define MICROPY_PY_LWIP (0)
+#endif
 #ifndef MICROPY_HW_USB_ECM_RNDIS
-#define MICROPY_HW_USB_ECM_RNDIS (1)
+#define MICROPY_HW_USB_ECM_RNDIS (MICROPY_PY_LWIP)
 #endif
 
 // Disable USB NCM networking
@@ -158,16 +163,16 @@
 // By default networking should include sockets, ssl, websockets, webrepl, dupterm.
 #if MICROPY_PY_NETWORK
 #ifndef MICROPY_PY_SOCKET
-#define MICROPY_PY_SOCKET               (1)
+#define MICROPY_PY_SOCKET               (MICROPY_PY_LWIP)
 #endif
 #ifndef MICROPY_PY_SSL
-#define MICROPY_PY_SSL                  (1)
+#define MICROPY_PY_SSL                  (MICROPY_PY_LWIP)
 #endif
 #ifndef MICROPY_PY_WEBSOCKET
-#define MICROPY_PY_WEBSOCKET            (1)
+#define MICROPY_PY_WEBSOCKET            (MICROPY_PY_LWIP)
 #endif
 #ifndef MICROPY_PY_WEBREPL
-#define MICROPY_PY_WEBREPL              (1)
+#define MICROPY_PY_WEBREPL              (MICROPY_PY_LWIP)
 #endif
 #endif
 
@@ -234,7 +239,6 @@ extern uint32_t mp_thread_begin_atomic_section(void);
 extern void mp_thread_end_atomic_section(uint32_t);
 #define MICROPY_BEGIN_ATOMIC_SECTION()     mp_thread_begin_atomic_section()
 #define MICROPY_END_ATOMIC_SECTION(state)  mp_thread_end_atomic_section(state)
-#define MICROPY_FREERTOS (1)
 
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
 

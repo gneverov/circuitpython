@@ -127,14 +127,14 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         #endif
         mp_obj_t result = mp_call_function_0(module_fun);
         if ((result != mp_const_none) && (exec_flags & EXEC_FLAG_ALLOW_AWAIT)) {
-            mp_store_global(MP_QSTR_aes, result);
+            mp_store_global(MP_QSTR__, result);
             vstr_t new_source;
             new_source.buf = "asyncio.repl_runner.run(aes)";
             new_source.alloc = new_source.len = strlen(new_source.buf);
             new_source.fixed_buf = 1;
             module_fun = call_mp_compile(&new_source, MP_PARSE_SINGLE_INPUT, exec_flags & ~EXEC_FLAG_ALLOW_AWAIT);
             result = mp_call_function_0(module_fun);
-            mp_delete_global(MP_QSTR_aes);
+            mp_delete_global(MP_QSTR__);
         }
         mp_hal_set_interrupt_char(-1); // disable interrupt
         mp_handle_pending(true); // handle any pending exceptions (and any callbacks)

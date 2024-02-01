@@ -52,6 +52,8 @@ void pico_fifo_clear(pico_fifo_t *fifo);
 
 void pico_fifo_set_enabled(pico_fifo_t *fifo, bool enable);
 
+bool pico_fifo_get_enabled(pico_fifo_t *fifo);
+
 void pico_fifo_set_handler(pico_fifo_t *fifo, pico_fifo_handler_t handler);
 
 #ifndef NDEBUG

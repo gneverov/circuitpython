@@ -50,9 +50,15 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 
 // Receive single character
 int mp_hal_stdin_rx_chr(void) {
-    MP_THREAD_GIL_EXIT();
-    int ch = getchar();
-    MP_THREAD_GIL_ENTER();
+    int ch;
+    do {
+        MP_THREAD_GIL_EXIT();
+        ch = getchar();
+        MP_THREAD_GIL_ENTER();
+        mp_handle_pending(false);
+    }
+    while ((ch == -1) && (errno == MP_EINTR));
+
     return ch;
 }
 

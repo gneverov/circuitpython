@@ -437,11 +437,13 @@ STATIC mp_obj_t network_cyw43_isconnected(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_isconnected_obj, network_cyw43_isconnected);
 
+#if !MICROPY_FREERTOS
 STATIC mp_obj_t network_cyw43_ifconfig(size_t n_args, const mp_obj_t *args) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     return mod_network_nic_ifconfig(&self->cyw->netif[self->itf], n_args - 1, args + 1);
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_ifconfig_obj, 1, 2, network_cyw43_ifconfig);
+#endif
 
 STATIC mp_obj_t network_cyw43_status(size_t n_args, const mp_obj_t *args) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -653,7 +655,9 @@ STATIC const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_connect), MP_ROM_PTR(&network_cyw43_connect_obj) },
     { MP_ROM_QSTR(MP_QSTR_disconnect), MP_ROM_PTR(&network_cyw43_disconnect_obj) },
     { MP_ROM_QSTR(MP_QSTR_isconnected), MP_ROM_PTR(&network_cyw43_isconnected_obj) },
+    #if !MICROPY_FREERTOS
     { MP_ROM_QSTR(MP_QSTR_ifconfig), MP_ROM_PTR(&network_cyw43_ifconfig_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&network_cyw43_status_obj) },
     { MP_ROM_QSTR(MP_QSTR_config), MP_ROM_PTR(&network_cyw43_config_obj) },
 

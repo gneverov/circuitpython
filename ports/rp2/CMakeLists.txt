@@ -98,6 +98,7 @@ include(${MICROPY_DIR}/py/usermod.cmake)
 
 add_subdirectory(${MICROPY_PORT_DIR}/freertos)
 add_subdirectory(${MICROPY_DIR}/lib/freertos/portable/ThirdParty/GCC/RP2040 freetros)
+target_link_libraries(FreeRTOS-Kernel INTERFACE hardware_clocks)
 string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
 
 add_subdirectory(${MICROPY_PORT_DIR}/lwip)
@@ -213,7 +214,9 @@ set(PICO_SDK_COMPONENTS
     pico_base_headers
     pico_binary_info
     pico_bootrom
+    pico_float
     pico_platform
+    pico_rand
     pico_stdlib
     pico_unique_id
     pico_util
@@ -221,16 +224,20 @@ set(PICO_SDK_COMPONENTS
     tinyusb_device
 )
 
-# Patch the tinyusb_device project to support networking
-target_include_directories(tinyusb_device INTERFACE 
-    ${PICO_TINYUSB_PATH}/lib/networking
-)
-target_sources(tinyusb_device INTERFACE 
-    ${PICO_TINYUSB_PATH}/lib/networking/rndis_reports.c
-)
 
-if (MICROPY_PY_LWIP)
-    list(APPEND PICO_SDK_COMPONENTS 
+if(MICROPY_PY_LWIP)
+    # Patch the tinyusb_device project to support networking
+    target_include_directories(tinyusb_device INTERFACE 
+        ${PICO_TINYUSB_PATH}/lib/networking
+    )
+    target_sources(tinyusb_device INTERFACE 
+        ${PICO_TINYUSB_PATH}/lib/networking/rndis_reports.c
+    )
+
+    target_link_libraries(${MICROPY_TARGET} lwip_helper)
+
+    list(APPEND PICO_SDK_COMPONENTS
+        pico_lwip_core
         pico_lwip_freertos
         pico_lwip_mdns
     )
@@ -242,7 +249,7 @@ if (MICROPY_PY_LWIP)
         MICROPY_PY_LWIP=1
     )
 
-    if (CMAKE_BUILD_TYPE MATCHES Debug)
+    if(CMAKE_BUILD_TYPE MATCHES Debug)
         target_compile_definitions(${MICROPY_TARGET} PRIVATE
             LWIP_DEBUG=1
         )
@@ -250,9 +257,7 @@ if (MICROPY_PY_LWIP)
 endif()
 
 if (MICROPY_PY_AUDIO_MP3)
-    target_link_libraries(${MICROPY_TARGET}
-        micropy_lib_audio_mp3
-    )
+    target_link_libraries(${MICROPY_TARGET} micropy_lib_audio_mp3)
 endif()
 
 if(MICROPY_PY_BLUETOOTH)
@@ -409,7 +414,6 @@ target_link_libraries(${MICROPY_TARGET}
 )
 
 target_link_libraries(${MICROPY_TARGET} 
-    lwip_helper 
     newlib_helper 
     pico_helper 
     tinyusb_helper
@@ -439,7 +443,9 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${MICROPY_SOURCE_PORT}
 )
 
-target_link_libraries(${MICROPY_TARGET} micropy_lib_mbedtls)
+if(MICROPY_SSL_MBEDTLS)
+    target_link_libraries(${MICROPY_TARGET} micropy_lib_mbedtls)
+endif()
 
 target_link_libraries(${MICROPY_TARGET} usermod)
 
@@ -469,7 +475,7 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     LFS1_NO_MALLOC LFS1_NO_DEBUG LFS1_NO_WARN LFS1_NO_ERROR LFS1_NO_ASSERT
     LFS2_NO_MALLOC LFS2_NO_DEBUG LFS2_NO_WARN LFS2_NO_ERROR LFS2_NO_ASSERT
     PICO_FLOAT_PROPAGATE_NANS=1
-    PICO_STACK_SIZE=0x2000
+    PICO_HEAP_SIZE=0
     PICO_CORE1_STACK_SIZE=0
     PICO_PROGRAM_NAME="MicroPython"
     PICO_NO_PROGRAM_VERSION_STRING=1 # do it ourselves in main.c

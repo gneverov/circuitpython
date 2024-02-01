@@ -33,7 +33,9 @@
 #include "task.h"
 
 #include "freertos/task_helper.h"
+#if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
+#endif
 #include "newlib/newlib.h"
 #include "pico/dma.h"
 #include "pico/gpio.h"
@@ -164,7 +166,7 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
         }
 
     soft_reset_exit:
-        mp_printf(MP_PYTHON_PRINTER, "MPY: soft reboot\n");
+        mp_printf(&mp_plat_print, "MPY: soft reboot\n");
         signal_deinit();
         #if MICROPY_PY_BLUETOOTH
         mp_bluetooth_deinit();
@@ -264,7 +266,9 @@ int main(int argc, char **argv) {
     cyw43_driver_init();
     #endif
 
+    #if MICROPY_PY_LWIP
     lwip_helper_init();
+    #endif
 
     const tusb_config_t *tusb_config = tusb_config_get();
     #if CFG_TUD_ENABLED

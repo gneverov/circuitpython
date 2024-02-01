@@ -27,7 +27,7 @@
 #include "py/runtime.h"
 #include "py/mphal.h"
 
-#if MICROPY_PY_NETWORK && MICROPY_PY_LWIP
+#if MICROPY_PY_NETWORK && MICROPY_PY_LWIP && !MICROPY_FREERTOS
 
 #include "shared/netutils/netutils.h"
 #include "extmod/modnetwork.h"

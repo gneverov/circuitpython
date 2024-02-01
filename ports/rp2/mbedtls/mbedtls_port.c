@@ -25,7 +25,7 @@
  */
 #include <py/mpconfig.h>
 
-#ifdef MICROPY_SSL_MBEDTLS
+#if MICROPY_SSL_MBEDTLS
 
 #include "mbedtls_config.h"
 

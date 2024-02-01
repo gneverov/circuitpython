@@ -403,9 +403,11 @@ freeze_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc)
 
         freeze_write_size(self, rc->n_children);
 
+#if MICROPY_EMIT_MACHINE_CODE
         freeze_write_short(self, rc->prelude_offset);
 
         freeze_write_int(self, rc->type_sig);
+#endif
 
         freeze_seek(self, ret);
     }
