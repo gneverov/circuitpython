@@ -83,9 +83,9 @@
 
 // MicroPython emitters
 #define MICROPY_PERSISTENT_CODE_LOAD            (1)
-#define MICROPY_EMIT_THUMB                      (1)
+#define MICROPY_EMIT_THUMB                      (0)
 #define MICROPY_EMIT_THUMB_ARMV7M               (0)
-#define MICROPY_EMIT_INLINE_THUMB               (1)
+#define MICROPY_EMIT_INLINE_THUMB               (0)
 #define MICROPY_EMIT_INLINE_THUMB_FLOAT         (0)
 #define MICROPY_PERSISTENT_CODE_SAVE            (1)
 
@@ -118,8 +118,8 @@
 #define MICROPY_PY_OS_URANDOM                   (1)
 #define MICROPY_PY_RE_MATCH_GROUPS              (1)
 #define MICROPY_PY_RE_MATCH_SPAN_START_END      (1)
-#define MICROPY_PY_HASHLIB_SHA1                 (1)
-#define MICROPY_PY_CRYPTOLIB                    (1)
+#define MICROPY_PY_HASHLIB_SHA1                 (0)
+#define MICROPY_PY_CRYPTOLIB                    (0)
 #define MICROPY_PY_TIME_GMTIME_LOCALTIME_MKTIME (1)
 #define MICROPY_PY_TIME_TIME_TIME_NS            (1)
 #define MICROPY_PY_TIME_INCLUDEFILE             "ports/rp2/modtime.c"
@@ -138,11 +138,13 @@
 #define MICROPY_PY_MACHINE_SOFTSPI              (1)
 #define MICROPY_PY_ONEWIRE                      (1)
 #define MICROPY_VFS                             (1)
-#define MICROPY_VFS_LFS2                        (1)
+#define MICROPY_VFS_LFS2                        (0)
 #define MICROPY_VFS_FAT                         (1)
-#define MICROPY_SSL_MBEDTLS                     (1)
+#define MICROPY_SSL_MBEDTLS                     (0)
 #define MICROPY_PY_LWIP_SOCK_RAW                (MICROPY_PY_LWIP)
 #define MICROPY_PY_FREEZE                       (1)
+#define MICROPY_PY_MATH_SPECIAL_FUNCTIONS       (0)
+#define MICROPY_PY_FRAMEBUF                     (0)
 
 // fatfs configuration
 #define MICROPY_FATFS_ENABLE_LFN                (1)
@@ -169,10 +171,10 @@
 #define MICROPY_PY_SSL                  (MICROPY_PY_LWIP)
 #endif
 #ifndef MICROPY_PY_WEBSOCKET
-#define MICROPY_PY_WEBSOCKET            (MICROPY_PY_LWIP)
+#define MICROPY_PY_WEBSOCKET            (0)
 #endif
 #ifndef MICROPY_PY_WEBREPL
-#define MICROPY_PY_WEBREPL              (MICROPY_PY_LWIP)
+#define MICROPY_PY_WEBREPL              (0)
 #endif
 #endif
 

@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.27)
+cmake_policy(SET CMP0126 OLD)
 
 # Set build type to reduce firmware size
 if(NOT CMAKE_BUILD_TYPE)
@@ -31,8 +32,6 @@ if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
     message(FATAL_ERROR "Invalid MICROPY_BOARD specified: ${MICROPY_BOARD}")
 endif()
 
-set(MICROPY_USER_FROZEN_MANIFEST ${MICROPY_FROZEN_MANIFEST})
-
 # Include board config, it may override MICROPY_FROZEN_MANIFEST
 include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake) 
 
@@ -42,14 +41,15 @@ if(NOT PICO_BOARD)
 endif()
 
 set(MICROPY_FREERTOS ON)
-set(MICROPY_PY_AUDIO_MP3 ON)
+set(MICROPY_PY_AUDIO_MP3 OFF)
+set(MICROPY_LVGL ON)
 
 # Set the amount of C heap, if it's not already set.
 # If a board uses malloc then it must set this to at least 4096.
 
 # Enable extmod components that will be configured by extmod.cmake.
 # A board may also have enabled additional components.
-set(MICROPY_SSL_MBEDTLS ON)
+set(MICROPY_SSL_MBEDTLS OFF)
 
 # Use the pico-sdk cyw43_driver instead of the local one
 if (MICROPY_PY_NETWORK_CYW43)
@@ -224,6 +224,10 @@ set(PICO_SDK_COMPONENTS
     tinyusb_device
 )
 
+if(MICROPY_LVGL)
+    include(${MICROPY_DIR}/extmod/lvgl/lvgl.cmake)
+    target_link_libraries(${MICROPY_TARGET} mp_lvgl)
+endif()
 
 if(MICROPY_PY_LWIP)
     # Patch the tinyusb_device project to support networking
@@ -429,9 +433,7 @@ list(APPEND MICROPY_SOURCE_QSTR
 set(MICROPY_CROSS_FLAGS -march=armv6m)
 
 # Set the frozen manifest file
-if (MICROPY_USER_FROZEN_MANIFEST)
-    set(MICROPY_FROZEN_MANIFEST ${MICROPY_USER_FROZEN_MANIFEST})
-elseif (NOT MICROPY_FROZEN_MANIFEST)
+if(NOT MICROPY_FROZEN_MANIFEST)
     set(MICROPY_FROZEN_MANIFEST ${MICROPY_PORT_DIR}/boards/manifest.py)
 endif()
 

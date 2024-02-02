@@ -33,6 +33,7 @@ set(MICROPY_SOURCE_PY
     ${MICROPY_PY_DIR}/formatfloat.c
     ${MICROPY_PY_DIR}/frozenmod.c
     ${MICROPY_PY_DIR}/gc.c
+    ${MICROPY_PY_DIR}/gc_handle.c
     ${MICROPY_PY_DIR}/lexer.c
     ${MICROPY_PY_DIR}/malloc.c
     ${MICROPY_PY_DIR}/map.c

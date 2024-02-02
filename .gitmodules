@@ -65,3 +65,6 @@
 [submodule "lib/audio"]
 	path = lib/audio
 	url = https://github.com/gneverov/ESP8266Audio.git
+[submodule "lib/lvgl"]
+	path = lib/lvgl
+	url = https://github.com/gneverov/lvgl.git

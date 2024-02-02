@@ -53,6 +53,34 @@ add_custom_target(
 )
 
 # Generate qstrs
+function(gather_source_qstr VAR TARGET)
+    set(SOURCE_QSTR ${${VAR}})
+    get_target_property(TARGET_SOURCES ${TARGET} SOURCES)
+    if(NOT TARGET_SOURCES)
+        unset(TARGET_SOURCES)
+    endif()
+    get_target_property(TARGET_INTERFACE_SOURCES ${TARGET} INTERFACE_SOURCES)
+    if(NOT TARGET_INTERFACE_SOURCES)
+        unset(TARGET_INTERFACE_SOURCES)
+    endif()    
+    foreach(TARGET_SOURCE ${TARGET_SOURCES} ${TARGET_INTERFACE_SOURCES})
+        get_source_file_property(TARGET_SOURCE_QSTR ${TARGET_SOURCE} MICROPY_SOURCE_QSTR)
+        # message(STATUS "${TARGET_SOURCE} --> ${TARGET_SOURCE_QSTR}")
+        if(TARGET_SOURCE_QSTR)
+            list(APPEND SOURCE_QSTR ${TARGET_SOURCE})
+        endif()
+    endforeach()
+
+    get_target_property(TARGET_LINK_LIBRARIES ${TARGET} LINK_LIBRARIES)
+    if(TARGET_LINK_LIBRARIES) 
+        foreach(TARGET_LINK_LIBRARY ${TARGET_LINK_LIBRARIES})
+            # message(STATUS "${TARGET} --> ${TARGET_LINK_LIBRARY}")
+            gather_source_qstr(SOURCE_QSTR ${TARGET_LINK_LIBRARY})
+        endforeach()
+    endif()
+    set(${VAR} ${SOURCE_QSTR} PARENT_SCOPE)
+endfunction()
+gather_source_qstr(MICROPY_SOURCE_QSTR ${MICROPY_TARGET})
 
 # If any of the dependencies in this rule change then the C-preprocessor step must be run.
 # It only needs to be passed the list of MICROPY_SOURCE_QSTR files that have changed since

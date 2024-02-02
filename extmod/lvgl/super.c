@@ -1,0 +1,76 @@
+// SPDX-FileCopyrightText: 2024 Gregory Neverov
+// SPDX-License-Identifier: MIT
+
+#include "./super.h"
+
+#include "py/runtime.h"
+
+
+// mp_obj_t lvgl_super_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+//     assert(MP_OBJ_TYPE_HAS_SLOT(type, parent));
+//     const mp_obj_type_t *parent_type = MP_OBJ_TYPE_GET_SLOT(type, parent);
+//     assert(parent_type->base.type == &mp_type_type);
+
+//     assert(MP_OBJ_TYPE_HAS_SLOT(parent_type, make_new));
+//     mp_make_new_fun_t make_new_fun = MP_OBJ_TYPE_GET_SLOT(parent_type, make_new);
+//     return make_new_fun(type, n_args, n_kw, args);
+// }
+
+void lvgl_super_attr_check(qstr attr, bool getter, bool setter, bool deleter, mp_obj_t *dest) {
+    if (dest[0] != MP_OBJ_SENTINEL) {
+        if (!getter) {
+            mp_raise_msg_varg(&mp_type_AttributeError, MP_ERROR_TEXT("can't get attribute '%q'"), attr);
+        }
+    }
+    else if (dest[1] != MP_OBJ_NULL) {
+        if (!setter) {
+            mp_raise_msg_varg(&mp_type_AttributeError, MP_ERROR_TEXT("can't set attribute '%q'"), attr);
+        }
+    }
+    else {
+        if (!deleter) {
+            mp_raise_msg_varg(&mp_type_AttributeError, MP_ERROR_TEXT("can't delete attribute '%q'"), attr);
+        } 
+    }
+}
+
+void lvgl_super_subscr_check(const mp_obj_type_t *type, bool getter, bool setter, bool deleter, mp_obj_t value) {
+    qstr type_name = type->name;
+    if (value == MP_OBJ_SENTINEL) {
+        if (!getter) {
+            mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("'%q' object is not subscriptable"), type_name);
+        }
+    }
+    else if (value == MP_OBJ_NULL) {
+        if (!deleter) {
+            mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("'%q' object does not support item deletion"), type_name);
+        }
+    }
+    else {
+        if (!setter) {
+            mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("'%q' object does not support item assignment"), type_name);
+        }
+    }
+}
+
+void lvgl_super_attr(mp_obj_t self_in, const mp_obj_type_t *type, qstr attr, mp_obj_t *dest) {
+    if (MP_OBJ_TYPE_HAS_SLOT(type, locals_dict)) {
+        mp_obj_dict_t *locals_dict = MP_OBJ_TYPE_GET_SLOT(type, locals_dict);
+        assert(mp_obj_is_dict_or_ordereddict(MP_OBJ_FROM_PTR(locals_dict)));
+        mp_map_elem_t *member = mp_map_lookup(&locals_dict->map, MP_OBJ_NEW_QSTR(attr), MP_MAP_LOOKUP);
+        if (member) {
+            mp_convert_member_lookup(self_in, type, member->value, dest);
+            return;
+        }
+    }
+
+    if (MP_OBJ_TYPE_HAS_SLOT(type, parent)) {
+        const mp_obj_type_t *parent_type = MP_OBJ_TYPE_GET_SLOT(type, parent);
+        assert(parent_type->base.type == &mp_type_type);
+
+        if (MP_OBJ_TYPE_HAS_SLOT(parent_type, attr) && (parent_type != &mp_type_object)) {
+            mp_attr_fun_t attr_fun = MP_OBJ_TYPE_GET_SLOT(parent_type, attr);
+            attr_fun(self_in, attr, dest);
+        }
+    }
+}

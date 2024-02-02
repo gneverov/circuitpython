@@ -62,15 +62,18 @@ if(MICROPY_FREERTOS)
         ${MICROPY_EXTMOD_DIR}/modsignal.c
     )
 
-    list(APPEND MICROPY_SOURCE_EXTMOD
-        ${MICROPY_EXTMOD_DIR}/socket/modsocket.c
-        ${MICROPY_EXTMOD_DIR}/socket/socket.c
-        ${MICROPY_EXTMOD_DIR}/socket/error.c
-        ${MICROPY_EXTMOD_DIR}/socket/dns.c
-        ${MICROPY_EXTMOD_DIR}/socket/tcp.c        
-        ${MICROPY_EXTMOD_DIR}/socket/udp.c
-        ${MICROPY_EXTMOD_DIR}/socket/netif.c
-    )
+    if(MICROPY_PY_LWIP)
+        list(APPEND MICROPY_SOURCE_EXTMOD
+            ${MICROPY_EXTMOD_DIR}/socket/modsocket.c
+            ${MICROPY_EXTMOD_DIR}/socket/socket.c
+            ${MICROPY_EXTMOD_DIR}/socket/error.c
+            ${MICROPY_EXTMOD_DIR}/socket/dns.c
+            ${MICROPY_EXTMOD_DIR}/socket/tcp.c        
+            ${MICROPY_EXTMOD_DIR}/socket/udp.c
+            ${MICROPY_EXTMOD_DIR}/socket/netif.c
+        )
+    endif()
+    
     list(APPEND MICROPY_SOURCE_EXTMOD   
         ${MICROPY_EXTMOD_DIR}/usb/modusb.c
         ${MICROPY_EXTMOD_DIR}/usb/usb_cdc.c

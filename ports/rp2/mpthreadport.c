@@ -152,4 +152,10 @@ void mp_thread_mutex_unlock(mp_thread_mutex_t *m) {
     xSemaphoreGive(m->handle);
 }
 
+#ifndef NDEBUG
+bool mp_thread_mutex_check(mp_thread_mutex_t *m) {
+    return xSemaphoreGetMutexHolder(m->handle) == xTaskGetCurrentTaskHandle();
+}
+#endif
+
 #endif // MICROPY_PY_THREAD

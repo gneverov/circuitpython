@@ -58,4 +58,6 @@ int mp_thread_mutex_lock(mp_thread_mutex_t *m, int wait);
 
 void mp_thread_mutex_unlock(mp_thread_mutex_t *m);
 
+bool mp_thread_mutex_check(mp_thread_mutex_t *m);
+
 #endif // MICROPY_INCLUDED_RP2_MPTHREADPORT_H

@@ -49,6 +49,7 @@
 #include "py/compile.h"
 #include "py/runtime.h"
 #include "py/gc.h"
+#include "py/gc_handle.h"
 #include "py/mperrno.h"
 #include "py/mphal.h"
 #include "py/stackctrl.h"
@@ -176,6 +177,7 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
         mp_thread_deinit();
         #endif
         gc_sweep_all();
+        gc_handle_collect(true);
         mp_deinit();
     }
 }
@@ -292,6 +294,9 @@ void gc_collect(void) {
     gc_helper_collect_regs_and_stack();
     #if MICROPY_PY_THREAD
     mp_thread_gc_others();
+    #endif
+    #if MICROPY_FREERTOS
+    gc_handle_collect(false);
     #endif
     freeze_gc();
     gc_collect_end();

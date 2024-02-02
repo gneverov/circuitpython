@@ -7,7 +7,7 @@
 #include "py/runtime.h"
 
 
-#define NUM_FLASH_PAGES 23
+#define NUM_FLASH_PAGES 15
 #define NUM_RAM_PAGES 1
 
 
