@@ -88,6 +88,8 @@ static void lvgl_obj_event_delete(lv_event_t *e) {
     for (uint32_t i = 0; i < count; i++) {
         lv_event_dsc_t *dsc = lv_obj_get_event_dsc(obj, i);
         if (lv_event_dsc_get_cb(dsc) == lvgl_obj_event_cb) {
+            // a subsequent MP callbacks cannot be called since the obj handle is freed by this function
+            dsc->cb = NULL;
             gc_handle_t *user_data = lv_event_dsc_get_user_data(dsc);
             gc_handle_free(user_data);
         }

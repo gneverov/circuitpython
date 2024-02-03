@@ -74,6 +74,8 @@ del x[7:]
 
 - `freeze`: A new module for "freezing" MicroPython runtime data structures into flash to free up RAM. See the [freezing demo](/examples/freeze/README.md) for more details.
 
+- `lvgl`: An interface to the [LVGL](https://github.com/lvgl/lvgl/tree/master) graphics library from MicroPythonRT. See the [LVGL demo](/examples/lvgl/README.md) for more details.
+
 - `micropython`: Information about FreeRTOS tasks is available by calling  new `tasks` method, and information about the C heap is available by calling the `malloc_stats` method.
 
 - `machine.AudioOutPwm`: A class for generating audio through PWM hardware, similar to CircuitPython's [`PWMAudioOut`](https://docs.circuitpython.org/en/8.2.x/shared-bindings/audiopwmio/index.html#audiopwmio.PWMAudioOut) class. See [audio player demo](/examples/async/audio_player.md) for example of use.
