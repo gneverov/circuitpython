@@ -25,9 +25,10 @@
  * THE SOFTWARE.
  */
 
-#include "py/runtime.h"
+// This file is never compiled standalone, it's included directly from
+// extmod/machine_pwm.c via MICROPY_PY_MACHINE_PWM_INCLUDEFILE.
+
 #include "py/mphal.h"
-#include "modmachine.h"
 #include "pin.h"
 #include "fsl_clock.h"
 #include "fsl_iomuxc.h"
@@ -190,8 +191,9 @@ STATIC const machine_pin_af_obj_t *af_name_decode_qtmr(const machine_pin_af_obj_
 #endif
 
 STATIC bool is_board_pin(const machine_pin_obj_t *pin) {
-    for (int i = 0; i < num_board_pins; i++) {
-        if (pin == machine_pin_board_pins[i]) {
+    const mp_map_t *board_map = &machine_pin_board_pins_locals_dict.map;
+    for (uint i = 0; i < board_map->alloc; i++) {
+        if (pin == MP_OBJ_TO_PTR(board_map->table[i].value)) {
             return true;
         }
     }

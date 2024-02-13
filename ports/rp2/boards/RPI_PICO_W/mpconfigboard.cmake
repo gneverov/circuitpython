@@ -1,7 +1,6 @@
 # cmake file for Raspberry Pi Pico W
 
 set(PICO_BOARD "pico_w")
-set(PICO_CYW43_SUPPORTED ON)
 
 set(MICROPY_PY_LWIP ON)
 set(MICROPY_PY_NETWORK_CYW43 ON)

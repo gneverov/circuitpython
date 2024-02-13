@@ -154,7 +154,9 @@
 #define MICROPY_PY_BINASCII_CRC32   (1)
 #define MICROPY_PY_RANDOM           (1)
 #define MICROPY_PY_MACHINE          (1)
+#define MICROPY_PY_MACHINE_INCLUDEFILE "ports/unix/modmachine.c"
 #define MICROPY_PY_MACHINE_PULSE    (1)
+#define MICROPY_PY_MACHINE_PIN_BASE (1)
 #define MICROPY_MACHINE_MEM_GET_READ_ADDR   mod_machine_mem_get_addr
 #define MICROPY_MACHINE_MEM_GET_WRITE_ADDR  mod_machine_mem_get_addr
 
@@ -225,14 +227,11 @@ typedef long mp_off_t;
 #include "sleep.h"
 
 #if MICROPY_ENABLE_SCHEDULER
-// Use 1mSec sleep to make sure there is effectively a wait period:
+// Use minimum 1mSec sleep to make sure there is effectively a wait period:
 // something like usleep(500) truncates and ends up calling Sleep(0).
-#define MICROPY_EVENT_POLL_HOOK \
-    do { \
-        extern void mp_handle_pending(bool); \
-        mp_handle_pending(true); \
-        msec_sleep(1.0); \
-    } while (0);
+#define MICROPY_INTERNAL_WFE(TIMEOUT_MS) msec_sleep(MAX(1.0, (double)(TIMEOUT_MS)))
+#else
+#define MICROPY_INTERNAL_WFE(TIMEOUT_MS) /* No-op */
 #endif
 
 #ifdef __GNUC__

@@ -49,7 +49,7 @@ extern uint8_t mp_bluetooth_hci_cmd_buf[4 + 256];
 #include "uart.h"
 
 // Provided by the port.
-extern pyb_uart_obj_t mp_bluetooth_hci_uart_obj;
+extern machine_uart_obj_t mp_bluetooth_hci_uart_obj;
 
 STATIC void cywbt_wait_cts_low(void) {
     mp_hal_pin_config(CYW43_PIN_BT_CTS, MP_HAL_PIN_MODE_INPUT, MP_HAL_PIN_PULL_UP, 0);
@@ -68,7 +68,7 @@ STATIC int cywbt_hci_cmd_raw(size_t len, uint8_t *buf) {
     mp_bluetooth_hci_uart_write((void *)buf, len);
     for (int c, i = 0; i < 6; ++i) {
         while ((c = mp_bluetooth_hci_uart_readchar()) == -1) {
-            MICROPY_EVENT_POLL_HOOK
+            mp_event_wait_indefinite();
         }
         buf[i] = c;
     }
@@ -88,7 +88,7 @@ STATIC int cywbt_hci_cmd_raw(size_t len, uint8_t *buf) {
     int sz = buf[2] - 3;
     for (int c, i = 0; i < sz; ++i) {
         while ((c = mp_bluetooth_hci_uart_readchar()) == -1) {
-            MICROPY_EVENT_POLL_HOOK
+            mp_event_wait_indefinite();
         }
         buf[i] = c;
     }

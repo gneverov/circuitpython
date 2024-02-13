@@ -38,7 +38,7 @@ STATIC mp_obj_t select_selector_make_new(const mp_obj_type_t *type, size_t n_arg
         queue_length = mp_obj_get_int(args[0]);
     }
 
-    select_obj_selector_t *self = m_new_obj_var(select_obj_selector_t, select_event_t, queue_length);
+    select_obj_selector_t *self = m_new_obj_var(select_obj_selector_t, queue_storage, select_event_t, queue_length);
     self->base.type = type;
     mp_map_init(&self->map, queue_length);
     self->queue = xQueueCreateStatic(queue_length, sizeof(select_event_t), (uint8_t *)self->queue_storage, &self->queue_buffer);

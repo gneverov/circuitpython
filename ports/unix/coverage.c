@@ -545,7 +545,7 @@ STATIC mp_obj_t extra_coverage(void) {
         fun_bc.context = &context;
         fun_bc.child_table = NULL;
         fun_bc.bytecode = (const byte *)"\x01"; // just needed for n_state
-        mp_code_state_t *code_state = m_new_obj_var(mp_code_state_t, mp_obj_t, 1);
+        mp_code_state_t *code_state = m_new_obj_var(mp_code_state_t, state, mp_obj_t, 1);
         code_state->fun_bc = &fun_bc;
         code_state->ip = (const byte *)"\x00"; // just needed for an invalid opcode
         code_state->sp = &code_state->state[0];
@@ -578,9 +578,10 @@ STATIC mp_obj_t extra_coverage(void) {
         mp_sched_unlock();
         mp_printf(&mp_plat_print, "unlocked\n");
 
-        // drain pending callbacks
+        // drain pending callbacks, and test mp_event_wait_indefinite(), mp_event_wait_ms()
+        mp_event_wait_indefinite(); // the unix port only waits 500us in this call
         while (mp_sched_num_pending()) {
-            mp_handle_pending(true);
+            mp_event_wait_ms(1);
         }
 
         // setting the keyboard interrupt and raising it during mp_handle_pending

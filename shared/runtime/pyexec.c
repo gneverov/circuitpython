@@ -68,7 +68,7 @@ STATIC mp_obj_t call_mp_compile(const void *source, mp_parse_input_kind_t input_
     } else if (exec_flags & EXEC_FLAG_SOURCE_IS_READER) {
         lex = mp_lexer_new(MP_QSTR__lt_stdin_gt_, *(mp_reader_t *)source);
     } else if (exec_flags & EXEC_FLAG_SOURCE_IS_FILENAME) {
-        lex = mp_lexer_new_from_file(source);
+        lex = mp_lexer_new_from_file(qstr_from_str(source));
     } else {
         lex = (mp_lexer_t *)source;
     }

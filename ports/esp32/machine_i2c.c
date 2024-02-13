@@ -27,8 +27,7 @@
 #include "py/runtime.h"
 #include "py/mphal.h"
 #include "py/mperrno.h"
-#include "extmod/machine_i2c.h"
-#include "modmachine.h"
+#include "extmod/modmachine.h"
 
 #include "driver/i2c.h"
 #include "hal/i2c_ll.h"
@@ -51,7 +50,7 @@
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
 #define I2C_SCLK_FREQ XTAL_CLK_FREQ
 #elif CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2
-#define I2C_SCLK_FREQ I2C_APB_CLK_FREQ
+#define I2C_SCLK_FREQ APB_CLK_FREQ
 #else
 #error "unsupported I2C for ESP32 SoC variant"
 #endif

@@ -966,7 +966,9 @@ static int dfu_handle_tx(int cmd, int arg, int len, uint8_t *buf, int max_len) {
 
 typedef struct _pyb_usbdd_obj_t {
     bool started;
+    #if USE_USB_POLLING
     bool tx_pending;
+    #endif
     USBD_HandleTypeDef hUSBDDevice;
 
     uint8_t bRequest;
@@ -1000,6 +1002,18 @@ typedef struct _pyb_usbdd_obj_t {
 #define MBOOT_USB_PID BOOTLOADER_DFU_USB_PID
 #endif
 
+// Special string descriptor value for Microsoft WCID support.
+// If the USB device responds to this string with the correct data (see msft100_str_desc)
+// then the Windows host will request further information about the configuration of
+// the device (see msft100_id).  This allows the device to set a Windows USB driver.
+// For more details about WCID see:
+// - https://github.com/pbatard/libwdi/wiki/WCID-Devices
+// - https://github.com/newaetech/naeusb/blob/main/wcid.md
+#define MSFT_WCID_STR_DESC_VALUE (0xee)
+
+// Vendor code, can be anything.
+#define MSFT100_VENDOR_CODE (0x42)
+
 #if !MICROPY_HW_USB_IS_MULTI_OTG
 STATIC const uint8_t usbd_fifo_size[USBD_PMA_NUM_FIFO] = {
     32, 32, // EP0(out), EP0(in)
@@ -1022,10 +1036,20 @@ __ALIGN_BEGIN static const uint8_t USBD_LangIDDesc[USB_LEN_LANGID_STR_DESC] __AL
 };
 
 static const uint8_t dev_descr[0x12] = {
-    0x12, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x40,
+    0x12, // bLength
+    0x01, // bDescriptorType: Device
+    0x00, 0x02, // USB version: 2.00
+    0x00, // bDeviceClass
+    0x00, // bDeviceSubClass
+    0x00, // bDeviceProtocol
+    0x40, // bMaxPacketSize
     LOBYTE(MBOOT_USB_VID), HIBYTE(MBOOT_USB_VID),
     LOBYTE(MBOOT_USB_PID), HIBYTE(MBOOT_USB_PID),
-    0x00, 0x22, 0x01, 0x02, 0x03, 0x01
+    0x00, 0x03, // bcdDevice: 3.00
+    0x01, // iManufacturer
+    0x02, // iProduct
+    0x03, // iSerialNumber
+    0x01, // bNumConfigurations: 1
 };
 
 // This may be modified by USBD_GetDescriptor
@@ -1034,6 +1058,32 @@ static uint8_t cfg_descr[9 + 9 + 9] =
     "\x09\x04\x00\x00\x00\xfe\x01\x02\x04"
     "\x09\x21\x0b\xff\x00\x00\x08\x1a\x01" // \x00\x08 goes with USB_XFER_SIZE
 ;
+
+__ALIGN_BEGIN static const uint8_t msft100_str_desc[18] __ALIGN_END = {
+    0x12, 0x03,
+    'M', 0x00,
+    'S', 0x00,
+    'F', 0x00,
+    'T', 0x00,
+    '1', 0x00,
+    '0', 0x00,
+    '0', 0x00,
+    MSFT100_VENDOR_CODE,
+    0x00,
+};
+
+__ALIGN_BEGIN static const uint8_t msft100_id[40] __ALIGN_END = {
+    0x28, 0x00, 0x00, 0x00,
+    0x00, 0x01, // 1.00
+    0x04, 0x00,
+    0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00,
+    0x01,
+    'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
 
 static uint8_t *pyb_usbdd_DeviceDescriptor(USBD_HandleTypeDef *pdev, uint16_t *length) {
     *length = USB_LEN_DEV_DESC;
@@ -1119,6 +1169,10 @@ static uint8_t *pyb_usbdd_StrDescriptor(USBD_HandleTypeDef *pdev, uint8_t idx, u
             return str_desc;
         #endif
 
+        case MSFT_WCID_STR_DESC_VALUE:
+            *length = sizeof(msft100_str_desc);
+            return (uint8_t *)msft100_str_desc; // the data should only be read from this buf
+
         default:
             return NULL;
     }
@@ -1147,8 +1201,24 @@ static uint8_t pyb_usbdd_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *r
     self->bRequest = req->bRequest;
     self->wValue = req->wValue;
     self->wLength = req->wLength;
-    if (req->bmRequest == 0x21) {
-        // host-to-device request
+
+    if ((req->bmRequest & 0xe0) == 0xc0) {
+        // device-to-host vendor request
+        if (req->wIndex == 0x04 && req->bRequest == MSFT100_VENDOR_CODE) {
+            // WCID: Compatible ID Feature Descriptor
+            #if USE_USB_POLLING
+            self->tx_pending = true;
+            #endif
+            int len = MIN(req->wLength, 40);
+            memcpy(self->tx_buf, msft100_id, len);
+            USBD_CtlSendData(&self->hUSBDDevice, self->tx_buf, len);
+            return USBD_OK;
+        } else {
+            USBD_CtlError(pdev, req);
+            return USBD_OK;
+        }
+    } else if (req->bmRequest == 0x21) {
+        // host-to-device class request
         if (req->wLength == 0) {
             // no data, process command straight away
             dfu_handle_rx(self->bRequest, self->wValue, 0, NULL);
@@ -1157,10 +1227,12 @@ static uint8_t pyb_usbdd_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *r
             USBD_CtlPrepareRx(pdev, self->rx_buf, req->wLength);
         }
     } else if (req->bmRequest == 0xa1) {
-        // device-to-host request
+        // device-to-host class request
         int len = dfu_handle_tx(self->bRequest, self->wValue, self->wLength, self->tx_buf, USB_XFER_SIZE);
         if (len >= 0) {
+            #if USE_USB_POLLING
             self->tx_pending = true;
+            #endif
             USBD_CtlSendData(&self->hUSBDDevice, self->tx_buf, len);
         }
     }
@@ -1168,9 +1240,10 @@ static uint8_t pyb_usbdd_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *r
 }
 
 static uint8_t pyb_usbdd_EP0_TxSent(USBD_HandleTypeDef *pdev) {
+    #if USE_USB_POLLING
     pyb_usbdd_obj_t *self = (pyb_usbdd_obj_t *)pdev->pClassData;
     self->tx_pending = false;
-    #if !USE_USB_POLLING
+    #else
     // Process now that we have sent a response
     dfu_process();
     #endif
@@ -1243,7 +1316,9 @@ static int pyb_usbdd_detect_port(void) {
 
 static void pyb_usbdd_init(pyb_usbdd_obj_t *self, int phy_id) {
     self->started = false;
+    #if USE_USB_POLLING
     self->tx_pending = false;
+    #endif
     USBD_HandleTypeDef *usbd = &self->hUSBDDevice;
     usbd->id = phy_id;
     usbd->dev_state = USBD_STATE_DEFAULT;

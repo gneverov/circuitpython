@@ -141,20 +141,17 @@ set(MICROPY_SOURCE_DRIVERS
 set(MICROPY_SOURCE_PORT
     fatfs_port.c
     help.c
-    machine_adc.c
     machine_bitstream.c
     machine_i2c.c
     machine_pin.c
     machine_rtc.c
     machine_spi.c
     machine_timer.c
-    machine_wdt.c
     machine/audio_out_pwm.c
     machine/pin.c
     machine/pio_sm.c
     machine/uart.c
     main.c
-    modmachine.c
     modrp2.c
     mphalport.c
     mpthreadport.c
@@ -259,6 +256,48 @@ if(MICROPY_PY_LWIP)
         )
     endif()
 endif()
+
+# Use our custom pico_float_micropython float implementation.  This is needed for two reasons:
+# - to fix inf handling in pico-sdk's __wrap___aeabi_fadd();
+# - so we can use our own libm functions, to fix inaccuracies in the pico-sdk versions.
+pico_set_float_implementation(${MICROPY_TARGET} micropython)
+
+# Define our custom pico_float_micropython component.
+pico_add_library(pico_float_micropython)
+
+# pico_float_micropython: add pico-sdk float and our libm source files.
+target_sources(pico_float_micropython INTERFACE
+    ${PICO_SDK_PATH}/src/rp2_common/pico_float/float_aeabi.S
+    ${PICO_SDK_PATH}/src/rp2_common/pico_float/float_init_rom.c
+    ${PICO_SDK_PATH}/src/rp2_common/pico_float/float_v1_rom_shim.S
+    ${MICROPY_SOURCE_LIB_LIBM}
+    ${MICROPY_SOURCE_LIB_LIBM_SQRT_SW}
+    ${MICROPY_PORT_DIR}/libm_extra.c
+)
+
+# pico_float_micropython: wrap low-level floating-point ops, to call the pico-sdk versions.
+pico_wrap_function(pico_float_micropython __aeabi_fdiv)
+pico_wrap_function(pico_float_micropython __aeabi_fmul)
+pico_wrap_function(pico_float_micropython __aeabi_frsub)
+pico_wrap_function(pico_float_micropython __aeabi_fsub)
+pico_wrap_function(pico_float_micropython __aeabi_cfcmpeq)
+pico_wrap_function(pico_float_micropython __aeabi_cfrcmple)
+pico_wrap_function(pico_float_micropython __aeabi_cfcmple)
+pico_wrap_function(pico_float_micropython __aeabi_fcmpeq)
+pico_wrap_function(pico_float_micropython __aeabi_fcmplt)
+pico_wrap_function(pico_float_micropython __aeabi_fcmple)
+pico_wrap_function(pico_float_micropython __aeabi_fcmpge)
+pico_wrap_function(pico_float_micropython __aeabi_fcmpgt)
+pico_wrap_function(pico_float_micropython __aeabi_fcmpun)
+pico_wrap_function(pico_float_micropython __aeabi_i2f)
+pico_wrap_function(pico_float_micropython __aeabi_l2f)
+pico_wrap_function(pico_float_micropython __aeabi_ui2f)
+pico_wrap_function(pico_float_micropython __aeabi_ul2f)
+pico_wrap_function(pico_float_micropython __aeabi_f2iz)
+pico_wrap_function(pico_float_micropython __aeabi_f2lz)
+pico_wrap_function(pico_float_micropython __aeabi_f2uiz)
+pico_wrap_function(pico_float_micropython __aeabi_f2ulz)
+pico_wrap_function(pico_float_micropython __aeabi_f2d)
 
 if (MICROPY_PY_AUDIO_MP3)
     target_link_libraries(${MICROPY_TARGET} micropy_lib_audio_mp3)
@@ -525,13 +564,10 @@ set(GEN_PINS_PREFIX "${MICROPY_BOARDS_DIR}/rp2_prefix.c")
 set(GEN_PINS_MKPINS "${MICROPY_BOARDS_DIR}/make-pins.py")
 set(GEN_PINS_SRC "${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c")
 set(GEN_PINS_HDR "${MICROPY_GENHDR_DIR}/pins.h")
-set(GEN_PINS_QSTR "${CMAKE_BINARY_DIR}/pins_qstr.h")
-set(GEN_PINS_AF_CONST "${MICROPY_GENHDR_DIR}/pins_af_const.h")
-set(GEN_PINS_AF_PY "${CMAKE_BINARY_DIR}/pins_af.py")
 
 if(EXISTS "${MICROPY_BOARDS_DIR}/${MICROPY_BOARD}/pins.csv")
     set(GEN_PINS_BOARD_CSV "${MICROPY_BOARDS_DIR}/${MICROPY_BOARD}/pins.csv")
-    set(GEN_PINS_CSV_ARG --board "${GEN_PINS_BOARD_CSV}")
+    set(GEN_PINS_CSV_ARG --board-csv "${GEN_PINS_BOARD_CSV}")
 endif()
 
 target_sources(${MICROPY_TARGET} PRIVATE
@@ -540,9 +576,8 @@ target_sources(${MICROPY_TARGET} PRIVATE
 
 # Generate pins
 add_custom_command(
-    OUTPUT ${GEN_PINS_HDR} ${GEN_PINS_SRC} ${GEN_PINS_QSTR}
-    COMMAND ${Python3_EXECUTABLE} ${GEN_PINS_MKPINS} ${GEN_PINS_CSV_ARG} --af ${GEN_PINS_AF_CSV} --prefix ${GEN_PINS_PREFIX}
-    --hdr ${GEN_PINS_HDR} --qstr ${GEN_PINS_QSTR} --af-const ${GEN_PINS_AF_CONST} --af-py ${GEN_PINS_AF_PY} > ${GEN_PINS_SRC}
+    OUTPUT ${GEN_PINS_HDR} ${GEN_PINS_SRC}
+    COMMAND ${Python3_EXECUTABLE} ${GEN_PINS_MKPINS} ${GEN_PINS_CSV_ARG} --af-csv ${GEN_PINS_AF_CSV} --prefix ${GEN_PINS_PREFIX} --output-source ${GEN_PINS_SRC} --output-header ${GEN_PINS_HDR}
     DEPENDS
         ${GEN_PINS_AF_CSV}
         ${GEN_PINS_BOARD_CSV}

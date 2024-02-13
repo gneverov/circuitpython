@@ -41,6 +41,7 @@
 
 #if MICROPY_PY_SELECT_POSIX_OPTIMISATIONS
 
+#include <string.h>
 #include <poll.h>
 
 #if !((MP_STREAM_POLL_RD) == (POLLIN) && \
@@ -142,14 +143,47 @@ STATIC void poll_obj_set_revents(poll_obj_t *poll_obj, mp_uint_t revents) {
     }
 }
 
+// How much (in pollfds) to grow the allocation for poll_set->pollfds by.
+#define POLL_SET_ALLOC_INCREMENT (4)
+
 STATIC struct pollfd *poll_set_add_fd(poll_set_t *poll_set, int fd) {
     struct pollfd *free_slot = NULL;
 
     if (poll_set->used == poll_set->max_used) {
         // No free slots below max_used, so expand max_used (and possibly allocate).
         if (poll_set->max_used >= poll_set->alloc) {
-            poll_set->pollfds = m_renew(struct pollfd, poll_set->pollfds, poll_set->alloc, poll_set->alloc + 4);
-            poll_set->alloc += 4;
+            size_t new_alloc = poll_set->alloc + POLL_SET_ALLOC_INCREMENT;
+            // Try to grow in-place.
+            struct pollfd *new_fds = m_renew_maybe(struct pollfd, poll_set->pollfds, poll_set->alloc, new_alloc, false);
+            if (!new_fds) {
+                // Failed to grow in-place. Do a new allocation and copy over the pollfd values.
+                new_fds = m_new(struct pollfd, new_alloc);
+                memcpy(new_fds, poll_set->pollfds, sizeof(struct pollfd) * poll_set->alloc);
+
+                // Update existing poll_obj_t to update their pollfd field to
+                // point to the same offset inside the new allocation.
+                for (mp_uint_t i = 0; i < poll_set->map.alloc; ++i) {
+                    if (!mp_map_slot_is_filled(&poll_set->map, i)) {
+                        continue;
+                    }
+
+                    poll_obj_t *poll_obj = MP_OBJ_TO_PTR(poll_set->map.table[i].value);
+                    if (!poll_obj) {
+                        // This is the one we're currently adding,
+                        // poll_set_add_obj doesn't assign elem->value until
+                        // afterwards.
+                        continue;
+                    }
+
+                    poll_obj->pollfd = new_fds + (poll_obj->pollfd - poll_set->pollfds);
+                }
+
+                // Delete the old allocation.
+                m_del(struct pollfd, poll_set->pollfds, poll_set->alloc);
+            }
+
+            poll_set->pollfds = new_fds;
+            poll_set->alloc = new_alloc;
         }
         free_slot = &poll_set->pollfds[poll_set->max_used++];
     } else {
@@ -306,6 +340,7 @@ STATIC mp_uint_t poll_set_poll_once(poll_set_t *poll_set, size_t *rwx_num) {
 
 STATIC mp_uint_t poll_set_poll_until_ready_or_timeout(poll_set_t *poll_set, size_t *rwx_num, mp_uint_t timeout) {
     mp_uint_t start_ticks = mp_hal_ticks_ms();
+    bool has_timeout = timeout != (mp_uint_t)-1;
 
     #if MICROPY_PY_SELECT_POSIX_OPTIMISATIONS
 
@@ -350,12 +385,12 @@ STATIC mp_uint_t poll_set_poll_until_ready_or_timeout(poll_set_t *poll_set, size
         }
 
         // Return if an object is ready, or if the timeout expired.
-        if (n_ready > 0 || (timeout != (mp_uint_t)-1 && mp_hal_ticks_ms() - start_ticks >= timeout)) {
+        if (n_ready > 0 || (has_timeout && mp_hal_ticks_ms() - start_ticks >= timeout)) {
             return n_ready;
         }
 
-        // This would be MICROPY_EVENT_POLL_HOOK but the call to poll() above already includes a delay.
-        mp_handle_pending(true);
+        // This would be mp_event_wait_ms() but the call to poll() above already includes a delay.
+        mp_event_handle_nowait();
     }
 
     #else
@@ -363,10 +398,15 @@ STATIC mp_uint_t poll_set_poll_until_ready_or_timeout(poll_set_t *poll_set, size
     for (;;) {
         // poll the objects
         mp_uint_t n_ready = poll_set_poll_once(poll_set, rwx_num);
-        if (n_ready > 0 || (timeout != (mp_uint_t)-1 && mp_hal_ticks_ms() - start_ticks >= timeout)) {
+        uint32_t elapsed = mp_hal_ticks_ms() - start_ticks;
+        if (n_ready > 0 || (has_timeout && elapsed >= timeout)) {
             return n_ready;
         }
-        MICROPY_EVENT_POLL_HOOK
+        if (has_timeout) {
+            mp_event_wait_ms(timeout - elapsed);
+        } else {
+            mp_event_wait_indefinite();
+        }
     }
 
     #endif

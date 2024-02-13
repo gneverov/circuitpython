@@ -29,10 +29,11 @@
 
 #include "py/runtime.h"
 #include "py/mphal.h"
+#include "extmod/modmachine.h"
+#include "extmod/virtpin.h"
 #include "shared/runtime/mpirq.h"
 #include "modmachine.h"
 #include "machine_pin.h"
-#include "extmod/virtpin.h"
 
 #include "hardware/irq.h"
 #include "hardware/regs/intctrl.h"
@@ -68,17 +69,17 @@ MP_DEFINE_CONST_OBJ_TYPE(
     pin_cpu_pins_obj_type,
     MP_QSTR_cpu,
     MP_TYPE_FLAG_NONE,
-    locals_dict, &pin_cpu_pins_locals_dict
+    locals_dict, &machine_pin_cpu_pins_locals_dict
     );
 
 MP_DEFINE_CONST_OBJ_TYPE(
     pin_board_pins_obj_type,
     MP_QSTR_board,
     MP_TYPE_FLAG_NONE,
-    locals_dict, &pin_board_pins_locals_dict
+    locals_dict, &machine_pin_board_pins_locals_dict
     );
 
-extern const machine_pin_obj_t *machine_pin_cpu_pins[NUM_BANK0_GPIOS];
+extern const machine_pin_obj_t machine_pin_obj_table[NUM_BANK0_GPIOS];
 
 // Mask with "1" indicating that the corresponding pin is in simulated open-drain mode.
 uint32_t machine_pin_open_drain_mask;
@@ -120,21 +121,21 @@ const machine_pin_af_obj_t *machine_pin_find_alt_by_index(const machine_pin_obj_
     return NULL;
 }
 
-static const machine_pin_obj_t *machine_pin_find(mp_obj_t pin) {
+const machine_pin_obj_t *machine_pin_find(mp_obj_t pin) {
     // Is already a object of the proper type
     if (mp_obj_is_type(pin, &machine_pin_type)) {
-        return pin;
+        return MP_OBJ_TO_PTR(pin);
     }
     if (mp_obj_is_str(pin)) {
         const char *name = mp_obj_str_get_str(pin);
         // Try to find the pin in the board pins first.
-        const machine_pin_obj_t *self = machine_pin_find_named(&pin_board_pins_locals_dict, pin);
+        const machine_pin_obj_t *self = machine_pin_find_named(&machine_pin_board_pins_locals_dict, pin);
         if (self != NULL) {
             return self;
         }
         // If not found, try to find the pin in the cpu pins which include
         // CPU and and externally controlled pins (if any).
-        self = machine_pin_find_named(&pin_cpu_pins_locals_dict, pin);
+        self = machine_pin_find_named(&machine_pin_cpu_pins_locals_dict, pin);
         if (self != NULL) {
             return self;
         }
@@ -142,8 +143,8 @@ static const machine_pin_obj_t *machine_pin_find(mp_obj_t pin) {
     } else if (mp_obj_is_int(pin)) {
         // get the wanted pin object
         int wanted_pin = mp_obj_get_int(pin);
-        if (0 <= wanted_pin && wanted_pin < MP_ARRAY_SIZE(machine_pin_cpu_pins)) {
-            return machine_pin_cpu_pins[wanted_pin];
+        if (0 <= wanted_pin && wanted_pin < MP_ARRAY_SIZE(machine_pin_obj_table)) {
+            return &machine_pin_obj_table[wanted_pin];
         }
     }
     mp_raise_ValueError("invalid pin");

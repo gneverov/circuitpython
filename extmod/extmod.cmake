@@ -7,16 +7,22 @@ set(MICROPY_SOURCE_EXTMOD
     ${MICROPY_DIR}/shared/libc/abort_.c
     ${MICROPY_DIR}/shared/libc/printf.c
     ${MICROPY_EXTMOD_DIR}/btstack/modbluetooth_btstack.c
+    ${MICROPY_EXTMOD_DIR}/machine_adc.c
+    ${MICROPY_EXTMOD_DIR}/machine_adc_block.c
     ${MICROPY_EXTMOD_DIR}/machine_bitstream.c
     ${MICROPY_EXTMOD_DIR}/machine_i2c.c
+    ${MICROPY_EXTMOD_DIR}/machine_i2s.c
     ${MICROPY_EXTMOD_DIR}/machine_mem.c
     ${MICROPY_EXTMOD_DIR}/machine_pulse.c
     ${MICROPY_EXTMOD_DIR}/machine_pwm.c
     ${MICROPY_EXTMOD_DIR}/machine_signal.c
     ${MICROPY_EXTMOD_DIR}/machine_spi.c
+    ${MICROPY_EXTMOD_DIR}/machine_uart.c
+    ${MICROPY_EXTMOD_DIR}/machine_wdt.c
     ${MICROPY_EXTMOD_DIR}/modbluetooth.c
     ${MICROPY_EXTMOD_DIR}/modframebuf.c
     ${MICROPY_EXTMOD_DIR}/modlwip.c
+    ${MICROPY_EXTMOD_DIR}/modmachine.c
     ${MICROPY_EXTMOD_DIR}/modnetwork.c
     ${MICROPY_EXTMOD_DIR}/modonewire.c
     ${MICROPY_EXTMOD_DIR}/modasyncio.c
@@ -123,6 +129,41 @@ if (MICROPY_PY_AUDIO_MP3)
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/trigtabs.c
     )
 endif()
+
+# Single-precision libm math library.
+
+set(MICROPY_SOURCE_LIB_LIBM
+    ${MICROPY_DIR}/lib/libm/acoshf.c
+    ${MICROPY_DIR}/lib/libm/asinfacosf.c
+    ${MICROPY_DIR}/lib/libm/asinhf.c
+    ${MICROPY_DIR}/lib/libm/atan2f.c
+    ${MICROPY_DIR}/lib/libm/atanf.c
+    ${MICROPY_DIR}/lib/libm/atanhf.c
+    ${MICROPY_DIR}/lib/libm/ef_rem_pio2.c
+    ${MICROPY_DIR}/lib/libm/erf_lgamma.c
+    ${MICROPY_DIR}/lib/libm/fmodf.c
+    ${MICROPY_DIR}/lib/libm/kf_cos.c
+    ${MICROPY_DIR}/lib/libm/kf_rem_pio2.c
+    ${MICROPY_DIR}/lib/libm/kf_sin.c
+    ${MICROPY_DIR}/lib/libm/kf_tan.c
+    ${MICROPY_DIR}/lib/libm/log1pf.c
+    ${MICROPY_DIR}/lib/libm/math.c
+    ${MICROPY_DIR}/lib/libm/nearbyintf.c
+    ${MICROPY_DIR}/lib/libm/roundf.c
+    ${MICROPY_DIR}/lib/libm/sf_cos.c
+    ${MICROPY_DIR}/lib/libm/sf_erf.c
+    ${MICROPY_DIR}/lib/libm/sf_frexp.c
+    ${MICROPY_DIR}/lib/libm/sf_ldexp.c
+    ${MICROPY_DIR}/lib/libm/sf_modf.c
+    ${MICROPY_DIR}/lib/libm/sf_sin.c
+    ${MICROPY_DIR}/lib/libm/sf_tan.c
+    ${MICROPY_DIR}/lib/libm/wf_lgamma.c
+    ${MICROPY_DIR}/lib/libm/wf_tgamma.c
+)
+
+# Choose only one of these sqrt implementations, software or hardware.
+set(MICROPY_SOURCE_LIB_LIBM_SQRT_SW ${MICROPY_DIR}/lib/libm/ef_sqrt.c)
+set(MICROPY_SOURCE_LIB_LIBM_SQRT_HW ${MICROPY_DIR}/lib/libm/thumb_vfp_sqrtf.c)
 
 # Library for btree module and associated code
 
