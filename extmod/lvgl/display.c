@@ -93,7 +93,7 @@ bool lvgl_handle_alloc_display_draw_buffers(lvgl_handle_display_t *handle, size_
     if (!handle->buf[0] || !handle->buf[1]) {
         return false;        
     }
-    lv_display_set_draw_buffers(disp, handle->buf[0], handle->buf[1], buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, handle->buf[0], handle->buf[1], buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
     return true;
 }
 
