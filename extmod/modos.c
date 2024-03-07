@@ -28,7 +28,7 @@
 #include "py/objstr.h"
 #include "py/runtime.h"
 
-#if MICROPY_PY_OS
+#if MICROPY_PY_OS && !MICROPY_NEWLIB
 
 #include "extmod/misc.h"
 #include "extmod/vfs.h"

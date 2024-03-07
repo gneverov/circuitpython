@@ -33,6 +33,7 @@
 #include "mpconfigboard.h"
 
 #define MICROPY_FREERTOS (1)
+#define MICROPY_NEWLIB (1)
 
 // Board and hardware specific configuration
 #define MICROPY_HW_MCU_NAME                     "RP2040"
@@ -94,7 +95,7 @@
 
 // Python internal features
 #define MICROPY_TRACKED_ALLOC                   (MICROPY_BLUETOOTH_BTSTACK)
-#define MICROPY_READER_VFS                      (1)
+#define MICROPY_READER_POSIX                    (1)
 #define MICROPY_ENABLE_GC                       (1)
 #define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF  (1)
 #define MICROPY_LONGINT_IMPL                    (MICROPY_LONGINT_IMPL_MPZ)
@@ -111,7 +112,6 @@
 
 // Extended modules
 #define MICROPY_EPOCH_IS_1970                   (1)
-#define MICROPY_PY_OS_INCLUDEFILE               "ports/rp2/modos.c"
 #define MICROPY_PY_OS_DUPTERM                   (0)
 #define MICROPY_PY_OS_SYNC                      (1)
 #define MICROPY_PY_OS_UNAME                     (1)
@@ -154,9 +154,9 @@
 #define MICROPY_PY_MACHINE_WDT                  (1)
 #define MICROPY_PY_MACHINE_WDT_INCLUDEFILE      "ports/rp2/machine_wdt.c"
 #define MICROPY_PY_ONEWIRE                      (1)
-#define MICROPY_VFS                             (1)
+#define MICROPY_VFS                             (0)
 #define MICROPY_VFS_LFS2                        (0)
-#define MICROPY_VFS_FAT                         (1)
+#define MICROPY_VFS_FAT                         (0)
 #define MICROPY_SSL_MBEDTLS                     (0)
 #define MICROPY_PY_LWIP_SOCK_RAW                (MICROPY_PY_LWIP)
 #define MICROPY_PY_FREEZE                       (1)

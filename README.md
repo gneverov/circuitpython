@@ -95,6 +95,8 @@ pin.value = 1     # output high
 
 - `network_cyw43`: This subcomponent of the network module still exists as a way to configure the cyw43 network device (e.g., tell it which wifi network to connect to). The wifi scan method has be updated to use FreeRTOS instead of polling.
 
+- `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to newlib-nano. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices.
+
 - `select`: The select module is rewritten to use FreeRTOS. It exposes a class called `Selector` which is basically a CPython-compatible [`selectors.EpollSelector`](https://docs.python.org/3/library/selectors.html?highlight=selector#selectors.BaseSelector) class. Under the hood, the select module implements a design similar to Linux [epoll](https://linux.die.net/man/4/epoll). In particular, MicroPython streams are extended with a POLL_CTL ioctl, which has similar behavior to Linux's [epoll_ctl](https://linux.die.net/man/2/epoll_ctl) syscall.
 The selector is a crucial part of any asyncio implementation. At its heart, an asyncio event loop will contain a selector to bring about IO concurrency between tasks.
 
@@ -127,6 +129,8 @@ This class's methods can also take keyword arguments to define values for variou
 
 ### Framework
 - **blocking**: Functions such as sleep, blocking I/O, and select will block the calling task using a FreeRTOS API, thus allowing the CPU to continue executing other tasks. Additionally the GIL is released before the blocking call to give other MicroPython threads a chance to run. The macro `MICROPY_EVENT_POLL_HOOK` is not used anywhere.
+
+- **flash translation layer**: Uses a variant of [Dhara](https://github.com/gneverov/dhara16) to provide a flash translation layer to the XIP flash storage. This allows for wear levelling of the on-chip flash memory and a smaller filesystem block size.
 
 - **main**: The C main function is responsible for starting FreeRTOS tasks for various subsystems. MicroPython, lwIP, and TinyUSB all execute as separate tasks. cyw43_driver executes as a FreeRTOS timer.
 

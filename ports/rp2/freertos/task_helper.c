@@ -14,6 +14,7 @@ enum task_interrupt_state {
 void task_init() {
     vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_REENT, _REENT);
     vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_INTERRUPT, (void *)0);
+    vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_CWD, NULL);
     vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_APP, NULL);
 }
 

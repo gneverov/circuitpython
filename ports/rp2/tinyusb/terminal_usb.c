@@ -11,13 +11,16 @@
 #include "freertos/task_helper.h"
 #include "event_groups.h"
 
+#include "newlib/devfs.h"
 #include "newlib/newlib.h"
 #include "newlib/poll.h"
+#include "newlib/vfs.h"
 #include "tinyusb/cdc_device_cb.h"
 #include "tinyusb/terminal.h"
 
 
 typedef struct {
+    struct vfs_file base;
     uint8_t usb_itf;
     EventGroupHandle_t events;
     StaticEventGroup_t events_buffer;
@@ -61,7 +64,7 @@ static int terminal_usb_close(void *state) {
     return 0;
 }
 
-static int terminal_usb_read(void *state, char *buf, int size) {
+static int terminal_usb_read(void *state, void *buf, size_t size) {
     terminal_usb_t *self = state;
     while (!tud_cdc_n_available(self->usb_itf)) {
         if (task_check_interrupted()) {
@@ -76,7 +79,7 @@ static int terminal_usb_read(void *state, char *buf, int size) {
     return br;
 }
 
-static int terminal_usb_write(void *state, const char *buf, int size) {
+static int terminal_usb_write(void *state, const void *buf, size_t size) {
     terminal_usb_t *self = state;
     while (!tud_cdc_n_write_available(self->usb_itf)) {
         if (task_check_interrupted()) {
@@ -95,18 +98,21 @@ static int terminal_usb_write(void *state, const char *buf, int size) {
     return bw;
 }
 
-static const struct fd_vtable terminal_usb_vtable = {
+static const struct vfs_file_vtable terminal_usb_vtable = {
     .close = terminal_usb_close,
+    .isatty = 1,
     .read = terminal_usb_read,
     .write = terminal_usb_write,
 };
 
-int terminal_usb_open(uint8_t usb_itf) {
+void *terminal_usb_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
+    uint8_t usb_itf = minor(dev);
     terminal_usb_t *self = malloc(sizeof(terminal_usb_t));
     if (!self) {
         errno = ENOMEM;
-        return -1;
+        return NULL;
     }
+    vfs_file_init(&self->base, &terminal_usb_vtable, mode | S_IFCHR);
 
     self->events = xEventGroupCreateStatic(&self->events_buffer);
 
@@ -118,6 +124,6 @@ int terminal_usb_open(uint8_t usb_itf) {
     tud_cdc_n_set_wanted_char(usb_itf, 3);
     tud_cdc_set_cb(usb_itf, terminal_usb_tud_cdc_device_cb, self);
 
-    return fd_open(&terminal_usb_vtable, self, 0);
+    return self;
 }
 #endif

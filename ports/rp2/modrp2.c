@@ -120,7 +120,6 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2_heap_size_obj, 0, 1, rp2_heap_siz
 
 STATIC const mp_rom_map_elem_t rp2_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),            MP_ROM_QSTR(MP_QSTR_rp2) },
-    { MP_ROM_QSTR(MP_QSTR_Flash),               MP_ROM_PTR(&rp2_flash_type) },
     { MP_ROM_QSTR(MP_QSTR_bootsel_button),      MP_ROM_PTR(&rp2_bootsel_button_obj) },
     { MP_ROM_QSTR(MP_QSTR_heap_size),           MP_ROM_PTR(&rp2_heap_size_obj) },
 

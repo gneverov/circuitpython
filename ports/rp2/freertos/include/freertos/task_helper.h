@@ -7,7 +7,8 @@
 
 #define TLS_INDEX_REENT 0
 #define TLS_INDEX_INTERRUPT 1
-#define TLS_INDEX_APP 2
+#define TLS_INDEX_CWD 2
+#define TLS_INDEX_APP 3
 
 static_assert(TLS_INDEX_APP < configNUM_THREAD_LOCAL_STORAGE_POINTERS);
 

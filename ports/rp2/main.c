@@ -25,9 +25,12 @@
  * THE SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <malloc.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/unistd.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -36,11 +39,13 @@
 #if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
 #endif
+#include "newlib/mount.h"
 #include "newlib/newlib.h"
 #include "pico/dma.h"
 #include "pico/gpio.h"
 #include "pico/pio.h"
 #include "pico/terminal.h"
+#include "tinyusb/msc_device.h"
 #include "tinyusb/net_device_lwip.h"
 #include "tinyusb/terminal.h"
 #include "tinyusb/tusb_config.h"
@@ -135,13 +140,6 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
 
         signal_init();
 
-        // Execute _boot.py to set up the filesystem.
-        #if MICROPY_VFS_FAT
-        pyexec_frozen_module("_boot_fat.py", false);
-        #else
-        pyexec_frozen_module("_boot.py", false);
-        #endif
-
         // Execute user scripts.
         int ret = pyexec_file_if_exists("boot.py");
         if (ret & PYEXEC_FORCED_EXIT) {
@@ -185,6 +183,8 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
 StaticTask_t mp_taskdef;
 const volatile __in_flash("gc_heap_size") size_t mp_gc_heap_size = 96 << 10;
 
+#define DEFAULT_TTY "/dev/ttyS0"
+
 void mp_task(void *params) {
     task_init();
     size_t gc_heap_size = mp_gc_heap_size;
@@ -194,25 +194,28 @@ void mp_task(void *params) {
         gc_heap = malloc(gc_heap_size);
     }
 
-    fd_close();
-    bool has_terminal = false;
-
     #if MICROPY_HW_USB_CDC
     const tusb_config_t *tusb_config = tusb_config_get();
-    if (!has_terminal && tusb_config && tusb_config->device && (tusb_config->cdc_itf != 255) && !tusb_config->disconnect) {
+    if (tusb_config && tusb_config->device && (tusb_config->cdc_itf != 255) && !tusb_config->disconnect) {
         while (!tud_inited()) {
             portYIELD();
         }
-        has_terminal = !terminal_usb_open(tusb_config->cdc_itf);
     }
     #endif
 
-    #if MICROPY_HW_ENABLE_UART_REPL
-    if (!has_terminal) {
-        has_terminal = !terminal_uart_open();
+    const char *tty = getenv("TTY");
+    if (!tty) {
+        tty = DEFAULT_TTY;
     }
-    #endif
-    assert(has_terminal);
+    if (tty) {
+        int fd = open(tty, O_RDWR, 0);
+        if (fd >= 0) {
+            // Success open of tty installs it on stdio fds, so we an close our fd.
+            close(fd);
+        } else {
+            perror("failed up open terminal");
+        }
+    }
 
     mp_main((uint8_t *)&__MpStackBottom, (uint8_t *)&__MpStackTop, gc_heap, gc_heap + gc_heap_size);
 
@@ -232,7 +235,7 @@ void mp_tud_task(void *params) {
         tud_disconnect();
     }
 
-    #if CFG_TUD_ECM_RNDIS || CFG_TUD_NCM
+    #if MICROPY_PY_LWIP && (CFG_TUD_ECM_RNDIS || CFG_TUD_NCM)
     lwip_wait();
     tud_network_init();
     #endif
@@ -257,12 +260,45 @@ void mp_tuh_task(void *params) {
 }
 #endif
 
+STATIC int mount_root_fs(void) {
+    char *auto_mount = getenv("AUTO_MOUNT");
+    if (!auto_mount) {
+        return 0;
+    }
+    char device[64], filesystemtype[16];
+    unsigned long flags = 0;
+    if (sscanf(auto_mount, "%s,%s,%lu", device, filesystemtype, &flags) < 2) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (mount(device, "/", filesystemtype, flags, NULL) >= 0) {
+        return 0;
+    }
+    if ((flags & MS_RDONLY) || (errno != ENODEV)) {
+        goto error;
+    }
+    // Mount failed due to no filesystem. Try mkfs.
+    if (mkfs(device, filesystemtype, NULL) < 0) {
+        goto error;
+    }
+    if (mount(device, "/", filesystemtype, flags, NULL) >= 0) {
+        return 0;
+    }
+
+error:
+    perror("failed to mount root filesystem");
+    return -1;
+}
+
 int main(int argc, char **argv) {
     pico_dma_init();
     pico_gpio_init();
     pico_pio_init();
 
-    terminal_boot_open();
+    mount(NULL, "/dev", "devfs", 0, NULL);
+    // close(open(DEV_TTYS, ~O_NOCTTY));
+
+    mount_root_fs();
 
     #if MICROPY_PY_NETWORK_CYW43
     cyw43_driver_init();

@@ -4,6 +4,7 @@ add_library(tinyusb_helper INTERFACE)
 
 target_sources(tinyusb_helper INTERFACE
     cdc_device_cb.c
+    msc_device.c
     terminal_usb.c
     tusb_config.c
     tusb_lock.c

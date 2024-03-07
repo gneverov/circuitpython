@@ -21,9 +21,11 @@
     __stack (== StackTop)
 */
 
+FLASH_STORAGE_SIZE = 1024k;
+
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 1024k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 2048k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -119,7 +121,7 @@ SECTIONS
     . = ALIGN(4);
 
     /* End of .text-like segments */
-    __etext = .;
+    HIDDEN(__etext = .);
 
    .ram_vector_table (COPY): {
         *(.ram_vector_table)
@@ -220,27 +222,24 @@ SECTIONS
         __HeapLimit = .;
     } > RAM
 
-    /* .stack*_dummy section doesn't contains any symbols. It is only
-     * used for linker to calculate size of stack sections, and assign
-     * values to stack symbols later
-     *
-     * stack1 section may be empty/missing if platform_launch_core1 is not used */
-
-    /* by default we put core 0 stack at the end of scratch Y, so that if core 1
-     * stack is not used then all of SCRATCH_X is free.
-     */
-    .stack1_dummy (COPY):
-    {
-        *(.stack1*)
-    } > SCRATCH_X
-    .stack_dummy (COPY):
-    {
-        *(.stack*)
-    } > SCRATCH_Y
-
     .flash_end : {
-        __flash_binary_end = .;
+        HIDDEN(__flash_binary_end = .);
+    }
+
+    .flash_heap : ALIGN(4k) {
+        HIDDEN(__flash_heap_start = .);
+        *(.flash_heap*)
+        HIDDEN(__flash_heap_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_STORAGE_SIZE - 4k);
     } > FLASH
+    
+    .flash_env __flash_heap_end (COPY) : ALIGN(4k) {
+        *(.usb_config*)
+    } > FLASH
+
+    HIDDEN(__flash_storage_end = ORIGIN(FLASH) + LENGTH(FLASH));
+    HIDDEN(__flash_storage_start = __flash_storage_end - FLASH_STORAGE_SIZE);
+    ASSERT(__flash_storage_start >= ., "flash region overflowed")
+
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
@@ -249,7 +248,6 @@ SECTIONS
      * Once vTaskStartScheduler is called, the stacks defined here are invalid.
      */
     __StackTop = ORIGIN(RAM) + LENGTH(RAM);
-    __StackBottom = __StackTop - SIZEOF(.stack_dummy);
     PROVIDE(__stack = __StackTop);
 
     /* Check if data + heap + stack exceeds RAM limit */

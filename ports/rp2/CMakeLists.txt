@@ -105,6 +105,8 @@ add_subdirectory(${MICROPY_PORT_DIR}/lwip)
 add_subdirectory(${MICROPY_PORT_DIR}/newlib)
 add_subdirectory(${MICROPY_PORT_DIR}/pico)
 add_subdirectory(${MICROPY_PORT_DIR}/tinyusb)
+add_subdirectory(${MICROPY_DIR}/lib/fatfs fatfs)
+add_subdirectory(${MICROPY_DIR}/lib/dhara dhara)
 
 
 add_executable(${MICROPY_TARGET})
@@ -114,12 +116,6 @@ set(MICROPY_QSTRDEFS_PORT
 )
 
 set(MICROPY_SOURCE_LIB
-    ${MICROPY_DIR}/lib/littlefs/lfs1.c
-    ${MICROPY_DIR}/lib/littlefs/lfs1_util.c
-    ${MICROPY_DIR}/lib/littlefs/lfs2.c
-    ${MICROPY_DIR}/lib/littlefs/lfs2_util.c
-    ${MICROPY_DIR}/lib/oofatfs/ff.c
-    ${MICROPY_DIR}/lib/oofatfs/ffunicode.c
     ${MICROPY_DIR}/shared/netutils/dhcpserver.c
     ${MICROPY_DIR}/shared/netutils/netutils.c
     ${MICROPY_DIR}/shared/netutils/trace.c
@@ -129,7 +125,6 @@ set(MICROPY_SOURCE_LIB
     ${MICROPY_DIR}/shared/runtime/interrupt_char.c
     ${MICROPY_DIR}/shared/runtime/pyexec.c
     ${MICROPY_DIR}/shared/runtime/stdout_helpers.c
-    ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
     ${MICROPY_DIR}/shared/timeutils/timeutils.c
 )
 
@@ -139,7 +134,6 @@ set(MICROPY_SOURCE_DRIVERS
 )
 
 set(MICROPY_SOURCE_PORT
-    fatfs_port.c
     help.c
     machine_bitstream.c
     machine_i2c.c
@@ -155,9 +149,9 @@ set(MICROPY_SOURCE_PORT
     modrp2.c
     mphalport.c
     mpthreadport.c
+    newlib_drv.c
     rp2_flash.c
     usbd.c
-    msc_disk.c
     mbedtls/mbedtls_port.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
@@ -166,7 +160,6 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_PY}
     ${MICROPY_DIR}/shared/readline/readline.c
     ${MICROPY_DIR}/shared/runtime/mpirq.c
-    ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
     ${MICROPY_PORT_DIR}/machine_adc.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
     ${MICROPY_PORT_DIR}/machine_pin.c
@@ -180,9 +173,7 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_PORT_DIR}/machine/uart.c
     ${MICROPY_PORT_DIR}/modmachine.c
     ${MICROPY_PORT_DIR}/modrp2.c
-    ${MICROPY_PORT_DIR}/modos.c
     ${MICROPY_PORT_DIR}/mpthreadport.c
-    ${MICROPY_PORT_DIR}/rp2_flash.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
 
@@ -457,6 +448,8 @@ target_link_libraries(${MICROPY_TARGET}
 )
 
 target_link_libraries(${MICROPY_TARGET} 
+    newlib_dhara
+    newlib_fatfs
     newlib_helper 
     pico_helper 
     tinyusb_helper
@@ -512,9 +505,6 @@ set_source_files_properties(
 )
 
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
-    FFCONF_H=\"${MICROPY_OOFATFS_DIR}/ffconf.h\"
-    LFS1_NO_MALLOC LFS1_NO_DEBUG LFS1_NO_WARN LFS1_NO_ERROR LFS1_NO_ASSERT
-    LFS2_NO_MALLOC LFS2_NO_DEBUG LFS2_NO_WARN LFS2_NO_ERROR LFS2_NO_ASSERT
     PICO_FLOAT_PROPAGATE_NANS=1
     PICO_HEAP_SIZE=0
     PICO_CORE1_STACK_SIZE=0

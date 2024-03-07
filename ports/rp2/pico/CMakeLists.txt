@@ -8,6 +8,7 @@ target_sources(pico_helper INTERFACE
     gpio.c
     pio.c
     pwm.c
+    terminal.c
     terminal_boot.c
     terminal_uart.c
     uart.c

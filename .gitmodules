@@ -68,3 +68,6 @@
 [submodule "lib/lvgl"]
 	path = lib/lvgl
 	url = https://github.com/gneverov/lvgl.git
+[submodule "lib/dhara"]
+	path = lib/dhara
+	url = https://github.com/dlbeer/dhara.git

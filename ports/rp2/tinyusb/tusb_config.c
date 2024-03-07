@@ -14,7 +14,8 @@
 #define TUSB_CONFIG_MAGIC 0x4e47
 
 
-extern uint32_t tusb_config_flash_offset;
+__attribute__((section(".usb_config")))
+static const volatile tusb_config_t tusb_config_flash;
 
 void tusb_config_init(tusb_config_t *tusb_config) {
     memset(tusb_config, 0, sizeof(tusb_config_t));
@@ -23,7 +24,7 @@ void tusb_config_init(tusb_config_t *tusb_config) {
 }
 
 const tusb_config_t *tusb_config_get(void) {
-    const tusb_config_t *tusb_config = (const tusb_config_t *)(XIP_BASE + tusb_config_flash_offset);
+    const tusb_config_t *tusb_config = (tusb_config_t *)&tusb_config_flash;
     return (tusb_config->magic == TUSB_CONFIG_MAGIC) ? tusb_config : NULL;
 }
 
@@ -31,6 +32,7 @@ void tusb_config_delete(void) {
     tud_disconnect();
 
     taskENTER_CRITICAL();
+    uint32_t tusb_config_flash_offset = ((uintptr_t)&tusb_config_flash) - XIP_BASE;
     flash_range_erase(tusb_config_flash_offset, FLASH_SECTOR_SIZE);
     taskEXIT_CRITICAL();
 }
@@ -45,7 +47,7 @@ size_t tusb_config_save(const tusb_config_t *ram_config) {
     *flash_config = *ram_config;
 
     uint8_t *heap = flash_config->heap;
-    ptrdiff_t diff = (uint8_t *)(XIP_BASE + tusb_config_flash_offset) - (uint8_t *)flash_config;
+    ptrdiff_t diff = (uint8_t *)&tusb_config_flash - (uint8_t *)flash_config;
 
     // flash_config->device = NULL;
     tusb_desc_device_t *dev = ram_config->device;
@@ -79,6 +81,7 @@ size_t tusb_config_save(const tusb_config_t *ram_config) {
     tud_disconnect();
 
     taskENTER_CRITICAL();
+    uint32_t tusb_config_flash_offset = ((uintptr_t)&tusb_config_flash) - XIP_BASE;
     flash_range_erase(tusb_config_flash_offset, FLASH_SECTOR_SIZE);
     flash_range_program(tusb_config_flash_offset, (uint8_t *)flash_config, FLASH_SECTOR_SIZE);
     taskEXIT_CRITICAL();
