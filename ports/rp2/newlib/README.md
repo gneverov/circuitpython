@@ -104,7 +104,7 @@ The following functions with 🟢 status are implemented.
 | `getcwd` | 🟢 | |
 | `getegid`<br>`geteuid`<br>`getgid`<br>`getuid`<br>`setegid`<br>`seteuid`<br>`setgid`<br>`setuid` | 🔴 | No users or groups |
 | `getgroups` | 🔴 | No users or groups |
-| `gethostname` | 🔴 | |
+| `gethostname` | 🟢 | Uses `HOSTNAME` environment variable|
 | `getlogin` | 🔴 | No users or groups |
 | `getopt` |  🔴 | No opt |
 | `getpgid`<br>`getpgrp`<br>`getsid`<br>`setpgid`<br>`setsid` | 🔴 | No multiple processes |
@@ -122,7 +122,7 @@ The following functions with 🟢 status are implemented.
 | `read` | 🟢 | Defined by newlib |
 | `readlink`<br>`readlinkat` | 🔴 | No symbolic links |
 | `rmdir` | 🟢 | |
-| `sleep` | 🔴 | |
+| `sleep` | 🟢 | |
 | `symlink`<br>`symlinkat` | 🔴 | No symbolic links |
 | `sysconf` | 🔴 | No conf |
 | `tcgetpgrp`<br>`tcsetpgrp` | 🔴 | No multiple processes |
@@ -131,3 +131,31 @@ The following functions with 🟢 status are implemented.
 | `unlink` | 🟢 | Defined by newlib |
 | `unlinkat` | 🔴 | | 
 | `write` | 🟢 | Defined by newlib |
+
+## time.h
+| Function | Status | Notes |
+| - | - | - |
+| `asctime` | 🟢 | Defined by newlib |
+| `clock` | 🟢 | Defined by newlib |
+| `ctime` | 🟢 | Defined by newlib |
+| `difftime` | 🟢 | Defined by newlib |
+| `getdate` | 🔴 | | 
+| `gmtime` | 🟢 | Defined by newlib |
+| `localtime` | 🟢 | Defined by newlib |
+| `mktime` | 🟢 | Defined by newlib |
+| `nanosleep` | 🟢 | |
+| `strftime` | 🟢 | Defined by newlib |
+| `strptime` | 🟢 | Defined by newlib |
+| `time` | 🟢 | Defined by newlib |
+| `tzset` | 🟢 | Defined by newlib |
+
+# Environment variables
+The environment variables are stored in flash memory and are persistent across resets and reflashes of the firmware. They are useful for storing small pieces of information that are needed before or without a filesystem being mounted.
+
+| Variable | Notes | Example |
+| - | - | - |
+| `COUNTRY` | Country code for wifi | US |
+| `HOSTNAME` | Host name used by `gethostname` |
+| `ROOT` | How to mount root filesystem: *device* *fstype* [*flags*] | /dev/flash fatfs |
+| `TTY` | Device to open for stdio streams| /dev/ttyUSB0 |
+| `TZ` | Time zone used by `tzset`| PST8PDT |

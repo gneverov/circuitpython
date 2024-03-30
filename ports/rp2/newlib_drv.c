@@ -3,7 +3,9 @@
 #include "newlib/fatfs.h"
 #include "newlib/flash.h"
 #include "pico/terminal.h"
+#include "tinyuf2/tinyuf2.h"
 #include "tinyusb/terminal.h"
+
 
 const struct devfs_driver devfs_drvs[] = {
     { "/", S_IFDIR, 0, NULL },
@@ -20,6 +22,8 @@ const struct devfs_driver devfs_drvs[] = {
     { "/ttyS1", S_IFCHR, DEV_TTYS1, terminal_open },
 
     { "/ttyUSB0", S_IFCHR, DEV_TTYUSB0, terminal_usb_open },
+
+    { "/uf2", S_IFBLK, 0, tinyuf2_open },
 };
 
 const size_t devfs_num_drvs = sizeof(devfs_drvs) / sizeof(devfs_drvs[0]);

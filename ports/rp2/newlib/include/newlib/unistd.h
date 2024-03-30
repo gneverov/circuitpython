@@ -12,9 +12,13 @@ int fsync(int fd);
 
 int ftruncate(int fd, off_t length);
 
+int gethostname(char *name, size_t namelen);
+
 int mkdir(const char *path, mode_t mode);
 
 int rmdir(const char *path);
+
+unsigned sleep(unsigned seconds);
 
 void sync(void);
 

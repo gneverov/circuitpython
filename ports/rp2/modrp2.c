@@ -38,19 +38,6 @@
 #include "hardware/structs/ioqspi.h"
 #include "hardware/structs/sio.h"
 
-#if MICROPY_PY_NETWORK_CYW43
-#ifndef MICROPY_PY_NETWORK_HOSTNAME_MAX_LEN
-#define MICROPY_PY_NETWORK_HOSTNAME_MAX_LEN (16)
-#endif
-
-char mod_network_country_code[2] = "XX";
-
-#ifndef MICROPY_PY_NETWORK_HOSTNAME_DEFAULT
-#error "MICROPY_PY_NETWORK_HOSTNAME_DEFAULT must be set in mpconfigport.h or mpconfigboard.h"
-#endif
-
-char mod_network_hostname[MICROPY_PY_NETWORK_HOSTNAME_MAX_LEN] = MICROPY_PY_NETWORK_HOSTNAME_DEFAULT;
-#endif
 
 // Improved version of
 // https://github.com/raspberrypi/pico-examples/blob/master/picoboard/button/button.c
@@ -92,38 +79,9 @@ STATIC mp_obj_t rp2_bootsel_button(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(rp2_bootsel_button_obj, rp2_bootsel_button);
 
-mp_obj_t __not_in_flash_func(rp2_heap_size)(size_t n_args, const mp_obj_t *args) {
-    const extern size_t mp_gc_heap_size;
-    assert(((uintptr_t)&mp_gc_heap_size >= XIP_BASE) && ((uintptr_t)&mp_gc_heap_size < SRAM_BASE));
-
-    if (n_args > 0) {
-        mp_int_t new_size = mp_obj_get_int(args[0]);
-        uint8_t *buffer = malloc(FLASH_SECTOR_SIZE);
-        if (!buffer) {
-            mp_raise_OSError(MP_ENOMEM);
-        }
-        uintptr_t flash_offset = ((uintptr_t)&mp_gc_heap_size) & ~(FLASH_SECTOR_SIZE - 1);
-        memcpy(buffer, (void *)flash_offset, FLASH_SECTOR_SIZE);
-        *(size_t *)&buffer[ ((uintptr_t)&mp_gc_heap_size) & (FLASH_SECTOR_SIZE - 1)] = new_size;
-
-        assert(flash_offset != ((uintptr_t)rp2_heap_size & ~(FLASH_SECTOR_SIZE - 1)));
-        mp_uint_t state = MICROPY_BEGIN_ATOMIC_SECTION();
-        flash_range_erase(flash_offset - XIP_BASE, FLASH_SECTOR_SIZE);
-        flash_range_program(flash_offset - XIP_BASE, buffer, FLASH_SECTOR_SIZE);
-        MICROPY_END_ATOMIC_SECTION(state);
-        return mp_const_none;
-    } else {
-        return MP_OBJ_NEW_SMALL_INT(mp_gc_heap_size);
-    }
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(rp2_heap_size_obj, 0, 1, rp2_heap_size);
-
 STATIC const mp_rom_map_elem_t rp2_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),            MP_ROM_QSTR(MP_QSTR_rp2) },
     { MP_ROM_QSTR(MP_QSTR_bootsel_button),      MP_ROM_PTR(&rp2_bootsel_button_obj) },
-    { MP_ROM_QSTR(MP_QSTR_heap_size),           MP_ROM_PTR(&rp2_heap_size_obj) },
-
-    MICROPY_PORT_NETWORK_INTERFACES
 };
 STATIC MP_DEFINE_CONST_DICT(rp2_module_globals, rp2_module_globals_table);
 

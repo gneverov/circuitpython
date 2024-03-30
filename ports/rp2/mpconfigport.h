@@ -122,7 +122,6 @@
 #define MICROPY_PY_CRYPTOLIB                    (0)
 #define MICROPY_PY_TIME_GMTIME_LOCALTIME_MKTIME (1)
 #define MICROPY_PY_TIME_TIME_TIME_NS            (1)
-#define MICROPY_PY_TIME_INCLUDEFILE             "ports/rp2/modtime.c"
 #define MICROPY_PY_RANDOM_SEED_INIT_FUNC        (rosc_random_u32())
 #define MICROPY_PY_MACHINE                      (1)
 #define MICROPY_PY_MACHINE_INCLUDEFILE          "ports/rp2/modmachine.c"
@@ -200,17 +199,6 @@
 #endif
 
 #if MICROPY_PY_NETWORK_CYW43
-#include "cyw43.h"
-extern const struct _mp_obj_type_t mp_network_cyw43_type;
-#define MICROPY_HW_NIC_CYW43 \
-    { MP_ROM_QSTR(MP_QSTR_WLAN), MP_ROM_PTR(&mp_network_cyw43_type) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_IDLE), MP_ROM_INT(CYW43_LINK_DOWN) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_CONNECTING), MP_ROM_INT(CYW43_LINK_JOIN) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_WRONG_PASSWORD), MP_ROM_INT(CYW43_LINK_BADAUTH) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_NO_AP_FOUND), MP_ROM_INT(CYW43_LINK_NONET) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_CONNECT_FAIL), MP_ROM_INT(CYW43_LINK_FAIL) }, \
-    { MP_ROM_QSTR(MP_QSTR_STAT_GOT_IP), MP_ROM_INT(CYW43_LINK_UP) },
-#else
 #define MICROPY_HW_NIC_CYW43
 #endif
 
@@ -284,3 +272,6 @@ extern uint32_t rosc_random_u32(void);
 #define MICROPY_PY_BLUETOOTH_ENTER uint32_t atomic_state = 0;
 #define MICROPY_PY_BLUETOOTH_EXIT (void)atomic_state;
 #endif
+
+extern void mp_task_interrupt(void);
+#define MICROPY_SCHED_HOOK_SCHEDULED mp_task_interrupt()

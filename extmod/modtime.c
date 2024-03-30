@@ -116,37 +116,14 @@ MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_ns_obj, time_time_ns);
 
 #endif // MICROPY_PY_TIME_TIME_TIME_NS
 
-#if MICROPY_FREERTOS
-STATIC void mp_interruptible_delay_ms(mp_uint_t timeout_ms) {
-    mp_uint_t now = mp_hal_ticks_ms();
-    mp_uint_t until = now + timeout_ms;
-    do {
-        if (task_check_interrupted()) {
-            mp_handle_pending(true);
-        }
-
-        MP_THREAD_GIL_EXIT();
-        task_enable_interrupt();
-        mp_hal_delay_ms(until - now);
-        task_disable_interrupt();
-        MP_THREAD_GIL_ENTER();
-
-        now = mp_hal_ticks_ms();
-    }
-    while (((int)(until - now)) > 0);
-}
-#else
-#define mp_interruptible_delay_ms mp_hal_delay_ms
-#endif
-
 STATIC mp_obj_t time_sleep(mp_obj_t seconds_o) {
     #ifdef MICROPY_PY_TIME_CUSTOM_SLEEP
     mp_time_sleep(seconds_o);
     #else
     #if MICROPY_PY_BUILTINS_FLOAT
-    mp_interruptible_delay_ms((mp_uint_t)(1000 * mp_obj_get_float(seconds_o)));
+    mp_hal_delay_ms((mp_uint_t)(1000 * mp_obj_get_float(seconds_o)));
     #else
-    mp_interruptible_delay_ms(1000 * mp_obj_get_int(seconds_o));
+    mp_hal_delay_ms(1000 * mp_obj_get_int(seconds_o));
     #endif
     #endif
     return mp_const_none;
@@ -156,7 +133,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_time_sleep_obj, time_sleep);
 STATIC mp_obj_t time_sleep_ms(mp_obj_t arg) {
     mp_int_t ms = mp_obj_get_int(arg);
     if (ms >= 0) {
-        mp_interruptible_delay_ms(ms);
+        mp_hal_delay_ms(ms);
     }
     return mp_const_none;
 }

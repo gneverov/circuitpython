@@ -14,17 +14,6 @@ target_sources(pico_helper INTERFACE
     uart.c
 )
 
-if(PICO_CYW43_SUPPORTED)
-    target_sources(pico_helper INTERFACE
-        cyw43_driver.c
-        cyw43_lwip.c
-    )
-
-    target_compile_definitions(pico_helper INTERFACE
-        CYW43_LWIP=1
-    )    
-endif()
-
 target_include_directories(pico_helper INTERFACE include)
 
 target_link_libraries(pico_helper INTERFACE
@@ -33,3 +22,18 @@ target_link_libraries(pico_helper INTERFACE
     hardware_uart
     pico_stdlib
 )
+
+if(PICO_CYW43_SUPPORTED)
+    add_library(cyw43_helper INTERFACE)
+
+    target_sources(cyw43_helper INTERFACE
+        cyw43_driver.c
+        cyw43_lwip.c
+    )
+
+    target_compile_definitions(cyw43_helper INTERFACE
+        CYW43_LWIP=1
+    )
+
+    target_include_directories(cyw43_helper INTERFACE include)
+endif()

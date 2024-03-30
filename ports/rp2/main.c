@@ -30,6 +30,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <sys/unistd.h>
 
 #include "FreeRTOS.h"
@@ -76,9 +77,6 @@
 #include "pico/unique_id.h"
 #include "hardware/rtc.h"
 #include "hardware/structs/rosc.h"
-#if MICROPY_PY_NETWORK_CYW43
-#include "pico/cyw43_driver.h"
-#endif
 
 
 // Embed version info in the binary in machine readable form
@@ -181,25 +179,25 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
 }
 
 StaticTask_t mp_taskdef;
-const volatile __in_flash("gc_heap_size") size_t mp_gc_heap_size = 96 << 10;
 
-#define DEFAULT_TTY "/dev/ttyS0"
+#define DEFAULT_TTY "/dev/ttyUSB0"
+#define DEFAULT_GC_HEAP (96 << 10)
+#define MIN_GC_HEAP (8 << 10)
 
 void mp_task(void *params) {
     task_init();
-    size_t gc_heap_size = mp_gc_heap_size;
+    const char *gc_heap_str = getenv("GC_HEAP");
+    size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;
+    gc_heap_size = MAX(gc_heap_size, MIN_GC_HEAP);
     uint8_t *gc_heap = malloc(gc_heap_size);
     while (!gc_heap) {
         gc_heap_size /= 2;
         gc_heap = malloc(gc_heap_size);
     }
 
-    #if MICROPY_HW_USB_CDC
-    const tusb_config_t *tusb_config = tusb_config_get();
-    if (tusb_config && tusb_config->device && (tusb_config->cdc_itf != 255) && !tusb_config->disconnect) {
-        while (!tud_inited()) {
-            portYIELD();
-        }
+    #if CFG_TUD_ENABLED
+    while (!tud_inited()) {
+        portYIELD();
     }
     #endif
 
@@ -224,21 +222,21 @@ void mp_task(void *params) {
     vTaskDelete(NULL);
 }
 
+void mp_task_interrupt(void) {
+    task_interrupt((TaskHandle_t)&mp_taskdef);
+}
+
 #if CFG_TUD_ENABLED
 void mp_tud_task(void *params) {
-    const tusb_config_t *tusb_config = tusb_config_get();
-
-    tud_lock_init();
     tud_init(TUD_OPT_RHPORT);
-
-    if (!tusb_config || tusb_config->disconnect) {
-        tud_disconnect();
-    }
+    tud_disconnect();
 
     #if MICROPY_PY_LWIP && (CFG_TUD_ECM_RNDIS || CFG_TUD_NCM)
     lwip_wait();
     tud_network_init();
     #endif
+
+    tud_connect();
 
     while (1) {
         tud_task();
@@ -249,8 +247,6 @@ void mp_tud_task(void *params) {
 
 #if CFG_TUH_ENABLED
 void mp_tuh_task(void *params) {
-    // const tusb_config_t *tusb_config = tusb_config_get();
-
     tuh_init(TUH_OPT_RHPORT);
 
     while (1) {
@@ -260,14 +256,28 @@ void mp_tuh_task(void *params) {
 }
 #endif
 
+STATIC void set_default_time(void) {
+    tzset();
+    struct tm tm = {
+        .tm_year = 124,
+        .tm_mon = 0,
+        .tm_mday = 1,
+    };
+    struct timeval tv = {
+        mktime(&tm),
+        0,
+    };
+    settimeofday(&tv, NULL);
+}
+
 STATIC int mount_root_fs(void) {
-    char *auto_mount = getenv("AUTO_MOUNT");
-    if (!auto_mount) {
+    char *root = getenv("ROOT");
+    if (!root) {
         return 0;
     }
     char device[64], filesystemtype[16];
     unsigned long flags = 0;
-    if (sscanf(auto_mount, "%s,%s,%lu", device, filesystemtype, &flags) < 2) {
+    if (sscanf(root, "%s %s %lu", device, filesystemtype, &flags) < 2) {
         errno = EINVAL;
         goto error;
     }
@@ -291,33 +301,27 @@ error:
 }
 
 int main(int argc, char **argv) {
+    env_init();
+    set_default_time();
+
     pico_dma_init();
     pico_gpio_init();
     pico_pio_init();
 
     mount(NULL, "/dev", "devfs", 0, NULL);
-    // close(open(DEV_TTYS, ~O_NOCTTY));
 
     mount_root_fs();
-
-    #if MICROPY_PY_NETWORK_CYW43
-    cyw43_driver_init();
-    #endif
 
     #if MICROPY_PY_LWIP
     lwip_helper_init();
     #endif
 
-    const tusb_config_t *tusb_config = tusb_config_get();
     #if CFG_TUD_ENABLED
-    if (tusb_config && tusb_config->device) {
-        xTaskCreate(mp_tud_task, "tud", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-    }
+    xTaskCreate(mp_tud_task, "tud", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
+
     #if CFG_TUH_ENABLED
-    if (tusb_config && tusb_config->host) {
-        xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-    }
+    xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
 
     xTaskCreateStatic(mp_task, "mp", (&__MpStackTop - &__MpStackBottom) / sizeof(StackType_t), NULL, 1, (StackType_t *)&__MpStackBottom, &mp_taskdef);

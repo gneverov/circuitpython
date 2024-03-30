@@ -105,7 +105,7 @@ STATIC mp_obj_t mp_builtin_compile(size_t n_args, const mp_obj_t *args) {
     }
 
     mp_obj_code_t *code = mp_obj_malloc(mp_obj_code_t, &mp_type_code);
-    code->module_fun = mp_parse_compile_execute(lex, parse_input_kind, NULL, NULL);
+    code->module_fun = mp_parse_compile_execute(lex, parse_input_kind, NULL, NULL, NULL);
     return MP_OBJ_FROM_PTR(code);
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_compile_obj, 3, 6, mp_builtin_compile);
@@ -151,7 +151,7 @@ STATIC mp_obj_t eval_exec_helper(size_t n_args, const mp_obj_t *args, mp_parse_i
         lex = mp_lexer_new_from_str_len(MP_QSTR__lt_string_gt_, bufinfo.buf, bufinfo.len, 0);
     }
 
-    return mp_parse_compile_execute(lex, parse_input_kind, globals, locals);
+    return mp_parse_compile_execute(lex, parse_input_kind, globals, locals, NULL);
 }
 
 STATIC mp_obj_t mp_builtin_eval(size_t n_args, const mp_obj_t *args) {

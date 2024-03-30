@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/times.h>
 #include "newlib/dirent.h"
+#include "newlib/dlfcn.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
 #include "newlib/random.h"
@@ -116,6 +117,23 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_uname_obj, mp_os_uname);
 
 // Process Parameters
 // ------------------
+STATIC mp_obj_t mp_os_environ(void) {
+    mp_obj_t dict = mp_obj_new_dict(0);
+    extern char **environ;
+    char **env = environ;
+    while (*env) {
+        char *equal = strchr(*env, '=');
+        if (equal) {
+            mp_obj_t key = mp_obj_new_str(*env, equal - *env);
+            mp_obj_t value = mp_obj_new_str(equal + 1, strlen(equal) - 1);
+            mp_obj_dict_store(dict, key, value);
+        }
+        env++;
+    }
+    return dict;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_environ_obj, mp_os_environ);
+
 STATIC mp_obj_t mp_os_getenv(mp_obj_t key_in) {
     const char *key = mp_obj_str_get_str(key_in);
     char *value = getenv(key);
@@ -505,6 +523,12 @@ STATIC mp_obj_t mp_os_abort(void) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_abort_obj, mp_os_abort);
 
+STATIC mp_obj_t mp_os__exit(mp_obj_t n_in) {
+    mp_int_t n = mp_obj_get_int(n_in);
+    _exit(n);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os__exit_obj, mp_os__exit);
+
 STATIC mp_obj_t mp_os_kill(mp_obj_t pid_in, mp_obj_t sig_in) {
     mp_int_t pid = mp_obj_get_int(pid_in);
     mp_int_t sig = mp_obj_get_int(sig_in);
@@ -559,12 +583,83 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_urandom_obj, mp_os_urandom);
 
 // MicroPython extensions
 // ----------------------
+STATIC mp_obj_t mp_os_dlerror(void) {
+    void *error = dlerror();
+    if (!error) {
+        return mp_const_none;
+    }
+    size_t error_len = strlen(error);
+    mp_obj_t args[] = {
+        MP_OBJ_NEW_SMALL_INT(errno),
+        mp_obj_new_str_copy(&mp_type_str, error, error_len),
+    };
+    nlr_raise(mp_obj_exception_make_new(&mp_type_OSError, error_len ? 2 : 1, 0, args));
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dlerror_obj, mp_os_dlerror);
+
+STATIC mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
+    const char *file = mp_obj_str_get_str(file_in);
+    const void *result = dlopen(file, 0);
+    if (!result) {
+        mp_raise_OSError(ENOENT);
+    }
+    return mp_obj_new_int((intptr_t)result);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlopen_obj, mp_os_dlopen);
+
+STATIC mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
+    void *handle = (void *)mp_obj_get_int(handle_in);
+    const char *symbol = mp_obj_str_get_str(symbol_in);
+
+    const flash_heap_header_t *header = NULL;
+    while (dl_iterate(&header) && (header != handle)) {
+        ;
+    }
+    if (header != handle) {
+        mp_raise_ValueError(NULL);
+    }
+
+    void *value = dlsym(handle, symbol);
+    if (!value) {
+        mp_raise_type(&mp_type_KeyError);
+    }
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dlsym_obj, mp_os_dlsym);
+
+STATIC mp_obj_t mp_os_dllist(void) {
+    mp_obj_t list = mp_obj_new_list(0, NULL);
+    const flash_heap_header_t *header = NULL;
+    while (dl_iterate(&header)) {
+        Elf32_Addr strtab = 0;
+        Elf32_Word soname = 0;
+        for (const Elf32_Dyn *dyn = header->entry; dyn->d_tag != DT_NULL; dyn++) {
+            switch (dyn->d_tag) {
+                case DT_STRTAB:
+                    strtab = dyn->d_un.d_ptr;
+                    break;
+                case DT_SONAME:
+                    soname = dyn->d_un.d_val;
+                    break;
+            }
+        }
+        if (strtab && soname) {
+            void *addr = (void *)(strtab + soname);
+            mp_obj_t item = mp_obj_new_str_copy(&mp_type_str, addr, strlen(addr));
+            mp_obj_list_append(list, item);
+        }
+    }
+    return list;
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
+
 STATIC mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {
     const char *source = mp_obj_str_get_str(source_in);
     const char *type = mp_obj_str_get_str(type_in);
     int ret;
     MP_OS_CALL(ret, mkfs, source, type, NULL);
-    return mp_os_check_ret(ret);
+    mp_os_check_ret(ret);
+    return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_mkfs_obj, mp_os_mkfs);
 
@@ -575,7 +670,8 @@ STATIC mp_obj_t mp_os_mount(size_t n_args, const mp_obj_t *args) {
     mp_int_t flags = n_args > 3 ? mp_obj_get_int(args[3]) : 0;
     int ret;
     MP_OS_CALL(ret, mount, source, target, type, flags, NULL);
-    return mp_os_check_ret(ret);
+    mp_os_check_ret(ret);
+    return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_mount_obj, 3, 4, mp_os_mount);
 
@@ -593,6 +689,7 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),   MP_ROM_QSTR(MP_QSTR_os) },
 
     // Process Parameters
+    { MP_ROM_QSTR(MP_QSTR_environ),    MP_ROM_PTR(&mp_os_environ_obj) },
     { MP_ROM_QSTR(MP_QSTR_getenv),     MP_ROM_PTR(&mp_os_getenv_obj) },
     { MP_ROM_QSTR(MP_QSTR_getpid),     MP_ROM_PTR(&mp_os_getpid_obj) },
     { MP_ROM_QSTR(MP_QSTR_putenv),     MP_ROM_PTR(&mp_os_putenv_obj) },
@@ -630,6 +727,7 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
 
     // Process Management
     { MP_ROM_QSTR(MP_QSTR_abort),      MP_ROM_PTR(&mp_os_abort_obj) },
+    { MP_ROM_QSTR(MP_QSTR__exit),      MP_ROM_PTR(&mp_os__exit_obj) },
     { MP_ROM_QSTR(MP_QSTR_kill),       MP_ROM_PTR(&mp_os_kill_obj) },
     #if MICROPY_PY_OS_SYSTEM
     { MP_ROM_QSTR(MP_QSTR_system),     MP_ROM_PTR(&mp_os_system_obj) },
@@ -647,6 +745,10 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     #endif
 
     // The following are MicroPython extensions.
+    { MP_ROM_QSTR(MP_QSTR_dlerror),    MP_ROM_PTR(&mp_os_dlerror_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dllist),     MP_ROM_PTR(&mp_os_dllist_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dlopen),     MP_ROM_PTR(&mp_os_dlopen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dlsym),      MP_ROM_PTR(&mp_os_dlsym_obj) },
     { MP_ROM_QSTR(MP_QSTR_mkfs),       MP_ROM_PTR(&mp_os_mkfs_obj) },
     { MP_ROM_QSTR(MP_QSTR_mount),      MP_ROM_PTR(&mp_os_mount_obj) },
     { MP_ROM_QSTR(MP_QSTR_umount),     MP_ROM_PTR(&mp_os_umount_obj) },

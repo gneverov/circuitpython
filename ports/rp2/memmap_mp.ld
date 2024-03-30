@@ -21,11 +21,13 @@
     __stack (== StackTop)
 */
 
-FLASH_STORAGE_SIZE = 1024k;
+FLASH_SIZE = 2048k;
+FLASH_STORAGE_SIZE = 720k;
+FLASH_ENV_SIZE = 4k;
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 2048k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = FLASH_SIZE
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -222,33 +224,36 @@ SECTIONS
         __HeapLimit = .;
     } > RAM
 
+    .stack_dummy (NOLOAD):
+    {
+        KEEP(*(.stack*))
+    } > RAM
+
     .flash_end : {
         HIDDEN(__flash_binary_end = .);
     }
 
-    .flash_heap : ALIGN(4k) {
+    .flash_heap (READONLY) : ALIGN(4k) {
         HIDDEN(__flash_heap_start = .);
         *(.flash_heap*)
-        HIDDEN(__flash_heap_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_STORAGE_SIZE - 4k);
+        HIDDEN(__flash_heap_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_STORAGE_SIZE - FLASH_ENV_SIZE);
     } > FLASH
     
-    .flash_env __flash_heap_end (COPY) : ALIGN(4k) {
-        *(.usb_config*)
-    } > FLASH
-
-    HIDDEN(__flash_storage_end = ORIGIN(FLASH) + LENGTH(FLASH));
+    HIDDEN(__flash_storage_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_ENV_SIZE);
     HIDDEN(__flash_storage_start = __flash_storage_end - FLASH_STORAGE_SIZE);
     ASSERT(__flash_storage_start >= ., "flash region overflowed")
 
+    .flash_env __flash_storage_end (COPY) : ALIGN(4k) {
+        *(.flash_env*)
+    } > FLASH
 
-    /* stack limit is poorly named, but historically is maximum heap ptr */
-    __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
-
-    /* These stack ranges are only relevant before FreeRTOS is initialized. 
-     * Once vTaskStartScheduler is called, the stacks defined here are invalid.
+    /* This is the conventional C stack. It is only used for "main" before the 
+     * FreeRTOS scheduler starts, and for interrupts.
      */
     __StackTop = ORIGIN(RAM) + LENGTH(RAM);
-    PROVIDE(__stack = __StackTop);
+    __StackBottom = __StackTop - SIZEOF(.stack_dummy);
+    __StackLimit = __StackBottom;
+    PROVIDE(__stack = __StackTop);    
 
     /* Check if data + heap + stack exceeds RAM limit */
     ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")

@@ -71,3 +71,6 @@
 [submodule "lib/dhara"]
 	path = lib/dhara
 	url = https://github.com/dlbeer/dhara.git
+[submodule "lib/tinyuf2"]
+	path = lib/tinyuf2
+	url = https://github.com/adafruit/tinyuf2.git

@@ -10,6 +10,10 @@
 #include <sys/stat.h>
 #include <sys/reent.h>
 
+#include "hardware/watchdog.h"
+#include "pico/bootrom.h"
+
+#include "newlib/dlfcn.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
 #include "freertos/task_helper.h"
@@ -18,6 +22,29 @@
 
 int _close(int fd) {
     return vfs_close(fd);
+}
+
+void __attribute__((noreturn)) _exit(int status) {
+    vTaskSuspendAll();
+    // switch to MSP stack
+    // clear current task
+
+    dl_init(DT_FINI);
+
+    extern void (*__fini_array_start)(void);
+    extern void (*__fini_array_end)(void);
+    for (void(**p)(void) = &__fini_array_start; p < &__fini_array_end; ++p) {
+        (*p)();
+    }
+
+    if (status == 0) {
+        watchdog_reboot(0, 0, 0);
+    } else if (status == 3) {
+        reset_usb_boot(0, 0);
+    }
+    while (1) {
+        __breakpoint();
+    }
 }
 
 int _fstat(int fd, struct stat *pstat) {

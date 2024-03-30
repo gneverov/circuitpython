@@ -48,7 +48,7 @@ static void lvgl_handle_free_indev(lvgl_handle_indev_t *handle) {
 //     assert(lvgl_is_locked());
 //     lvgl_handle_indev_t *handle = lv_indev_get_user_data(indev);
 //     if (!handle) {
-//         handle = lvgl_handle_alloc_indev(indev, &lvgl_type_indev, NULL);
+//         handle = lvgl_handle_alloc_indev(&lvgl_type_indev, indev, NULL);
 //     }
 //     assert(handle->lv_indev == indev);
 //     return handle;
@@ -139,7 +139,8 @@ STATIC MP_DEFINE_CONST_DICT(lvgl_indev_locals_dict, lvgl_indev_locals_dict_table
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_indev,
-    MP_QSTR_InDev,
+    MP_ROM_QSTR_CONST(MP_QSTR_InDev),
     MP_TYPE_FLAG_NONE,
     locals_dict, &lvgl_indev_locals_dict 
     );
+MP_REGISTER_OBJECT(lvgl_type_indev);

@@ -8,11 +8,7 @@ The MicroPython/LVGL API is hand-written, which allows development of a more "Py
 The display driver is written in C and uses DMA transfers to the SPI peripheral. Although still technically possible to write a display driver in MicroPython, it loses the benefits of low latency display updates.
 
 ## Download
-Pre-built firmware that includes LVGL:
-- [RPI PICO](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0_lvgl/rpi_pico.uf2)
-- [RPI PICO W](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0_lvgl/rpi_pico_w.uf2)
-
-N.B. The firmware on the [main page](/README.md) does not contain LVGL.
+Follow these [instructions](/getstarted.md#installing-extension-modules) for downloading and installing the LVGL extension module.
 
 ## Hardware setup
 These examples require a display, and ideally an input device. The following displays and input devices are supported:

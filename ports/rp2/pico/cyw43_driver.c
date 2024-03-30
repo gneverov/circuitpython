@@ -23,6 +23,12 @@ TimerHandle_t cyw43_timer;
 
 int cyw43_counts[2];
 
+__attribute__((constructor))
+void cyw43_mutex_init(void) {
+    static StaticSemaphore_t xMutexBuffer;
+    cyw43_mutex = xSemaphoreCreateRecursiveMutexStatic(&xMutexBuffer);
+}
+
 static void cyw43_do_poll(void *pvParameter1, uint32_t ulParameter2);
 
 static void cyw43_set_irq_enabled(bool enabled) {
@@ -88,19 +94,25 @@ static void cyw43_do_timer(TimerHandle_t xTimer) {
 }
 
 void cyw43_driver_init(void) {
-    cyw43_mutex = xSemaphoreCreateRecursiveMutex();
-    cyw43_init(&cyw43_state);
-    cyw43_irq_init();
-    cyw43_post_poll_hook();
-
-    cyw43_timer = xTimerCreate("cyw43", pdMS_TO_TICKS(50), pdTRUE, NULL, cyw43_do_timer);
+    cyw43_thread_enter();
+    if (!cyw43_timer) {
+        cyw43_init(&cyw43_state);
+        cyw43_irq_init();
+        cyw43_post_poll_hook();
+        cyw43_timer = xTimerCreate("cyw43", pdMS_TO_TICKS(50), pdTRUE, NULL, cyw43_do_timer);
+    }
+    cyw43_thread_exit();
 }
 
 void cyw43_driver_deinit(void) {
-    xTimerDelete(cyw43_timer, portMAX_DELAY);
-    cyw43_irq_deinit();
-    cyw43_deinit(&cyw43_state);
-    vSemaphoreDelete(cyw43_mutex);
+    cyw43_thread_enter();
+    if (cyw43_timer) {
+        xTimerDelete(cyw43_timer, portMAX_DELAY);
+        cyw43_timer = NULL;
+        cyw43_irq_deinit();
+        cyw43_deinit(&cyw43_state);
+    }
+    cyw43_thread_exit();
 }
 
 // todo maybe add an #ifdef in cyw43_driver

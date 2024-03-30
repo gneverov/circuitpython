@@ -4,11 +4,17 @@
 #include <errno.h>
 #include <malloc.h>
 #include <reent.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/unistd.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
+#include "freertos/task_helper.h"
 #include "newlib/dirent.h"
+#include "newlib/time.h"
+#include "newlib/unistd.h"
 #include "newlib/vfs.h"
 
 
@@ -128,6 +134,16 @@ char *getcwd(char *buf, size_t size) {
     return strncpy(buf, cwd ? cwd : "/", size);
 }
 
+int gethostname(char *name, size_t namelen) {
+    const char *hostname = getenv("HOSTNAME");
+    if (!hostname || !namelen) {
+        errno = EINVAL;
+        return -1;
+    }
+    strncpy(name, hostname, namelen);
+    return 0;
+}
+
 int ioctl(int fd, unsigned long request, ...) {
     struct vfs_file *file = vfs_acquire_file(fd);
     if (!file) {
@@ -148,6 +164,27 @@ int ioctl(int fd, unsigned long request, ...) {
 
 int mkdir(const char *path, mode_t mode) {
     return _mkdir_r(_impure_ptr, path, mode);
+}
+
+int nanosleep(const struct timespec *rqtp, struct timespec *rmtp) {
+    int ret = 0;
+    TickType_t xTicksToWait = rqtp->tv_sec * configTICK_RATE_HZ + (rqtp->tv_nsec * configTICK_RATE_HZ + 999999999) / 1000000000;
+    TimeOut_t xTimeOut;
+    vTaskSetTimeOutState(&xTimeOut);
+    while (!xTaskCheckForTimeOut(&xTimeOut, &xTicksToWait)) {
+        if (task_check_interrupted()) {
+            ret = -1;
+            break;
+        }
+        task_enable_interrupt();
+        vTaskDelay(xTicksToWait);
+        task_disable_interrupt();
+    }
+    if (rmtp) {
+        rmtp->tv_sec = xTicksToWait / configTICK_RATE_HZ;
+        rmtp->tv_nsec = xTicksToWait % configTICK_RATE_HZ * (1000000000 / configTICK_RATE_HZ);
+    }
+    return ret;
 }
 
 DIR *opendir(const char *dirname) {
@@ -226,6 +263,13 @@ int rmdir(const char *path) {
     }
     vfs_release_mount(vfs);
     return ret;
+}
+
+unsigned sleep(unsigned seconds) {
+    struct timespec rqtp = {.tv_sec = seconds, .tv_nsec = 0 };
+    struct timespec rmtp;
+    nanosleep(&rqtp, &rmtp);
+    return rmtp.tv_sec;
 }
 
 int statvfs(const char *path, struct statvfs *buf) {

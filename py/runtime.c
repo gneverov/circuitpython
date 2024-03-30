@@ -1594,7 +1594,8 @@ void mp_import_all(mp_obj_t module) {
 
 #if MICROPY_ENABLE_COMPILER
 
-mp_obj_t mp_parse_compile_execute(mp_lexer_t *lex, mp_parse_input_kind_t parse_input_kind, mp_obj_dict_t *globals, mp_obj_dict_t *locals) {
+mp_obj_t mp_parse_compile_execute(mp_lexer_t *lex, mp_parse_input_kind_t parse_input_kind, mp_obj_dict_t *globals, mp_obj_dict_t *locals, mp_module_context_t *context) {
+    assert(!context || (globals == context->module.globals));
     // save context
     nlr_jump_callback_node_globals_locals_t ctx;
     ctx.globals = mp_globals_get();
@@ -1609,7 +1610,7 @@ mp_obj_t mp_parse_compile_execute(mp_lexer_t *lex, mp_parse_input_kind_t parse_i
 
     qstr source_name = lex->source_name;
     mp_parse_tree_t parse_tree = mp_parse(lex, parse_input_kind);
-    mp_obj_t module_fun = mp_compile(&parse_tree, source_name, parse_input_kind == MP_PARSE_SINGLE_INPUT);
+    mp_obj_t module_fun = mp_compile(&parse_tree, source_name, parse_input_kind == MP_PARSE_SINGLE_INPUT, context);
 
     mp_obj_t ret;
     if (MICROPY_PY_BUILTINS_COMPILE && globals == NULL) {

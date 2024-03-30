@@ -347,6 +347,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &lvgl_obj_locals_dict,
     protocol, &lv_obj_class
     );
+MP_REGISTER_OBJECT(lvgl_type_obj);
 
 void lvgl_obj_attr_int(lvgl_obj_t *self, qstr attr, int32_t (*getter)(const lv_obj_t *obj), void (*setter)(lv_obj_t *obj, int32_t value), void (*deleter)(lv_obj_t *obj), mp_obj_t *dest) {
     lvgl_super_attr_check(attr, getter, setter, deleter, dest);
@@ -578,7 +579,7 @@ STATIC MP_DEFINE_CONST_DICT(lvgl_obj_list_locals_dict, lvgl_obj_list_locals_dict
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_obj_list,
-    MP_QSTR_ObjectCollection,
+    MP_ROM_QSTR_CONST(MP_QSTR_ObjectCollection),
     MP_TYPE_FLAG_ITER_IS_GETITER,
     // attr, lvgl_obj_list_attr,
     unary_op, lvgl_obj_list_unary_op,
@@ -586,3 +587,4 @@ MP_DEFINE_CONST_OBJ_TYPE(
     iter, lvgl_obj_list_getiter,
     locals_dict, &lvgl_obj_list_locals_dict
     );
+MP_REGISTER_OBJECT(lvgl_type_obj_list);

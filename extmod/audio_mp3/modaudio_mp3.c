@@ -14,5 +14,5 @@ const mp_obj_module_t audio_mp3_module = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&audio_mp3_module_globals,
 };
-
-MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_audio_mp3, audio_mp3_module);
+MP_REGISTER_MODULE(MP_QSTR_audio_mp3, audio_mp3_module);
+MP_REGISTER_OBJECT(audio_mp3_module);

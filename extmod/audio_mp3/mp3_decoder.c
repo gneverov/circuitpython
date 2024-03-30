@@ -233,20 +233,23 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_mp3_decoder_del_obj, audio_mp3_decoder_de
 
 STATIC void audio_mp3_decoder_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     audio_mp3_obj_decoder_t *self = audio_mp3_decoder_get(self_in);
-    switch (attr) {
-        case MP_QSTR_num_channels:
-            dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.nChans);
-            break;
-        case MP_QSTR_sample_rate:
-            dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.samprate);
-            break;
-        case MP_QSTR_bits_per_sample:
-            dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.bitsPerSample);
-            break;
-        default:
-            dest[1] = MP_OBJ_SENTINEL;
+    if (attr == MP_QSTR_num_channels) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.nChans);
+    }
+    else if(attr == MP_QSTR_sample_rate) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.samprate);
+    }
+    else if (attr == MP_QSTR_bits_per_sample) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(self->frame_info.bitsPerSample);
+    } else {
+        dest[1] = MP_OBJ_SENTINEL;
     }
 }
+
+STATIC const mp_stream_p_t audio_mp3_decoder_p = {
+    .read = audio_mp3_decoder_read,
+    .ioctl = audio_mp3_decoder_ioctl,
+};
 
 STATIC const mp_rom_map_elem_t audio_mp3_decoder_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&audio_mp3_decoder_del_obj) },
@@ -257,17 +260,13 @@ STATIC const mp_rom_map_elem_t audio_mp3_decoder_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(audio_mp3_decoder_locals_dict, audio_mp3_decoder_locals_dict_table);
 
-STATIC const mp_stream_p_t audio_mp3_decoder_p = {
-    .read = audio_mp3_decoder_read,
-    .ioctl = audio_mp3_decoder_ioctl,
-};
-
 MP_DEFINE_CONST_OBJ_TYPE(
     audio_mp3_type_decoder,
-    MP_QSTR_AudioMP3Decoder,
+    MP_ROM_QSTR_CONST(MP_QSTR_AudioMP3Decoder),
     MP_TYPE_FLAG_ITER_IS_STREAM,
     make_new, audio_mp3_decoder_make_new,
     attr, audio_mp3_decoder_attr,
     protocol, &audio_mp3_decoder_p,
     locals_dict, &audio_mp3_decoder_locals_dict 
     );
+MP_REGISTER_OBJECT(audio_mp3_type_decoder);

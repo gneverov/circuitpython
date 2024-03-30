@@ -1,15 +1,16 @@
 # MicroPythonRT demos
 - [audio player](/examples/async/audio_player.md)
 - [remote UART](/examples/async/remote_uart.md)
+- [LVGL](/examples//lvgl/README.md)
 
 ## Network setup
-Both apps require a network connection to the device. Getting a network connection depends on which board you are using
+Some apps require a network connection to the device. Getting a network connection depends on which board you are using
 
 ### RPI PICO W
-This board has a wifi adapter and uses the same code as MicroPython for configuring the wifi adapter. The only real difference is that the `WLAN` is in the `rp2` module since the `network_cyw43` does not exist.
+This board has a wifi adapter and uses similar code as MicroPython for configuring the wifi adapter. First install the `cyw43` extension module following these [instructions](/getstarted.md#installing-extension-modules).
 ```
-import rp2
-wifi = rp2.WLAN()
+import cyw43
+wifi = cyw43.WLAN()
 wifi.active(True)
 wifi.connect("mywifi", "mypassword")
 ```
@@ -31,6 +32,18 @@ Where the 3 IP addresses are the local address, gateway address, and netmask, in
 
 ### RPI PICO
 This board does not have a wifi adapter so it wouldn't usually have a network connection. However it is possible to use a USB connection for networking. This is the same technology that USB network adapters use. I have only tested this functionality on Windows.
+
+First you need to re-configure the board to expose a USB network adapter.
+```
+import usb
+cfg = usb.UsbConfig()
+cfg.device()
+cfg.configuration()
+cfg.net_rndis()
+cfg.cdc()
+cfg.msc()
+cfg.save()
+```
 
 In Windows, open the Network Connections control panel. (From command prompt or run dialog, run `ncpa.cpl`.) When you connect the board to USB, a new network adapter should appear with the name "Remote NDIS based Internet Sharing Device". From here the easiest way to connect the board to the Internet is to create a virtual Ethernet bridge between the RNDIS adapter and whatever adapter your Windows machine uses for Internet. In Network Connections control panel, select the RNDIS adapter and the other adapter, right click and select "Create Bridge". Hopefully that works, but its not a very robust procedure and many things can go wrong.
 

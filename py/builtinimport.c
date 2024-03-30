@@ -159,7 +159,7 @@ STATIC void do_load_from_lexer(mp_module_context_t *context, mp_lexer_t *lex) {
 
     // parse, compile and execute the module in its context
     mp_obj_dict_t *mod_globals = context->module.globals;
-    mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals);
+    mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals, context);
 }
 #endif
 

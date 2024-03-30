@@ -1,14 +1,19 @@
 # MicroPythonRT
-MicroPythonRT is a fork of [MicroPython](https://github.com/micropython/micropython/) with added support for concurrency and interoperability. 
+MicroPythonRT is a fork of [MicroPython](https://github.com/micropython/micropython/) with added support for concurrency, dynamic linking and interoperability. 
 
 Concurrency means multiple programs running at the same time. MicroPythonRT achieves this by adopting [FreeRTOS](https://www.freertos.org/) as a foundation layer. FreeRTOS provides robust concurrency and parallelism support for MicroPython and C components. This support extends into the Python API by providing support for the [`threading`](https://docs.python.org/3/library/threading.html), [`select`](https://docs.python.org/3/library/select.html)/[`selectors`](https://docs.python.org/3/library/selectors.html), and [`asyncio`](https://docs.python.org/3/library/asyncio.html) modules.
 
-Interoperability means the ease at which non-Python (e.g., C) code can be integrated into firmware to provide increased functionality in cooperation with or independently of the MicroPython runtime. MicroPythonRT achieves this by providing a common C runtime library and leveraging FreeRTOS to partition software components into independent tasks.
+Interoperability means the ease at which non-Python (e.g., C) code can be integrated into firmware to provide increased functionality in cooperation with or independently of the MicroPython runtime. MicroPythonRT does this in several ways by: dynamically linking C libraries on-device, partitioning software components into independent tasks, and providing a common C runtime library.
+
+## Support
+If you are interested in using MicroPythonRT, please open an [issue](https://github.com/gneverov/micropythonrt/issues) to let me know how MicroPythonRT helps your application, or what additional functionality you need, or to simply report bugs. Your feedback will help to direct future development efforts.
 
 ## Highlights
-- All use of busy polling and background tasks have been removed from the MicroPython core.
+- Support for dynamic linking (i.e., DLLs or shared libraries). Native code libraries can be built, distributed, and installed without recompiling or reinstalling the firmware. This allows users to add new native code to their application, with similar ease to which Python code can be added by copying files to the device.
 
-- newlib-nano is used as the system-wide C runtime library. Crucially it implements malloc, allowing C programs to allocate their own memory independent of MicroPython.
+- All use of busy polling and background tasks have been removed from the MicroPython core and replaced with FreeRTOS-based concurrency.
+
+- newlib-nano is used as the system-wide C runtime library. Crucially it implements malloc, allowing C programs to allocate their own memory independent of MicroPython. newlib-nano is also extended with additional POSIX [functionality](/ports/rp2/newlib/README.md) including a virtual filesystem.
 
 - System services such as [lwIP](https://savannah.nongnu.org/projects/lwip/) and [TinyUSB](https://docs.tinyusb.org/en/latest/) run as separate FreeRTOS tasks isolated of MicroPython. There is no problem with MicroPython or Python code being able to interfere with these services, and the MicroPython VM can be restarted without any effect on them.
 
@@ -34,30 +39,7 @@ Interoperability means the ease at which non-Python (e.g., C) code can be integr
 **Bluetooth**: The recently added Bluetooth support for RP2 in MicroPython has not yet been ported to MicroPythonRT.
 
 ## Getting Started ##
-### Download
-Pre-built firmware is available for:
-- [RPI PICO](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0/rpi_pico.uf2)
-- [RPI PICO W](https://github.com/gneverov/micropythonrt/releases/download/v0.0.0/rpi_pico_w.uf2)
-
-> [!CAUTION]
-> Unlike MicroPython firmware from other sources, these UF2 files contain a full flash image including a filesystem with files for the demo apps. Flashing these UF2 files will erase any existing filesystem on your device.
-
-The default builds are configured as follows:
-- One USB MSC device that accesses a FAT file system. The file system is readonly to MicroPython and read/write to the USB host. Similar to how [CircuitPython](https://github.com/adafruit/circuitpython) works, where you can write your py files directly to the board and run them.
-- One USB CDC device that is used as stdio.
-- One USB RNDIS device for the possibility of USB networking.
-
-### Installing
-Installing firmware is the same as MicroPython:
-1. Press and hold down BOOTSEL button while connecting the board to USB.
-1. A USB drive should appear. Copy the downloaded UF2 file to this drive.
-1. Connect to the device using [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) or other terminal program.
-
-### Building
-Building MicroPythonRT is the same as MicroPython. Refer to the MicroPython building [guide](https://docs.micropython.org/en/latest/develop/gettingstarted.html).
-
-### Examples
-Check out the [demo apps](/examples/async/README.md) to see examples of MicroPythonRT's unique capabilities.
+See the [getting started](/getstarted.md) section for details on how to install MicroPythonRT and run example code.
 
 ## Technical Differences
 A detailed list of some of the technical differences from MicroPython.
@@ -95,7 +77,7 @@ pin.value = 1     # output high
 
 - `network_cyw43`: This subcomponent of the network module still exists as a way to configure the cyw43 network device (e.g., tell it which wifi network to connect to). The wifi scan method has be updated to use FreeRTOS instead of polling.
 
-- `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to newlib-nano. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices.
+- `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to newlib-nano. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices, and redirecting stdio through character devices. This module also contains the dynamic linking API and other functionality from the base C library.
 
 - `select`: The select module is rewritten to use FreeRTOS. It exposes a class called `Selector` which is basically a CPython-compatible [`selectors.EpollSelector`](https://docs.python.org/3/library/selectors.html?highlight=selector#selectors.BaseSelector) class. Under the hood, the select module implements a design similar to Linux [epoll](https://linux.die.net/man/4/epoll). In particular, MicroPython streams are extended with a POLL_CTL ioctl, which has similar behavior to Linux's [epoll_ctl](https://linux.die.net/man/2/epoll_ctl) syscall.
 The selector is a crucial part of any asyncio implementation. At its heart, an asyncio event loop will contain a selector to bring about IO concurrency between tasks.
@@ -110,9 +92,12 @@ list(socket.netif)          # List all network interfaces
 socket.netif['wl0']         # Access a network interface by name
 socket.netif['wl0'].wait()  # Wait/blocks until the network interface has an IP address
 ```
+
+- `time`: Module refactored to be more consistent with CPython and to use newlib for time functions, including timezone information.
+
 - `_thread` and `threading`: The `_thread` module is implemented using FreeRTOS tasks. Python code can create any number of threads (limited by available RAM). The implementation relies on a GIL, do just as in CPython, there is no automatic compute parallelism advantage to using multiple threads. `_thread` is a low-level module you don't use directly. The higher-level `threading` module in MicroPython is currently minimal. Much work remains to fully implement this module.
 
-- `usb`: A new module that allows Python code to interact with TinyUSB. Support is somewhat limited and currently only exposes CDC devices, in addition to network devices through `socket.netif`.
+- `usb`: A new module that allows Python code to interact with TinyUSB. Support is somewhat limited and currently only exposes CDC and MSC devices, in addition to network devices through `socket.netif`.
 
 - `usb.UsbConfig`: Typically the USB configuration of a board is fixed in firmware. However this class allows you to reconfigure the USB configuration at runtime (e.g., change which device classes the board exposes to a USB host). To use this class some prior understanding of the [USB descriptors](https://www.beyondlogic.org/usbnutshell/usb5.shtml) is required. For example, to set the board to have a MSC (storage) device and 5 CDC (serial) devices, you could run:
 ```
@@ -128,7 +113,7 @@ usb_config.save()
 This class's methods can also take keyword arguments to define values for various USB metadata such as VID:PID and name strings. See the source [code](/extmod/usb/usb_config.c) for details.
 
 ### Framework
-- **blocking**: Functions such as sleep, blocking I/O, and select will block the calling task using a FreeRTOS API, thus allowing the CPU to continue executing other tasks. Additionally the GIL is released before the blocking call to give other MicroPython threads a chance to run. The macro `MICROPY_EVENT_POLL_HOOK` is not used anywhere.
+- **blocking**: Functions such as sleep, blocking I/O, and select will block the calling task using a FreeRTOS API, thus allowing the CPU to continue executing other tasks. Additionally the GIL is released before the blocking call to give other MicroPython threads a chance to run. The macro `MICROPY_EVENT_POLL_HOOK` is not needed anymore.
 
 - **flash translation layer**: Uses a variant of [Dhara](https://github.com/gneverov/dhara16) to provide a flash translation layer to the XIP flash storage. This allows for wear levelling of the on-chip flash memory and a smaller filesystem block size.
 
@@ -145,8 +130,6 @@ This class's methods can also take keyword arguments to define values for variou
 >>> await coro()
 ```
 This functionality requires that the expression "asyncio.repl_runner" evaluates to an asyncio `Runner` object.
-
-- **stdio** and **libc**: The MicroPython HAL for stdio is implemented by directly calling stdio functions in newlib-nano. MicroPythonRT then contains a newlib "OS implementation" that can send stdio to one of a bare bones UART used during boot, a fancy UART with DMA, or USB CDC. The MicroPythonRT newlib implemenation does not depend on MicroPython and is intended to provide a common API surface for any C components you include in your firmware.
 
 - **USB networking**: TinyUSB provides 3 kinds of USB network devices: RNDIS, ECM, and NCM. Only RNDIS works for me on Windows, and I haven't tried anything on Linux. All 3 kinds can be enabled through the `UsbConfig` class. However TinyUSB only compiles with NCM only or both ECM and RNDIS support. It doesn't compile with all three. Overall I wouldn't say this support is easy to use because of configuration issues on the host side.
 Additionally lwIP supports SLIP network interfaces, and running SLIP over a USB CDC is possibly a more reliable way to get networking over USB. However I don't know how to set up a SLIP interface on Windows.

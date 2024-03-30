@@ -41,8 +41,9 @@ if(NOT PICO_BOARD)
 endif()
 
 set(MICROPY_FREERTOS ON)
-set(MICROPY_PY_AUDIO_MP3 OFF)
+set(MICROPY_PY_AUDIO_MP3 ON)
 set(MICROPY_LVGL ON)
+set(PICO_NO_GC_SECTIONS ON)
 
 # Set the amount of C heap, if it's not already set.
 # If a board uses malloc then it must set this to at least 4096.
@@ -57,8 +58,44 @@ if (MICROPY_PY_NETWORK_CYW43)
 endif()
 
 # Necessary submodules for all boards.
+find_package (Python3 COMPONENTS Interpreter)
+string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
 string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/mbedtls)
 # string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
+
+function(add_micropy_extension_library TARGET LIB)
+    add_dynamic_library(${TARGET} ${ARGN})
+    target_link_libraries(${TARGET} micropython_import ${LIB})
+    target_link_options(${TARGET} PRIVATE
+        -T "${MICROPY_PORT_DIR}/memmap_ext.ld"
+        LINKER:--no-warn-rwx-segments
+        LINKER:-Map=$<TARGET_FILE:${TARGET}>.map
+    )
+    set_target_properties(${TARGET} PROPERTIES NEWLIB_DYNLINK_OPTIONS "--entry;0x6000000E;mp_extmod_module")
+    set(GENHDR_DIR "${CMAKE_BINARY_DIR}/genhdr")
+    get_target_property(srcs ${LIB} INTERFACE_SOURCES)
+    target_compile_definitions(${LIB} INTERFACE
+        MICROPY_PY_EXTENSION
+        NO_QSTR
+        MP_QSTRDEFSFILE="${GENHDR_DIR}/${TARGET}.qstrdefs.h"
+    )    
+    add_custom_command(
+        OUTPUT ${GENHDR_DIR}/${TARGET}.qstrdefs.h ${GENHDR_DIR}/${TARGET}.qstrdefs.c
+        COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makeqstrdefs_ext.py ${TARGET} ${srcs}
+        DEPENDS ${MICROPY_PY_DIR}/makeqstrdefs_ext.py ${srcs}
+        VERBATIM
+        COMMAND_EXPAND_LISTS
+    )
+    target_sources(${TARGET} PRIVATE
+        ${GENHDR_DIR}/${TARGET}.qstrdefs.c
+    )
+    add_import_library("${TARGET}_import" ${TARGET})
+endfunction()
+
+function(set_target_visibility_hidden TARGET)
+    get_target_property(SRCS ${TARGET} INTERFACE_SOURCES)
+    set_source_files_properties(${SRCS} PROPERTIES COMPILE_OPTIONS -fvisibility=hidden)
+endfunction()
 
 # Include component cmake fragments
 include(${MICROPY_DIR}/py/py.cmake)
@@ -99,17 +136,30 @@ include(${MICROPY_DIR}/py/usermod.cmake)
 add_subdirectory(${MICROPY_PORT_DIR}/freertos)
 add_subdirectory(${MICROPY_DIR}/lib/freertos/portable/ThirdParty/GCC/RP2040 freetros)
 target_link_libraries(FreeRTOS-Kernel INTERFACE hardware_clocks)
-string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
 
 add_subdirectory(${MICROPY_PORT_DIR}/lwip)
+
 add_subdirectory(${MICROPY_PORT_DIR}/newlib)
+
 add_subdirectory(${MICROPY_PORT_DIR}/pico)
+
+set(TINYUF2_DIR "${MICROPY_DIR}/lib/tinyuf2")
+add_subdirectory(${MICROPY_PORT_DIR}/tinyuf2)
+set_target_visibility_hidden(tinyuf2)
+
 add_subdirectory(${MICROPY_PORT_DIR}/tinyusb)
+set_target_visibility_hidden(tinyusb_helper)
+set_target_visibility_hidden(tinyusb_device_base)
+set_target_visibility_hidden(tinyusb_common_base)
+set_target_visibility_hidden(tinyusb_device_base)
+
 add_subdirectory(${MICROPY_DIR}/lib/fatfs fatfs)
+set_target_visibility_hidden(fatfs)
+
 add_subdirectory(${MICROPY_DIR}/lib/dhara dhara)
+set_target_visibility_hidden(dhara)
 
-
-add_executable(${MICROPY_TARGET})
+add_firmware_executable(${MICROPY_TARGET})
 
 set(MICROPY_QSTRDEFS_PORT
     ${MICROPY_PORT_DIR}/qstrdefsport.h
@@ -214,7 +264,8 @@ set(PICO_SDK_COMPONENTS
 
 if(MICROPY_LVGL)
     include(${MICROPY_DIR}/extmod/lvgl/lvgl.cmake)
-    target_link_libraries(${MICROPY_TARGET} mp_lvgl)
+    # target_link_libraries(${MICROPY_TARGET} mp_lvgl)
+    add_micropy_extension_library(liblvgl mp_lvgl)    
 endif()
 
 if(MICROPY_PY_LWIP)
@@ -230,8 +281,15 @@ if(MICROPY_PY_LWIP)
 
     list(APPEND PICO_SDK_COMPONENTS
         pico_lwip_core
-        pico_lwip_freertos
+        pico_lwip_core4
+        pico_lwip_contrib_freertos
+        # pico_lwip_freertos
         pico_lwip_mdns
+    )
+    target_sources(${MICROPY_TARGET} PRIVATE
+        ${PICO_LWIP_PATH}/src/api/err.c
+        ${PICO_LWIP_PATH}/src/api/tcpip.c
+        ${PICO_LWIP_PATH}/src/netif/ethernet.c
     )
 
     target_include_directories(${MICROPY_TARGET} PRIVATE
@@ -291,7 +349,8 @@ pico_wrap_function(pico_float_micropython __aeabi_f2ulz)
 pico_wrap_function(pico_float_micropython __aeabi_f2d)
 
 if (MICROPY_PY_AUDIO_MP3)
-    target_link_libraries(${MICROPY_TARGET} micropy_lib_audio_mp3)
+    # target_link_libraries(${MICROPY_TARGET} micropy_lib_audio_mp3)
+    add_micropy_extension_library(libaudio_mp3 micropy_lib_audio_mp3)
 endif()
 
 if(MICROPY_PY_BLUETOOTH)
@@ -358,29 +417,47 @@ if(MICROPY_BLUETOOTH_NIMBLE)
 endif()
 
 if (MICROPY_PY_NETWORK_CYW43)
-    string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/cyw43-driver)
-    if((NOT (${ECHO_SUBMODULES})) AND NOT EXISTS ${MICROPY_DIR}/lib/cyw43-driver/src/cyw43.h)
-        message(FATAL_ERROR " cyw43-driver not initialized.\n Run 'make BOARD=${MICROPY_BOARD} submodules'")
-    endif()
+    # string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/cyw43-driver)
+    # if((NOT (${ECHO_SUBMODULES})) AND NOT EXISTS ${MICROPY_DIR}/lib/cyw43-driver/src/cyw43.h)
+    #     message(FATAL_ERROR " cyw43-driver not initialized.\n Run 'make BOARD=${MICROPY_BOARD} submodules'")
+    # endif()
 
-    target_compile_definitions(${MICROPY_TARGET} PRIVATE
+    add_library(network_cyw43 INTERFACE)
+
+    target_sources(network_cyw43 INTERFACE 
+        network_cyw43.c
+        modnetwork_cyw43.c
+        machine_pin_cyw43.c
+    )
+
+    set_source_files_properties(
+        network_cyw43.c
+        modnetwork_cyw43.c 
+        PROPERTIES MICROPY_SOURCE_QSTR ON)
+
+    target_compile_definitions(network_cyw43 INTERFACE
         MICROPY_PY_NETWORK_CYW43=1
-        MICROPY_PY_SOCKET_DEFAULT_TIMEOUT_MS=30000 # default socket timeout
         CYW43_CONFIG_FILE="${PICO_SDK_PATH}/src/rp2_common/pico_cyw43_driver/include/cyw43_configport.h"
     )
     if (CMAKE_BUILD_TYPE MATCHES Debug)
-    target_compile_definitions(${MICROPY_TARGET} PRIVATE
+    target_compile_definitions(network_cyw43 INTERFACE
         CYW43_USE_STATS=1
     )
     endif()
 
-    list(APPEND MICROPY_SOURCE_PORT
-        machine_pin_cyw43.c
+    target_link_libraries(network_cyw43 INTERFACE 
+        cyw43_helper
+        cyw43_driver_picow
     )
-
-    list(APPEND PICO_SDK_COMPONENTS cyw43_driver_picow)
+    set_target_visibility_hidden(cyw43_helper)
+    set_target_visibility_hidden(cyw43_driver)
+    set_target_visibility_hidden(cyw43_driver_picow)
 
     target_remove_property_value(cyw43_driver INTERFACE_SOURCES ${PICO_CYW43_DRIVER_PATH}/src/cyw43_lwip.c)
+    target_remove_property_value(cyw43_driver_picow INTERFACE_LINK_LIBRARIES cybt_shared_bus)
+
+    # target_link_libraries(${MICROPY_TARGET} network_cyw43)
+    add_micropy_extension_library(libcyw43 network_cyw43)    
 endif()
 
 if (MICROPY_PY_NETWORK_NINAW10)
@@ -451,6 +528,7 @@ target_link_libraries(${MICROPY_TARGET}
     newlib_dhara
     newlib_fatfs
     newlib_helper 
+    tinyuf2
     pico_helper 
     tinyusb_helper
 )
@@ -507,8 +585,9 @@ set_source_files_properties(
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_FLOAT_PROPAGATE_NANS=1
     PICO_HEAP_SIZE=0
+    PICO_STACK_SIZE=1024
     PICO_CORE1_STACK_SIZE=0
-    PICO_PROGRAM_NAME="MicroPython"
+    PICO_PROGRAM_NAME="MicroPythonRT"
     PICO_NO_PROGRAM_VERSION_STRING=1 # do it ourselves in main.c
     MICROPY_BUILD_TYPE="${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION} ${CMAKE_BUILD_TYPE}"
     PICO_NO_BI_STDIO_UART=1 # we call it UART REPL
@@ -577,3 +656,14 @@ add_custom_command(
     VERBATIM
     COMMAND_EXPAND_LISTS
 )
+
+add_import_library(micropython_import ${MICROPY_TARGET})
+
+# Explicitly add certian objects from libc_nano.a to support dynamic linking
+include(newlib_obj.cmake)
+get_target_property(DIR extract_stdlib BINARY_DIR)
+list(TRANSFORM STDLIB_OBJECTS PREPEND "${DIR}/stdlib/")
+target_sources(${MICROPY_TARGET} PRIVATE
+    ${STDLIB_OBJECTS}
+)
+add_dependencies(${MICROPY_TARGET} extract_stdlib)

@@ -36,6 +36,7 @@
 // for qstrs that are referenced this way, but you don't want to have them in ROM.
 
 // first entry in enum will be MP_QSTRnull=0, which indicates invalid/no qstr
+#ifndef MP_QSTRDEFSFILE
 enum {
     #ifndef NO_QSTR
 #define QDEF0(id, hash, len, str) id,
@@ -56,6 +57,9 @@ enum {
     #endif
     MP_QSTRnumber_of, // no underscore so it can't clash with any of the above
 };
+#else
+#include MP_QSTRDEFSFILE
+#endif
 
 typedef size_t qstr;
 typedef uint16_t qstr_short_t;

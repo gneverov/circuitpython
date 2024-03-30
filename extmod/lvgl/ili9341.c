@@ -66,9 +66,10 @@ cleanup:
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_ILI9341,
-    MP_QSTR_ILI9341,
+    MP_ROM_QSTR_CONST(MP_QSTR_ILI9341),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_ILI9341_make_new,
     attr, lvgl_display_attr,
     parent, &lvgl_type_display
     );
+MP_REGISTER_OBJECT(lvgl_type_ILI9341);

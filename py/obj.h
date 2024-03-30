@@ -345,6 +345,7 @@ typedef union _mp_rom_obj_t {
 typedef mp_const_obj_t mp_rom_obj_t;
 #define MP_ROM_INT(i) MP_OBJ_NEW_SMALL_INT(i)
 #define MP_ROM_QSTR(q) MP_OBJ_NEW_QSTR(q)
+#define MP_ROM_QSTR_CONST(q) (q)
 #define MP_ROM_PTR(p) (p)
 /* for testing
 typedef struct _mp_rom_obj_t { mp_const_obj_t o; } mp_rom_obj_t;
@@ -433,6 +434,8 @@ typedef struct _mp_rom_obj_t { mp_const_obj_t o; } mp_rom_obj_t;
 // param module_name: MP_QSTR_<module name>
 // param obj_module: mp_obj_module_t instance
 #define MP_REGISTER_MODULE(module_name, obj_module)
+
+#define MP_REGISTER_OBJECT(obj)
 
 // As above, but allow this module to be extended from the filesystem.
 #define MP_REGISTER_EXTENSIBLE_MODULE(module_name, obj_module)

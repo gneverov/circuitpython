@@ -151,12 +151,10 @@ STATIC mp_obj_t lvgl_run_forever(void) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_run_forever_obj, lvgl_run_forever);
 
 STATIC mp_obj_t lvgl_getattr(mp_obj_t attr) {
-    switch (MP_OBJ_QSTR_VALUE(attr)) {
-        case MP_QSTR_display:        
-            return lvgl_display_get_default();
-        default:
-            return MP_OBJ_NULL;
+    if (MP_OBJ_QSTR_VALUE(attr) == MP_QSTR_display) {
+        return lvgl_display_get_default();
     }
+    return MP_OBJ_NULL;
 }
 MP_DEFINE_CONST_FUN_OBJ_1(lvgl_getattr_obj, lvgl_getattr);
 
@@ -284,3 +282,4 @@ const mp_obj_module_t lvgl_module = {
 };
 
 MP_REGISTER_MODULE(MP_QSTR_lvgl, lvgl_module);
+MP_REGISTER_OBJECT(lvgl_module);

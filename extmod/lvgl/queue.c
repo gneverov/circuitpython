@@ -209,9 +209,10 @@ STATIC MP_DEFINE_CONST_DICT(lvgl_obj_queue_locals_dict, lvgl_obj_queue_locals_di
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_queue,
-    MP_QSTR_Queue,
+    MP_ROM_QSTR_CONST(MP_QSTR_Queue),
     MP_TYPE_FLAG_ITER_IS_STREAM,
     // make_new, lvgl_obj_queue_make_new,
     protocol, &lvgl_obj_queue_p,
     locals_dict, &lvgl_obj_queue_locals_dict 
     );
+MP_REGISTER_OBJECT(lvgl_type_queue);

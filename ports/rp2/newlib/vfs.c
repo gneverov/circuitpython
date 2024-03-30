@@ -34,8 +34,8 @@ static bool vfs_is_locked(void) {
 static void vfs_lock(void) {
     assert((xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) || !vfs_is_locked());
     xSemaphoreTake(vfs_mutex, portMAX_DELAY);
-
 }
+
 static void vfs_unlock(void) {
     assert((xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) || vfs_is_locked());
     xSemaphoreGive(vfs_mutex);
@@ -117,11 +117,9 @@ int vfs_expand_path(vfs_path_buffer_t *vfs_path, const char *path) {
         } else if (strncmp(path, "..", len) == 0) {
             char *prev = strrchr(vfs_path->begin, '/');
             out = prev ? prev : vfs_path->begin;
-            *out = '\0';
         } else if (out + len < limit) {
             out = stpcpy(out, "/");
             out = stpncpy(out, path, len);
-            *out = '\0';
         } else {
             errno = ENAMETOOLONG;
             return -1;
@@ -129,9 +127,10 @@ int vfs_expand_path(vfs_path_buffer_t *vfs_path, const char *path) {
         path = next + 1;
     }
     while (*next);
-    if (*out == '\0') {
-        strcpy(out, "/");
+    if (out == vfs_path->begin) {
+        out = stpcpy(out, "/");
     }
+    *out = '\0';
     return 0;
 }
 

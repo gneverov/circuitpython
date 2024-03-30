@@ -17,6 +17,7 @@ static SemaphoreHandle_t tud_mutex;
 static StaticSemaphore_t tud_mutex_buffer;
 static int tud_task_blocked;
 
+__attribute__((constructor))
 void tud_lock_init(void) {
     tud_mutex = xSemaphoreCreateMutexStatic(&tud_mutex_buffer);
 }

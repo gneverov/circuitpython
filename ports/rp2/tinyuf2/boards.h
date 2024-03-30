@@ -1,9 +1,7 @@
 /*
- * This file is part of the MicroPython project, http://micropython.org/
- *
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2023 Damien P. George
+ * Copyright (c) 2020 Ha Thach (tinyusb.org) for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,30 +22,22 @@
  * THE SOFTWARE.
  */
 
-#include "py/obj.h"
-#include "shared/timeutils/timeutils.h"
-#include "hardware/rtc.h"
+#ifndef BOARDS_H_
+#define BOARDS_H_
 
-// Return the localtime as an 8-tuple.
-STATIC mp_obj_t mp_time_localtime_get(void) {
-    datetime_t t;
-    rtc_get_datetime(&t);
-    mp_obj_t tuple[8] = {
-        mp_obj_new_int(t.year),
-        mp_obj_new_int(t.month),
-        mp_obj_new_int(t.day),
-        mp_obj_new_int(t.hour),
-        mp_obj_new_int(t.min),
-        mp_obj_new_int(t.sec),
-        mp_obj_new_int(t.dotw),
-        mp_obj_new_int(timeutils_year_day(t.year, t.month, t.day)),
-    };
-    return mp_obj_new_tuple(8, tuple);
-}
+// random ID
+// #define BOARD_UF2_FAMILY_ID 0x75293fd6
 
-// Return the number of seconds since the Epoch.
-STATIC mp_obj_t mp_time_time_get(void) {
-    datetime_t t;
-    rtc_get_datetime(&t);
-    return mp_obj_new_int_from_ull(timeutils_seconds_since_epoch(t.year, t.month, t.day, t.hour, t.min, t.sec));
-}
+// Use RP2040 ID for compatibility with Pico SDK elf2uf2 tool
+#define BOARD_UF2_FAMILY_ID 0xe48bff56
+
+// --------------------------------------------------------------------+
+// USB UF2
+// --------------------------------------------------------------------+
+
+#define UF2_PRODUCT_NAME  PICO_PROGRAM_NAME
+#define UF2_BOARD_ID      PICO_BOARD
+#define UF2_VOLUME_LABEL  "MPRT_UF2"
+#define UF2_INDEX_URL     ""
+
+#endif /* BOARDS_H_ */

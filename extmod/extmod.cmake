@@ -33,19 +33,13 @@ set(MICROPY_SOURCE_EXTMOD
     ${MICROPY_EXTMOD_DIR}/modhashlib.c
     ${MICROPY_EXTMOD_DIR}/modheapq.c
     ${MICROPY_EXTMOD_DIR}/modjson.c
-    ${MICROPY_EXTMOD_DIR}/modos.c
     ${MICROPY_EXTMOD_DIR}/modplatform.c
     ${MICROPY_EXTMOD_DIR}/modrandom.c
     ${MICROPY_EXTMOD_DIR}/modre.c
-    ${MICROPY_EXTMOD_DIR}/modselect.c
-    ${MICROPY_EXTMOD_DIR}/modsocket.c
     ${MICROPY_EXTMOD_DIR}/modssl_axtls.c
     ${MICROPY_EXTMOD_DIR}/modssl_mbedtls.c
-    ${MICROPY_EXTMOD_DIR}/modtime.c
     ${MICROPY_EXTMOD_DIR}/modwebsocket.c
-    ${MICROPY_EXTMOD_DIR}/modwebrepl.c
-    ${MICROPY_EXTMOD_DIR}/network_cyw43.c
-    ${MICROPY_EXTMOD_DIR}/network_lwip.c
+    ${MICROPY_EXTMOD_DIR}/modwebrepl.c   
     ${MICROPY_EXTMOD_DIR}/network_ninaw10.c
     ${MICROPY_EXTMOD_DIR}/network_wiznet5k.c
     ${MICROPY_EXTMOD_DIR}/os_dupterm.c
@@ -67,6 +61,7 @@ if(MICROPY_FREERTOS)
         ${MICROPY_EXTMOD_DIR}/modos_newlib.c
         ${MICROPY_EXTMOD_DIR}/modselect_freertos.c
         ${MICROPY_EXTMOD_DIR}/modsignal.c
+        ${MICROPY_EXTMOD_DIR}/modtime_newlib.c
     )
 
     if(MICROPY_PY_LWIP)
@@ -89,19 +84,22 @@ if(MICROPY_FREERTOS)
     )
  
     list(APPEND MICROPY_SOURCE_EXTMOD
-        ${MICROPY_EXTMOD_DIR}/freeze/cache.c
-        ${MICROPY_EXTMOD_DIR}/freeze/flash.c
+        ${MICROPY_EXTMOD_DIR}/freeze/extmod_helper.c
         ${MICROPY_EXTMOD_DIR}/freeze/freeze.c
         ${MICROPY_EXTMOD_DIR}/freeze/modfreeze.c
+    )
+else()
+    list(APPEND MICROPY_SOURCE_EXTMOD
+        ${MICROPY_EXTMOD_DIR}/modos.c
+        ${MICROPY_EXTMOD_DIR}/modselect.c
+        ${MICROPY_EXTMOD_DIR}/modsocket.c
+        ${MICROPY_EXTMOD_DIR}/modtime.c
+        ${MICROPY_EXTMOD_DIR}/network_cyw43.c
+        ${MICROPY_EXTMOD_DIR}/network_lwip.c
     )
 endif()
 
 if (MICROPY_PY_AUDIO_MP3)
-    list(APPEND MICROPY_SOURCE_EXTMOD
-        ${MICROPY_EXTMOD_DIR}/audio_mp3/modaudio_mp3.c
-        ${MICROPY_EXTMOD_DIR}/audio_mp3/mp3_decoder.c
-    )
-
     set(MICROPY_LIB_AUDIO_MP3_DIR "${MICROPY_DIR}/lib/audio/src")
     add_library(micropy_lib_audio_mp3 INTERFACE)
 
@@ -114,6 +112,9 @@ if (MICROPY_PY_AUDIO_MP3)
     )
 
     target_sources(micropy_lib_audio_mp3 INTERFACE
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/modaudio_mp3.c
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/mp3_decoder.c
+
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/bitstream.c
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/buffers.c
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/dct32.c

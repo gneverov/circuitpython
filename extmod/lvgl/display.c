@@ -242,11 +242,12 @@ STATIC MP_DEFINE_CONST_DICT(lvgl_display_locals_dict, lvgl_display_locals_dict_t
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_display,
-    MP_QSTR_Display,
+    MP_ROM_QSTR_CONST(MP_QSTR_Display),
     MP_TYPE_FLAG_NONE,
     attr, lvgl_display_attr,
     locals_dict, &lvgl_display_locals_dict 
     );
+MP_REGISTER_OBJECT(lvgl_type_display);
 
 mp_obj_t lvgl_display_get_default(void) {
     lvgl_lock();

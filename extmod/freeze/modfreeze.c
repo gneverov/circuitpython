@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <errno.h>
 #include <string.h>
+
+#include "newlib/dlfcn.h"
 
 #include "py/gc.h"
 #include "py/runtime.h"
@@ -31,11 +34,20 @@ STATIC mp_obj_t freeze_get_modules(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(freeze_get_modules_obj, freeze_get_modules);
 
+STATIC mp_obj_t freeze_flash_py(mp_obj_t file_in) {
+    const char *file = mp_obj_str_get_str(file_in);
+    freeze_flash(file);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_1(freeze_flash_obj, freeze_flash_py);
+
 STATIC const mp_rom_map_elem_t freeze_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_freeze) },
     { MP_ROM_QSTR(MP_QSTR_import_modules), MP_ROM_PTR(&freeze_import_modules_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&freeze_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_modules), MP_ROM_PTR(&freeze_get_modules_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_flash), MP_ROM_PTR(&freeze_flash_obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(freeze_module_globals, freeze_module_globals_table);

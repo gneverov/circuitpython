@@ -50,6 +50,9 @@ int tud_msc_eject(uint8_t lun) {
     if (tud_msc_disk.ssize != 0) {
         tud_msc_disk.eject = 1;
     }
+    if (!tud_mounted()) {
+        tud_msc_test_unit_ready_cb(lun);
+    }
     tud_unlock();
     return 0;
 }

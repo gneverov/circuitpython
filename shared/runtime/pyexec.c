@@ -75,7 +75,7 @@ STATIC mp_obj_t call_mp_compile(const void *source, mp_parse_input_kind_t input_
     // source is a lexer, parse and compile the script
     qstr source_name = lex->source_name;
     mp_parse_tree_t parse_tree = mp_parse(lex, input_kind);
-    return mp_compile(&parse_tree, source_name, exec_flags & EXEC_FLAG_IS_REPL);
+    return mp_compile(&parse_tree, source_name, exec_flags & EXEC_FLAG_IS_REPL, NULL);
 }
 
 // parses, compiles and executes the code in the lexer

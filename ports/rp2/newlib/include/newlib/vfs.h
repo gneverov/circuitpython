@@ -100,6 +100,8 @@ struct vfs_file *vfs_acquire_file(int fd);
 
 void vfs_release_file(struct vfs_file *file);
 
+struct vfs_file *vfs_copy_file(struct vfs_file *file);
+
 int vfs_replace(int fd, struct vfs_file *file);
 
 int vfs_close(int fd);

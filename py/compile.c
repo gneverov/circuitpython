@@ -3650,10 +3650,13 @@ void mp_compile_to_raw_code(mp_parse_tree_t *parse_tree, qstr source_file, bool 
     }
 }
 
-mp_obj_t mp_compile(mp_parse_tree_t *parse_tree, qstr source_file, bool is_repl) {
+mp_obj_t mp_compile(mp_parse_tree_t *parse_tree, qstr source_file, bool is_repl, mp_module_context_t *context) {
     mp_compiled_module_t cm;
-    cm.context = m_new_obj(mp_module_context_t);
-    cm.context->module.globals = mp_globals_get();
+    if (!context) {
+        context = m_new_obj(mp_module_context_t);
+        context->module.globals = mp_globals_get();
+    }
+    cm.context = context;
     mp_compile_to_raw_code(parse_tree, source_file, is_repl, &cm);
     // return function that executes the outer module
     return mp_make_function_from_raw_code(cm.rc, cm.context, NULL);

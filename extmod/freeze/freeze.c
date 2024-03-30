@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <elf.h>
 #include <malloc.h>
 #include <memory.h>
 
+#include "newlib/dlfcn.h"
+#include "newlib/flash_heap.h"
 #include "pico/platform.h"
 
 #include "./freeze.h"
+#include "./extmod.h"
 #include "py/builtin.h"
 #include "py/mperrno.h"
 #include "py/emitglue.h"
@@ -15,221 +19,179 @@
 #include "py/objfun.h"
 #include "py/objstr.h"
 #include "py/objtype.h"
+#include "py/smallint.h"
 
 
-const mp_flash_page_t flash_data[NUM_FLASH_PAGES] __aligned(sizeof(mp_flash_page_t)) __in_flash("freezer");
-const mp_flash_page_t ram_data_in_flash[NUM_RAM_PAGES] __aligned(sizeof(mp_flash_page_t)) __in_flash("freezer");
-mp_flash_page_t ram_data[NUM_RAM_PAGES] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
-
-typedef const void *freeze_ptr_t;
-
-STATIC size_t freeze_last_flash_size;
+STATIC uint8_t ram_data[1024] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
 STATIC size_t freeze_last_ram_size;
 STATIC int freeze_mode;
+STATIC const flash_heap_header_t *freeze_checkpoint;
 
 STATIC void freeze_writer_nlr_callback(void *ctx) {
     freeze_writer_t *self = ctx - offsetof(freeze_writer_t, nlr_callback);
-    freeze_cache_flush(self, false);
+    flash_heap_free(&self->heap);
 }
 
-void freeze_writer_init(freeze_writer_t *self, bool init_map) {
-    self->flash_pages = flash_data;
-    self->num_flash_pages = NUM_FLASH_PAGES;
-    self->flash_size = freeze_last_flash_size;
-    self->flash_pos = freeze_last_flash_size;
-    freeze_cache_init(self);
-
-    self->ram_pages_in_flash = ram_data_in_flash;
-    self->ram_pages = ram_data;
-    self->num_ram_pages = NUM_RAM_PAGES;
-    self->ram_size = freeze_last_ram_size;
-    self->ram_pos = self->ram_pages[0];
-    self->ram_pos += freeze_last_ram_size;
-    memset(self->ram_dirty, 0, sizeof(self->ram_dirty));
-
-    self->base = self->flash_pages;
+STATIC void freeze_writer_init(freeze_writer_t *self, uint32_t type) {
+    if (flash_heap_open(&self->heap, type) < 0) {
+        mp_raise_OSError(errno);
+    }
+    self->ram_start = ram_data + freeze_last_ram_size;
+    self->ram_end = self->ram_start;
+    self->ram_pos = 0;
+    self->ram_limit = ram_data + sizeof(ram_data);
 
     mp_map_init(&self->obj_map, 0);
-
     nlr_push_jump_callback(&self->nlr_callback, freeze_writer_nlr_callback);
-}
-
-void freeze_writer_deinit(freeze_writer_t *self) {
-    nlr_pop_jump_callback(true);
-}
-
-void freeze_flush(freeze_writer_t *self) {
-    assert(self->flash_size <= self->num_flash_pages * sizeof(mp_flash_page_t));
-    freeze_cache_flush(self, true);
-
-    assert(self->ram_size <= self->num_ram_pages * sizeof(mp_flash_page_t));
-    for (int i = 0; i < self->num_ram_pages; i++) {
-        if (self->ram_dirty[i]) {
-            mp_write_flash_page(&self->ram_pages_in_flash[i], &self->ram_pages[i]);
-            self->ram_dirty[i] = false;
-        }
-    }
-}
-
-static bool freeze_in_range(freeze_ptr_t ptr, const mp_flash_page_t *base, size_t size) {
-    return ((uint8_t *)ptr >= (uint8_t *)base) && ((uint8_t *)ptr <= ((uint8_t *)base) + size);
-}
-
-freeze_ptr_t freeze_tell(freeze_writer_t *self) {
-    if (self->base == self->flash_pages) {
-        return (uint8_t *)self->flash_pages + self->flash_pos;
-    }
-    else if (self->base == self->ram_pages) {
-        return self->ram_pos;
-    }
-    else {
-        assert(0);
-        return NULL;
+    if (flash_heap_get_header(&self->heap) < freeze_checkpoint) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("reset needed"));
     }    
 }
 
-freeze_ptr_t freeze_seek(freeze_writer_t *self, freeze_ptr_t fptr) {
-    freeze_ptr_t old_fptr = freeze_tell(self);
-    if (freeze_in_range(fptr, self->flash_pages, self->flash_size)) {
-        self->flash_pos = (uintptr_t)fptr - (uintptr_t)self->flash_pages;
-        assert(self->flash_pos >= freeze_last_flash_size);
-        self->base = self->flash_pages;
+STATIC void freeze_writer_deinit(freeze_writer_t *self) {
+    nlr_pop_jump_callback(true);
+}
+
+STATIC void freeze_writer_commit(freeze_writer_t *self) {
+    if (flash_heap_close(&self->heap) < 0) {
+        mp_raise_OSError(errno);
     }
-    else if (freeze_in_range(fptr, self->ram_pages, self->ram_size)) {
-        self->ram_pos = (void *)fptr;
-        assert(self->ram_pos >= self->ram_pages[0] + freeze_last_ram_size);
-        self->base = self->ram_pages;
+    freeze_last_ram_size += self->ram_end - self->ram_start;
+}
+
+STATIC flash_ptr_t freeze_tell(freeze_writer_t *self) {
+    if (!self->ram_pos) {
+        return flash_heap_tell(&self->heap);
     }
     else {
-        assert(0);
+        return (flash_ptr_t)self->ram_pos;
     }
+}
+
+#ifndef NDEBUG
+STATIC bool freeze_is_valid_ptr(freeze_writer_t *self, flash_ptr_t fptr) {
+    return flash_heap_is_valid_ptr(&self->heap, fptr) || ((fptr >= (flash_ptr_t)self->ram_start) && (fptr <= (flash_ptr_t)self->ram_limit));
+}
+#endif
+
+STATIC flash_ptr_t freeze_seek(freeze_writer_t *self, flash_ptr_t fptr) {
+    flash_ptr_t old_fptr = freeze_tell(self);
+    if (flash_heap_is_valid_ptr(&self->heap, fptr)) {
+        if (flash_heap_seek(&self->heap, fptr) < 0) {
+            mp_raise_OSError(errno);
+        }
+        self->ram_pos = NULL;
+    }
+    else if((uint8_t *)fptr < self->ram_start) {
+        mp_raise_OSError(MP_EINVAL);
+    }
+    else if ((uint8_t *)fptr > self->ram_limit) {
+        mp_raise_OSError(MP_ENOSPC);
+    }
+    else {
+        self->ram_end = MAX(self->ram_end, (uint8_t *)fptr);
+        self->ram_pos = (uint8_t *)fptr;
+    } 
     return old_fptr;
 }
 
-void freeze_align(freeze_writer_t *self, size_t align) {
-    assert((align & (align - 1)) == 0);
-    if (self->base == self->flash_pages) {
-        self->flash_pos += -self->flash_pos & (align - 1);
-    }
-    else if (self->base == self->ram_pages) {
-        self->ram_pos += -(uintptr_t)self->ram_pos & (align - 1);
-    }
-    else {
-        assert(0);
-    }
+STATIC void freeze_align(freeze_writer_t *self, size_t align) {
+    flash_ptr_t fptr = freeze_tell(self);
+    fptr = flash_heap_align(fptr, align); 
+    freeze_seek(self, fptr);
 }
 
-void freeze_read(freeze_writer_t *self, uint8_t *buffer, size_t length) {
-    if (self->base == self->flash_pages) {
-        while (length > 0) {
-            size_t page_num = self->flash_pos / sizeof(mp_flash_page_t);
-            const mp_flash_page_t *page = self->cache_pages[page_num];
-            if (!page) {
-                page = &self->flash_pages[page_num];
-            }
-            size_t offset = self->flash_pos % sizeof(mp_flash_page_t);
-            size_t len = MIN(length, sizeof(mp_flash_page_t) - offset);
-            memcpy(buffer, (uint8_t *)page + offset, len);
-            buffer += len;
-            length -= len;
-            self->flash_pos += len;
+STATIC void freeze_read(freeze_writer_t *self, uint8_t *buffer, size_t length) {
+    if (!self->ram_pos) {
+        if (flash_heap_read(&self->heap, buffer, length) < 0) {
+            mp_raise_OSError(errno);
         }
     }
-    else if (self->base == self->ram_pages) {
+    else if (self->ram_pos + length > self->ram_limit) {
+        mp_raise_OSError(MP_ENOSPC);
+    }
+    else {
         memcpy(buffer, self->ram_pos, length);
         self->ram_pos += length;
     }
-    else {
-        assert(0);
-    }
 }
 
-void freeze_write(freeze_writer_t *self, const uint8_t *buffer, size_t length) {
-    if (self->base == self->flash_pages) {
-        while (length > 0) {
-            size_t page_num = self->flash_pos / sizeof(mp_flash_page_t);
-            mp_flash_page_t *cache_page = freeze_cache_get(self, page_num);
-            if (!cache_page) {
-                mp_raise_OSError(MP_ENOMEM);
-            }
-            size_t offset = self->flash_pos % sizeof(mp_flash_page_t);
-            size_t len = MIN(length, sizeof(mp_flash_page_t) - offset);
-            memcpy((uint8_t *)cache_page + offset, buffer, len);
-            buffer += len;
-            length -= len;
-            self->flash_pos += len;
+STATIC void freeze_write(freeze_writer_t *self, const uint8_t *buffer, size_t length) {
+    if (!self->ram_pos) {
+        if (flash_heap_write(&self->heap, buffer, length) < 0) {
+            mp_raise_OSError(errno);
         }
     }
-    else if (self->base == self->ram_pages) {
-        size_t page_num = (self->ram_pos - self->ram_pages[0]) / sizeof(mp_flash_page_t);
+    else if (self->ram_pos + length > self->ram_limit) {
+        mp_raise_OSError(MP_ENOSPC);
+    }    
+    else {
         memcpy(self->ram_pos, buffer, length);
         self->ram_pos += length;
-        self->ram_dirty[page_num] = true;
-    }
-    else {
-        assert(0);
     }
 }
 
-void freeze_write_char(freeze_writer_t *self, uint8_t value) {
+STATIC void freeze_write_char(freeze_writer_t *self, uint8_t value) {
     freeze_align(self, __alignof__(uint8_t));
     freeze_write(self, &value, sizeof(uint8_t));
 }
 
-void freeze_write_short(freeze_writer_t *self, uint16_t value) {
+STATIC void freeze_write_short(freeze_writer_t *self, uint16_t value) {
     freeze_align(self, __alignof__(uint16_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uint16_t));
 }
 
-void freeze_write_int(freeze_writer_t *self, uint32_t value) {
+STATIC void freeze_write_int(freeze_writer_t *self, uint32_t value) {
     freeze_align(self, __alignof__(uint32_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uint32_t));
 }
 
-void freeze_write_size(freeze_writer_t *self, size_t value) {
+STATIC void freeze_write_size(freeze_writer_t *self, size_t value) {
     freeze_align(self, __alignof__(size_t));
     freeze_write(self, (uint8_t *)&value, sizeof(size_t));
 }
 
-void freeze_write_intptr(freeze_writer_t *self, uintptr_t value) {
+STATIC void freeze_write_intptr(freeze_writer_t *self, uintptr_t value) {
     freeze_align(self, __alignof__(uintptr_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uintptr_t));
 }
 
-bool freeze_is_data_ptr(const void *ptr) {
-    extern uint8_t __HeapLimit;
-    return (ptr < (void *)&__HeapLimit);
+STATIC bool freeze_is_freezable_ptr(freeze_writer_t *self, const void *ptr) {
+    extern uint8_t end;
+    return (ptr == 0) || 
+        ((ptr >= (void *)XIP_BASE) && (ptr <= (void *)self->heap.flash_end)) || 
+        ((ptr >= (void *)SRAM_BASE) && (ptr <= (void *)&end));
 }
 
-void freeze_write_fptr(freeze_writer_t *self, freeze_ptr_t fptr) {
-    assert(mp_is_flash_ptr(fptr) || freeze_is_data_ptr(fptr));
+STATIC void freeze_write_fptr(freeze_writer_t *self, flash_ptr_t fptr) {
+    assert(freeze_is_valid_ptr(self, fptr) || freeze_is_freezable_ptr(self, (void *)fptr));
     freeze_write_intptr(self, (uintptr_t)fptr);
 }
 
-freeze_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t align, bool ram) {
-    assert((align & (align - 1)) == 0);
+STATIC flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t align, bool ram) {
+    flash_ptr_t fptr = ram ? (flash_ptr_t)self->ram_end : self->heap.flash_end;
+    fptr = flash_heap_align(fptr, align);
     if (!ram) {
-        self->flash_size += -self->flash_size & (align - 1);
-        freeze_ptr_t fptr = (uint8_t *)self->flash_pages + self->flash_size;
-        self->flash_size += size;
-        if (self->flash_size > self->num_flash_pages * sizeof(mp_flash_page_t)) {
-            mp_raise_msg(&mp_type_RuntimeError, "Not enough flash space");
+        flash_ptr_t ret = flash_heap_tell(&self->heap);
+        if (flash_heap_seek(&self->heap, fptr + size) < 0) {
+            mp_raise_OSError(errno);
         }
-        return fptr;        
+        if (flash_heap_seek(&self->heap, ret) < 0) {
+            mp_raise_OSError(errno);
+        }
+    }
+    else if ((uint8_t *)fptr + size > self->ram_limit) {
+        mp_raise_OSError(MP_ENOSPC);
     }
     else {
-        self->ram_size += -self->ram_size & (align - 1);
-        freeze_ptr_t fptr = (uint8_t *)self->ram_pages + self->ram_size;
-        self->ram_size += size;
-        if (self->ram_size > self->num_ram_pages * sizeof(mp_flash_page_t)) {
-            mp_raise_msg(&mp_type_RuntimeError, "Not enough ram space");
-        }
-        return fptr;        
-    }
+        self->ram_end = MAX(self->ram_end, (uint8_t *)fptr);
+    } 
+    return fptr;
 }
 
-static void freeze_add_ptr(freeze_writer_t *self, freeze_ptr_t fptr, const void *ptr) {
-    assert(ptr && !mp_is_flash_ptr(ptr) && !freeze_is_data_ptr(ptr));
+STATIC void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *ptr) {
+    assert(freeze_is_valid_ptr(self, fptr));
+    assert(!freeze_is_freezable_ptr(self, ptr));
 
     mp_map_elem_t *elem = mp_map_lookup(
         &self->obj_map,
@@ -239,9 +201,9 @@ static void freeze_add_ptr(freeze_writer_t *self, freeze_ptr_t fptr, const void 
     elem->value = MP_OBJ_NEW_SMALL_INT(fptr);
 }
 
-static bool freeze_lookup_ptr(freeze_writer_t *self, freeze_ptr_t *fptr, const void *ptr) {
-    if (mp_is_flash_ptr(ptr) || freeze_is_data_ptr(ptr)) {
-        *fptr = ptr;
+STATIC bool freeze_lookup_ptr(freeze_writer_t *self, flash_ptr_t *fptr, const void *ptr) {
+    if (freeze_is_freezable_ptr(self, ptr)) {
+        *fptr = (flash_ptr_t)ptr;
         return true;
     }
 
@@ -251,7 +213,7 @@ static bool freeze_lookup_ptr(freeze_writer_t *self, freeze_ptr_t *fptr, const v
         MP_MAP_LOOKUP);
     if (elem != NULL) {
         assert(elem->value != NULL);
-        *fptr = (void *)MP_OBJ_SMALL_INT_VALUE(elem->value);
+        *fptr = MP_OBJ_SMALL_INT_VALUE(elem->value);
         return true;
     }
 
@@ -261,34 +223,39 @@ static bool freeze_lookup_ptr(freeze_writer_t *self, freeze_ptr_t *fptr, const v
 typedef void (*freeze_write_t)(freeze_writer_t *self, const void *value);
 typedef size_t (*freeze_sizeof_t)(const void *value);
 
-void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
-    freeze_ptr_t fptr = freeze_allocate(self, size, align, ram);
-    freeze_ptr_t ret = freeze_seek(self, fptr);
+STATIC void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
+    if (freeze_is_freezable_ptr(self, ptr)) {
+        freeze_write_fptr(self, (flash_ptr_t)ptr);
+        return;
+    }
+
+    flash_ptr_t fptr = freeze_allocate(self, size, align, ram);
+    flash_ptr_t ret = freeze_seek(self, fptr);
     freeze_write(self, ptr, size);
     freeze_seek(self, ret);
 
     freeze_write_fptr(self, fptr);
 }
 
-void freeze_write_aliased_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
-    freeze_ptr_t fptr;
+STATIC void freeze_write_aliased_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
+    flash_ptr_t fptr;
     if (!freeze_lookup_ptr(self, &fptr, ptr)) {
         fptr = freeze_allocate(self, size, align, ram);
         freeze_add_ptr(self, fptr, ptr);
-        freeze_ptr_t ret = freeze_seek(self, fptr);
+        flash_ptr_t ret = freeze_seek(self, fptr);
         freeze_write(self, ptr, size);
         freeze_seek(self, ret);
     }
     freeze_write_fptr(self, fptr);
 }
 
-void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj);
+STATIC void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj);
 
-void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, size_t count, bool ram) {
-    freeze_ptr_t fobjs = NULL;
+STATIC void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, size_t count, bool ram) {
+    flash_ptr_t fobjs = 0;
     if (objs) {
         fobjs = freeze_allocate(self, count * sizeof(mp_obj_t), __alignof__(mp_obj_t), ram);
-        freeze_ptr_t ret = freeze_seek(self, fobjs);
+        flash_ptr_t ret = freeze_seek(self, fobjs);
         for (int i = 0; i < count; i++) {
             freeze_write_obj(self, objs[i]);
         }
@@ -299,9 +266,9 @@ void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, size_t 
 }
 
 // ### base ###
-void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj);
+STATIC void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj);
 
-void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) {
+STATIC void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) {
     freeze_align(self, __alignof__(mp_obj_base_t));
     freeze_write_raw_obj(self, &base->type->base);
 }
@@ -309,7 +276,7 @@ void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) {
 // ### cell ###
 extern const mp_obj_type_t mp_type_cell;
 
-void freeze_write_cell(freeze_writer_t *self, const mp_obj_cell_t *cell) {
+STATIC void freeze_write_cell(freeze_writer_t *self, const mp_obj_cell_t *cell) {
     assert(cell->base.type == &mp_type_cell);
 
     freeze_align(self, __alignof__(mp_obj_cell_t));
@@ -327,11 +294,11 @@ typedef struct _mp_obj_closure_t {
 
 extern const mp_obj_type_t mp_type_closure;
 
-size_t freeze_sizeof_closure(const mp_obj_closure_t *closure) {
+STATIC size_t freeze_sizeof_closure(const mp_obj_closure_t *closure) {
     return closure->n_closed * sizeof(mp_obj_t);
 }
 
-void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *closure) {
+STATIC void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *closure) {
     assert(closure->base.type == &mp_type_closure);
 
     freeze_align(self, __alignof__(mp_obj_closure_t));
@@ -344,7 +311,7 @@ void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *closure
 }
 
 // ### dict ###
-void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mutable) {
+STATIC void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mutable) {
     union mp_map_header {
         mp_map_t map;
         size_t header;
@@ -357,18 +324,18 @@ void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mutable) 
     freeze_write_obj_array(self, (mp_obj_t *)map->table, 2 * map->alloc, mutable);
 }
 
-void freeze_write_immutable_dict_ptr(freeze_writer_t *self, const mp_obj_dict_t *dict) {
+STATIC void freeze_write_immutable_dict_ptr(freeze_writer_t *self, const mp_obj_dict_t *dict) {
     assert(dict->base.type == &mp_type_dict);
 
-    freeze_ptr_t fdict = freeze_allocate(self, sizeof(mp_obj_dict_t), __alignof__(mp_obj_dict_t), false);
-    freeze_ptr_t ret = freeze_seek(self, fdict);
+    flash_ptr_t fdict = freeze_allocate(self, sizeof(mp_obj_dict_t), __alignof__(mp_obj_dict_t), false);
+    flash_ptr_t ret = freeze_seek(self, fdict);
     freeze_write_base(self, &dict->base);
     freeze_write_map(self, &dict->map, false);
     freeze_seek(self, ret);
     freeze_write_fptr(self, fdict);    
 }
 
-static void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t *dict) {
+STATIC void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t *dict) {
     assert(dict->base.type == &mp_type_dict);
 
     freeze_write_base(self, &dict->base);
@@ -376,11 +343,11 @@ static void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t
 }
 
 // ### fun_bc ###
-freeze_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc) {
-    freeze_ptr_t frc;
+STATIC flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc) {
+    flash_ptr_t frc;
     if (!freeze_lookup_ptr(self, &frc, rc)) {
         frc = freeze_allocate(self, sizeof(mp_raw_code_t), __alignof__(mp_raw_code_t), false);
-        freeze_ptr_t ret = freeze_seek(self, frc);
+        flash_ptr_t ret = freeze_seek(self, frc);
         freeze_add_ptr(self, frc, rc);
 
         freeze_write_int(self, *(mp_uint_t *)rc);
@@ -389,12 +356,12 @@ freeze_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc)
         
         freeze_write_size(self, rc->fun_data_len);
 
-        freeze_ptr_t fchild_table = NULL;
+        flash_ptr_t fchild_table = 0;
         if (rc->children) {
             fchild_table = freeze_allocate(self, rc->n_children * sizeof(mp_raw_code_t *), __alignof__(mp_raw_code_t *), false);
-            freeze_ptr_t ret = freeze_seek(self, fchild_table);
+            flash_ptr_t ret = freeze_seek(self, fchild_table);
             for (int i = 0; i < rc->n_children; i++) {
-                freeze_ptr_t fchild_rc = freeze_new_raw_code(self, rc->children[i]);
+                flash_ptr_t fchild_rc = freeze_new_raw_code(self, rc->children[i]);
                 freeze_write_fptr(self, fchild_rc);
             }
             freeze_seek(self, ret);
@@ -414,30 +381,33 @@ freeze_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc)
     return frc;
 }
 
-size_t freeze_sizeof_fun_bc(const mp_obj_fun_bc_t *fun_bc) {
+STATIC size_t freeze_sizeof_fun_bc(const mp_obj_fun_bc_t *fun_bc) {
     return fun_bc->n_extra_args * sizeof(mp_obj_t);
 }
 
-void freeze_write_fun_bc(freeze_writer_t *self, const mp_obj_fun_bc_t *fun_bc) {
+STATIC void freeze_write_fun_bc(freeze_writer_t *self, const mp_obj_fun_bc_t *fun_bc) {
     assert((fun_bc->base.type == &mp_type_fun_bc) || (fun_bc->base.type == &mp_type_gen_wrap));
 
     freeze_align(self, __alignof__(mp_obj_fun_bc_t));
     freeze_write_base(self, &fun_bc->base);
     
+    if (!fun_bc->context->module.base.type) {
+        ((mp_module_context_t *)(fun_bc->context))->module.base.type = &mp_type_module;
+    }
     freeze_write_raw_obj(self, &fun_bc->context->module.base);
 
-    freeze_ptr_t frc = freeze_new_raw_code(self, fun_bc->rc);
+    flash_ptr_t frc = freeze_new_raw_code(self, fun_bc->rc);
     mp_raw_code_t rc;
-    if (freeze_in_range(frc, self->flash_pages, self->flash_size)) {
-        freeze_ptr_t ret = freeze_seek(self, frc);
+    if (flash_heap_is_valid_ptr(&self->heap, frc)) {
+        flash_ptr_t ret = freeze_seek(self, frc);
         freeze_read(self, (uint8_t *)&rc, sizeof(mp_raw_code_t));
         freeze_seek(self, ret);
     }
     else {
         rc = *(mp_raw_code_t *)frc;
     }
-    freeze_write_fptr(self, rc.children);
-    freeze_write_fptr(self, rc.fun_data);
+    freeze_write_fptr(self, (flash_ptr_t)rc.children);
+    freeze_write_fptr(self, (flash_ptr_t)rc.fun_data);
     freeze_write_fptr(self, frc);
 
     freeze_write_size(self, fun_bc->n_extra_args);
@@ -461,7 +431,7 @@ typedef struct _mp_obj_bound_meth_t {
 
 extern const mp_obj_type_t mp_type_bound_meth;
 
-void freeze_write_bound_meth(freeze_writer_t *self, const mp_obj_bound_meth_t *bound_meth) {
+STATIC void freeze_write_bound_meth(freeze_writer_t *self, const mp_obj_bound_meth_t *bound_meth) {
     assert((bound_meth->base.type == &mp_type_bound_meth));
 
     freeze_align(self, __alignof__(mp_obj_bound_meth_t));
@@ -476,7 +446,7 @@ typedef struct _mp_obj_float_t {
     mp_float_t value;
 } mp_obj_float_t;
 
-void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *float_obj) {
+STATIC void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *float_obj) {
     assert(float_obj->base.type == &mp_type_float);
     freeze_align(self, __alignof__(mp_obj_float_t));
     freeze_write_base(self, &float_obj->base);
@@ -485,14 +455,14 @@ void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *float_o
 }
 
 // ### int ###
-void freeze_write_mpz(freeze_writer_t *self, const mpz_t *mpz) {
+STATIC void freeze_write_mpz(freeze_writer_t *self, const mpz_t *mpz) {
     freeze_align(self, __alignof__(mpz_t));
     freeze_write_size(self, *(size_t *)mpz);
     freeze_write_size(self, mpz->len);
     freeze_write_ptr(self, mpz->dig, mpz->len * sizeof(mpz_dig_t), __alignof__(mpz_dig_t), false);
 }
 
-void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_obj) {
+STATIC void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_obj) {
     assert(int_obj->base.type == &mp_type_int);
     freeze_align(self, __alignof__(mp_obj_int_t));
     freeze_write_base(self, &int_obj->base);
@@ -500,7 +470,7 @@ void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_obj) {
 }
 
 // ### module ###
-void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *module) {
+STATIC void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *module) {
     assert(module->base.type == &mp_type_module);
 
     mp_obj_t dest[2];
@@ -517,7 +487,7 @@ void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *module) {
     }
 }
 
-void freeze_write_module_context(freeze_writer_t *self, const mp_module_context_t *context) {
+STATIC void freeze_write_module_context(freeze_writer_t *self, const mp_module_context_t *context) {
     // printf("module_context: n_qstr=%d, n_obj=%d\n", context->constants.n_qstr, context->constants.n_obj);
 
     freeze_align(self, __alignof__(mp_module_context_t));
@@ -530,22 +500,22 @@ void freeze_write_module_context(freeze_writer_t *self, const mp_module_context_
     freeze_write_size(self, context->constants.n_obj);
 }
 
-freeze_ptr_t freeze_new_module(freeze_writer_t *self, mp_obj_t module_obj) {
+STATIC flash_ptr_t freeze_new_module(freeze_writer_t *self, mp_obj_t module_obj) {
     const mp_module_context_t *module = MP_OBJ_TO_PTR(module_obj);
-    freeze_ptr_t fmodule;
+    flash_ptr_t fmodule;
     if (freeze_lookup_ptr(self, &fmodule, module)) {
         return fmodule;
     }
 
     fmodule = freeze_allocate(self, sizeof(mp_module_context_t), __alignof(mp_module_context_t), false);
     freeze_add_ptr(self, fmodule, module);
-    freeze_ptr_t ret = freeze_seek(self, fmodule);
+    flash_ptr_t ret = freeze_seek(self, fmodule);
     freeze_write_module_context(self, module);
     freeze_seek(self, ret);
     return fmodule;
 }
 
-void freeze_write_non_frozen_module(freeze_writer_t *self, const mp_module_context_t *context) {
+STATIC void freeze_write_non_frozen_module(freeze_writer_t *self, const mp_module_context_t *context) {
     mp_obj_t dest[2];
     mp_load_method_maybe(MP_OBJ_FROM_PTR(context), MP_QSTR___name__, dest);
     mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("module '%s' already loaded but not frozen"), mp_obj_str_get_str(dest[0]));
@@ -557,7 +527,7 @@ typedef struct _mp_obj_property_t {
     mp_obj_t proxy[3]; // getter, setter, deleter
 } mp_obj_property_t;
 
-void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t *property) {
+STATIC void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t *property) {
     assert(property->base.type == &mp_type_property);
 
     freeze_align(self, __alignof__(mp_obj_property_t));
@@ -568,7 +538,7 @@ void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t *prope
 }
 
 // ### static/class method ###
-void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj_static_class_method_t *scm) {
+STATIC void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj_static_class_method_t *scm) {
     assert((scm->base.type == &mp_type_staticmethod) || (scm->base.type == &mp_type_classmethod));
 
     freeze_align(self, __alignof__(mp_obj_static_class_method_t));
@@ -577,7 +547,7 @@ void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj_static
 }
 
 // ### str ###
-void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
+STATIC void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
     assert((str->base.type == &mp_type_str) || (str->base.type == &mp_type_bytes));
 
     freeze_align(self, __alignof__(mp_obj_str_t));
@@ -588,11 +558,11 @@ void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
 }
 
 // ### tuple ###
-size_t freeze_sizeof_tuple(const mp_obj_tuple_t *tuple) {
+STATIC size_t freeze_sizeof_tuple(const mp_obj_tuple_t *tuple) {
     return tuple->len * sizeof(mp_obj_t);
 }
 
-void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tuple) {
+STATIC void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tuple) {
     assert(tuple->base.type == &mp_type_tuple);
 
     freeze_align(self, __alignof__(mp_obj_tuple_t));
@@ -604,7 +574,7 @@ void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tuple) {
 }
 
 // ### type ###
-static size_t freeze_type_num_slots(const mp_obj_type_t *type) {
+STATIC size_t freeze_type_num_slots(const mp_obj_type_t *type) {
     size_t n = 0;
     n = MAX(n, type->slot_index_make_new);
     n = MAX(n, type->slot_index_print);
@@ -621,11 +591,11 @@ static size_t freeze_type_num_slots(const mp_obj_type_t *type) {
     return n;
 }
 
-size_t freeze_sizeof_type(const mp_obj_type_t *type) {
+STATIC size_t freeze_sizeof_type(const mp_obj_type_t *type) {
     return freeze_type_num_slots(type) * sizeof(void *);
 }
 
-void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) {
+STATIC void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) {
     assert(type->base.type == &mp_type_type);
 
     freeze_align(self, __alignof__(mp_obj_type_t));
@@ -655,19 +625,19 @@ void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) {
             const mp_obj_base_t *parent = type->slots[i];
             freeze_write_raw_obj(self, parent);
         } else {
-            freeze_write_fptr(self, type->slots[i]);
+            freeze_write_fptr(self, (flash_ptr_t)type->slots[i]);
         }
     }
 }
 
 // ### instance ###
-size_t freeze_sizeof_instance(const mp_obj_instance_t *obj) {
+STATIC size_t freeze_sizeof_instance(const mp_obj_instance_t *obj) {
     const mp_obj_type_t *native_base;
     size_t num_native_bases = instance_count_native_bases(obj->base.type, &native_base);
     return num_native_bases * sizeof(native_base);
 }
 
-void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t *obj) {
+STATIC void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t *obj) {
     assert(obj->base.type->flags & MP_TYPE_FLAG_INSTANCE_TYPE);
 
     const mp_obj_type_t *native_base;
@@ -682,7 +652,7 @@ void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t *obj) 
 }
 
 // ## list ##
-void freeze_write_list(freeze_writer_t *self, const mp_obj_list_t *list) {
+STATIC void freeze_write_list(freeze_writer_t *self, const mp_obj_list_t *list) {
     assert(list->base.type == &mp_type_list);
 
     freeze_align(self, __alignof__(mp_obj_list_t));
@@ -698,7 +668,7 @@ typedef struct _mp_obj_set_t {
     mp_set_t set;
 } mp_obj_set_t;
 
-void freeze_write_set(freeze_writer_t *self, const mp_obj_set_t *set) {
+STATIC void freeze_write_set(freeze_writer_t *self, const mp_obj_set_t *set) {
     assert(set->base.type == &mp_type_set);
 
     freeze_align(self, __alignof__(mp_obj_set_t));
@@ -719,11 +689,11 @@ typedef struct _mp_obj_re_t {
 
 extern const mp_obj_type_t re_type;
 
-size_t freeze_sizeof_re(const mp_obj_re_t *re) {
+STATIC size_t freeze_sizeof_re(const mp_obj_re_t *re) {
     return re->re.bytelen;
 }
 
-void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
+STATIC void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
     assert(re->base.type == &re_type);
 
     freeze_align(self, __alignof__(mp_obj_re_t));
@@ -736,7 +706,7 @@ void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
 #endif
 
 // ### raw_obj ###
-struct freeze_type {
+STATIC struct freeze_type {
     const mp_obj_type_t *type;
     size_t size;
     size_t align;
@@ -774,7 +744,7 @@ struct freeze_type {
 },
 freeze_type_instance = { NULL, sizeof(mp_obj_instance_t), __alignof__(mp_obj_instance_t), true, (freeze_write_t)freeze_write_instance, (freeze_sizeof_t)freeze_sizeof_instance };
 
-const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) { 
+STATIC const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) { 
     const struct freeze_type *ftype = freeze_type_table;
     while (ftype->type) {
         if (type == ftype->type) {
@@ -788,12 +758,12 @@ const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) {
     return NULL;
 }
 
-freeze_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
+STATIC flash_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
     if (raw_obj == NULL) {
-        return NULL;
+        return 0;
     }
 
-    freeze_ptr_t fraw_obj;
+    flash_ptr_t fraw_obj;
     if (freeze_lookup_ptr(self, &fraw_obj, raw_obj)) {
         return fraw_obj;
     }
@@ -809,18 +779,18 @@ freeze_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_
     }
     fraw_obj = freeze_allocate(self, size, ftype->align, ftype->mutable);
     freeze_add_ptr(self, fraw_obj, raw_obj);
-    freeze_ptr_t ret = freeze_seek(self, fraw_obj);
+    flash_ptr_t ret = freeze_seek(self, fraw_obj);
     ftype->writer(self, raw_obj);
     freeze_seek(self, ret);
     return fraw_obj;
 }
 
-void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
-    freeze_ptr_t fraw_obj = freeze_new_raw_obj(self, raw_obj);
+STATIC void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
+    flash_ptr_t fraw_obj = freeze_new_raw_obj(self, raw_obj);
     freeze_write_fptr(self, fraw_obj);
 }
 
-void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj) {
+STATIC void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj) {
     if (obj == MP_OBJ_NULL) {
         freeze_write_intptr(self, (uintptr_t)obj);
     } else if (mp_obj_is_small_int(obj)) {
@@ -831,7 +801,7 @@ void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj) {
         freeze_write_intptr(self, (uintptr_t)obj);
     } else if (mp_obj_is_obj(obj)) {
         const mp_obj_base_t *raw_obj = MP_OBJ_TO_PTR(obj);
-        freeze_ptr_t fraw_obj = freeze_new_raw_obj(self, raw_obj);
+        flash_ptr_t fraw_obj = freeze_new_raw_obj(self, raw_obj);
         freeze_write_intptr(self, (uintptr_t)MP_OBJ_FROM_PTR(fraw_obj));
     } else {
         assert(0);
@@ -845,8 +815,8 @@ enum qstr_pool_field {
     QSTR_POOL_FIELD_QSTRS,
 };
 
-void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum qstr_pool_field field) {
-    if (mp_is_flash_ptr(pool)) {
+STATIC void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum qstr_pool_field field) {
+    if (freeze_is_freezable_ptr(self, pool)) {
         return;
     }
     if (pool->prev != NULL) {
@@ -873,26 +843,26 @@ void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum
     }
 }
 
-freeze_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last_pool) {
+STATIC flash_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last_pool) {
     const qstr_pool_t *first_pool = last_pool;
-    while (!mp_is_flash_ptr(first_pool) && first_pool->prev != NULL) {
+    while (!freeze_is_freezable_ptr(self, first_pool) && first_pool->prev != NULL) {
         first_pool = first_pool->prev;
     }
 
     size_t total_prev_len = first_pool->total_prev_len + first_pool->len;
     size_t len = last_pool->total_prev_len + last_pool->len - total_prev_len;
     if (len == 0) {
-        return NULL;
+        return 0;
     }
 
-    freeze_ptr_t fpool = freeze_allocate(self, sizeof(qstr_pool_t) + len * sizeof(uint8_t *), __alignof__(qstr_pool_t), false);
-    freeze_ptr_t fhashes = freeze_allocate(self, len * sizeof(qstr_hash_t), __alignof__(qstr_hash_t), false);
-    freeze_ptr_t flengths = freeze_allocate(self, len * sizeof(qstr_len_t), __alignof__(qstr_len_t), false);
+    flash_ptr_t fpool = freeze_allocate(self, sizeof(qstr_pool_t) + len * sizeof(uint8_t *), __alignof__(qstr_pool_t), false);
+    flash_ptr_t fhashes = freeze_allocate(self, len * sizeof(qstr_hash_t), __alignof__(qstr_hash_t), false);
+    flash_ptr_t flengths = freeze_allocate(self, len * sizeof(qstr_len_t), __alignof__(qstr_len_t), false);
 
-    freeze_ptr_t ret = freeze_seek(self, fpool);
-    freeze_write_fptr(self, first_pool);
+    flash_ptr_t ret = freeze_seek(self, fpool);
+    freeze_write_fptr(self, (flash_ptr_t)first_pool);
     freeze_write_size(self, total_prev_len);
-    freeze_write_size(self, 10);
+    freeze_write_size(self, MIN(len, 10));
     freeze_write_size(self, len);
     freeze_write_fptr(self, fhashes);
     freeze_write_fptr(self, flengths);
@@ -909,117 +879,98 @@ freeze_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last
 }
 
 // ### api ###
-enum freeze_header_type {
-    FREEZE_MODULE = 1,
-    FREEZE_QSTR_POOL = 2,
-};
-
 typedef struct {
-    uint16_t flash_size;
-    uint16_t ram_size;
-    uint16_t type;
-    const void* object;
+    qstr module_name;
+    const mp_obj_module_t *module;
+    const void *ram_src;
+    void *ram_dst;
+    size_t ram_len;
 } freeze_header_t;
-
-STATIC void freeze_write_sentinel(freeze_writer_t *self) {
-    freeze_ptr_t sentinel = freeze_allocate(self, sizeof(freeze_header_t), __alignof(freeze_header_t), false);
-    freeze_ptr_t ret = freeze_seek(self, sentinel);
-    freeze_write_short(self, 0);
-    freeze_write_short(self, 0);
-    freeze_write_short(self, 0);
-    freeze_write_fptr(self, NULL);
-    freeze_seek(self, ret);
-    self->flash_size -= sizeof(freeze_header_t);
-}
 
 bool freeze_clear() {
     if (freeze_mode > 0) {
         return false;
     }
+    if (flash_heap_truncate(NULL) < 0) {
+        mp_raise_OSError(errno);
+    }
     freeze_mode = -1;
-    freeze_last_flash_size = 0;
-    freeze_last_ram_size = 0;
-
-    freeze_writer_t freezer;
-    freeze_writer_init(&freezer, false);
-    freeze_write_sentinel(&freezer);
-    freeze_flush(&freezer);
-    freeze_writer_deinit(&freezer);
     return true;
 }
 
 void freeze_gc() {
-    gc_collect_root((void**)ram_data, freeze_last_ram_size / sizeof(void *));
+    const flash_heap_header_t *header = NULL;
+    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
+        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+            const freeze_header_t *p = header->entry;
+            gc_collect_root((void**)p->ram_dst, p->ram_len / sizeof(void *));            
+        }
+    }
 }
 
-STATIC bool freeze_header_next(const freeze_header_t **pheader) {
-    const freeze_header_t *header = *pheader;
-    if (header == NULL) {
-        *pheader = (freeze_header_t *)flash_data[0];
-    }
-    else {
-        *pheader = (freeze_header_t *)(((uint8_t *)header) + header->flash_size);
-    }
-    return (*pheader)->flash_size;
+STATIC void freeze_set_qstr_pool(qstr_pool_t *qstr_pool) {
+    MP_STATE_VM(last_pool) = qstr_pool;
+    MP_STATE_VM(qstr_last_chunk) = NULL;
+    MP_STATE_VM(qstr_last_alloc) = 0;
+    MP_STATE_VM(qstr_last_used) = 0;
 }
 
 void freeze_init() {
-    static_assert(NUM_RAM_PAGES == 1);
-    mp_read_flash_page(ram_data, ram_data_in_flash);
-
     freeze_mode = 0;
-    freeze_last_flash_size = 0;
-    freeze_last_ram_size = 0;
 
-    const freeze_header_t *header = NULL;
-    while (freeze_header_next(&header)) {
-        if (header->type == FREEZE_QSTR_POOL) {
-            qstr_pool_t *qstr_pool = (qstr_pool_t *)header->object;
+    const flash_heap_header_t *header = NULL;
+    while (flash_heap_iterate(&header)) {
+        if (header->type == FREEZE_QSTR_POOL_FLASH_HEAP_TYPE) {
+            const qstr_pool_t *qstr_pool = header->entry;
             assert(qstr_pool->prev == MP_STATE_VM(last_pool));
-            MP_STATE_VM(last_pool) = qstr_pool;
-            MP_STATE_VM(qstr_last_chunk) = NULL;
-            MP_STATE_VM(qstr_last_alloc) = 0;
-            MP_STATE_VM(qstr_last_used) = 0;
+            freeze_set_qstr_pool((qstr_pool_t *)qstr_pool);
         }
-
-        freeze_last_flash_size += header->flash_size;
-        freeze_last_ram_size += header->ram_size;
+        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+            const freeze_header_t *p = header->entry;
+            freeze_last_ram_size += p->ram_len;
+        }
     }
+    freeze_checkpoint = flash_heap_next_header();
 }
 
-STATIC void freeze_write_header(freeze_writer_t *self, enum freeze_header_type header_type, freeze_ptr_t header_object) {
-    freeze_allocate(self, 0, __alignof(freeze_header_t), false);
-
-    size_t flash_size = self->flash_size - freeze_last_flash_size;
-    assert(flash_size <= 0xffff);
-    freeze_write_short(self, flash_size);
-    size_t ram_size = self->ram_size - freeze_last_ram_size;
-    assert(ram_size <= 0xffff);
-    freeze_write_short(self, ram_size);
-    freeze_write_short(self, header_type);
-    freeze_write_fptr(self, header_object);
-
-    freeze_write_sentinel(self);
-
-    freeze_flush(self);
-
-    freeze_last_flash_size = self->flash_size;
-    freeze_last_ram_size = self->ram_size;
+STATIC bool freeze_check_module_name(mp_obj_t module_obj, qstr module_name) {
+    if (module_obj == MP_OBJ_NULL) {
+        return false;
+    }
+    mp_obj_t module_name_obj = mp_load_attr(module_obj, MP_QSTR___name__);
+    return MP_OBJ_QSTR_VALUE(module_name_obj) == module_name;
 }
 
 mp_obj_t mp_module_get_frozen(qstr module_name, mp_obj_t outer_module_obj) {
-    const freeze_header_t *header = NULL;
-    while (freeze_header_next(&header)) {
-        if (header->type == FREEZE_MODULE) {
-            mp_obj_t module_obj = MP_OBJ_FROM_PTR(header->object);
-            mp_obj_t module_name_obj = mp_load_attr(module_obj, MP_QSTR___name__);
-            if (MP_OBJ_QSTR_VALUE(module_name_obj) == module_name) {
-                mp_map_t *module_map = &MP_STATE_VM(mp_loaded_modules_dict).map;
-                mp_map_elem_t *elem = mp_map_lookup(module_map, module_name_obj, MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
-                elem->value = module_obj;
-                return module_obj;
+    const flash_heap_header_t *header = NULL;
+    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
+        mp_obj_t module_obj;
+        if (header->type == DL_FLASH_HEAP_TYPE) {
+            mp_obj_t (*extmod_init)(void) = dlsym(header, "mp_extmod_init");
+            if (!extmod_init) {
+                continue;
+            }
+            module_obj = extmod_init();
+            if (!freeze_check_module_name(module_obj, module_name)) {
+                continue;
             }
         }
+        else if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+            const freeze_header_t *p = header->entry;
+            if (p->module_name != module_name) {
+                continue;
+            }
+            module_obj = MP_OBJ_FROM_PTR(p->module);
+            memcpy(p->ram_dst, p->ram_src, p->ram_len);
+        }
+        else {
+            continue;
+        }
+
+        mp_map_t *module_map = &MP_STATE_VM(mp_loaded_modules_dict).map;
+        mp_map_elem_t *elem = mp_map_lookup(module_map, MP_OBJ_NEW_QSTR(module_name), MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
+        elem->value = module_obj;
+        return module_obj;
     }
     return MP_OBJ_NULL;
 }
@@ -1030,12 +981,23 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     }
 
     freeze_writer_t freezer;
-    freeze_writer_init(&freezer, true);
-    freeze_ptr_t fheader = freeze_allocate(&freezer, sizeof(freeze_header_t), __alignof(freeze_header_t), false);
-    freeze_ptr_t fmodule = freeze_new_module(&freezer, module_obj);
-        
+    freeze_writer_init(&freezer, FREEZE_MODULE_FLASH_HEAP_TYPE);
+    flash_ptr_t fmodule = freeze_new_module(&freezer, module_obj);
+    
+    size_t ram_size = freezer.ram_end - freezer.ram_start;
+    flash_ptr_t ram_in_flash = freeze_allocate(&freezer, ram_size, 1, false);
+    flash_heap_pwrite(&freezer.heap, freezer.ram_start, ram_size, ram_in_flash);
+
+    flash_ptr_t fheader = freeze_allocate(&freezer, sizeof(freeze_header_t), __alignof__(freeze_header_t), false);
     freeze_seek(&freezer, fheader);
-    freeze_write_header(&freezer, FREEZE_MODULE, fmodule);
+    freeze_write_int(&freezer, module_name);
+    freeze_write_fptr(&freezer, fmodule);
+    freeze_write_fptr(&freezer, ram_in_flash);
+    freeze_write_fptr(&freezer, (flash_ptr_t)freezer.ram_start);
+    freeze_write_size(&freezer, ram_size);
+    
+    freezer.heap.entry = fheader;
+    freeze_writer_commit(&freezer);
     freeze_writer_deinit(&freezer);
     
     module_obj = (void *)fmodule;
@@ -1045,8 +1007,31 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     return module_obj;
 }
 
+STATIC void freeze_qstrs(void) {
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        freeze_writer_t freezer;
+        freeze_writer_init(&freezer, FREEZE_QSTR_POOL_FLASH_HEAP_TYPE);
+        flash_ptr_t fpool = freeze_new_qstr_pool(&freezer, MP_STATE_VM(last_pool));
+        if (fpool) {
+            freezer.heap.entry = fpool;
+            freeze_writer_commit(&freezer);
+            freeze_set_qstr_pool((void *)fpool);
+        }
+        freeze_checkpoint = flash_heap_next_header();
+        freeze_writer_deinit(&freezer);
+        nlr_pop();
+    }
+    else {
+        if (flash_heap_truncate(freeze_checkpoint) < 0) {
+            panic("flash heap corrupted");
+        }
+        nlr_jump(nlr.ret_val);
+    }
+}
+
 STATIC void freeze_mode_nlr_callback(void *ctx) {
-    freeze_mode--;
+        freeze_mode--;
 }
 
 mp_obj_t freeze_import(size_t n_args, const mp_obj_t *args) {
@@ -1060,38 +1045,296 @@ mp_obj_t freeze_import(size_t n_args, const mp_obj_t *args) {
     mp_obj_tuple_get(result, &len, &items);
 
     freeze_mode++;
-    size_t entry_flash_size = freeze_last_flash_size;
-    size_t entry_ram_size = freeze_last_ram_size;
+    size_t start_flash_size;
+    size_t start_ram_size;
+    size_t start_ram_size2 = freeze_last_ram_size;
+    flash_heap_stats(&start_flash_size, &start_ram_size);
     nlr_jump_callback_node_t nlr_callback;
     nlr_push_jump_callback(&nlr_callback, freeze_mode_nlr_callback);
     for (size_t i = 0; i <n_args; i++) {
         items[i] = mp_builtin___import__(1, &args[i]);
     }
+    freeze_qstrs();
     nlr_pop_jump_callback(true);
 
-    freeze_writer_t freezer;
-    freeze_writer_init(&freezer, false);
-    freeze_ptr_t fheader = freeze_allocate(&freezer, sizeof(freeze_header_t), __alignof(freeze_header_t), false);
-    freeze_ptr_t fpool = freeze_new_qstr_pool(&freezer, MP_STATE_VM(last_pool));
-    if (fpool) {
-        freeze_seek(&freezer, fheader);
-        freeze_write_header(&freezer, FREEZE_QSTR_POOL, fpool);
-    }
-    freeze_writer_deinit(&freezer);
-
-    mp_printf(&mp_plat_print, "froze %u flash bytes, %u ram bytes\n", freeze_last_flash_size - entry_flash_size, freeze_last_ram_size - entry_ram_size);
+    size_t end_flash_size;
+    size_t end_ram_size;
+    flash_heap_stats(&end_flash_size, &end_ram_size);
+    size_t end_ram_size2 = freeze_last_ram_size;
+    mp_printf(&mp_plat_print, "froze %u flash bytes, %u ram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size + end_ram_size2 - start_ram_size2);
     return result;
 }
 
 mp_obj_t freeze_modules(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
-    const freeze_header_t *header = NULL;
-    while (freeze_header_next(&header)) {
-        if (header->type == FREEZE_MODULE) {
-            mp_obj_t module_obj = MP_OBJ_FROM_PTR(header->object);
-            mp_obj_t module_name_obj = mp_load_attr(module_obj, MP_QSTR___name__);
-            mp_obj_dict_store(dict, module_name_obj, module_obj);
+    const flash_heap_header_t *header = NULL;
+    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
+        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+            const freeze_header_t *module_header = header->entry;
+            mp_obj_t module_name = MP_OBJ_NEW_QSTR(module_header->module_name);
+            mp_obj_t module_obj = MP_OBJ_FROM_PTR(module_header->module);
+            mp_obj_dict_store(dict, module_name, module_obj);
         }
     }
     return dict;
+}
+
+
+// dynamic loader
+typedef struct {
+    const dl_linker_t *link_state;
+    size_t num_qstrs;
+    uint16_t *qstr_table;
+} freeze_link_state_t;
+
+// Machinery for running a C callback on the MP main thread
+typedef int (*freeze_schedule_fun_t)(va_list args);
+
+struct freeze_schedule_ctx {
+    freeze_schedule_fun_t func;
+    va_list args;
+    int ret;
+    TaskHandle_t task;
+};
+
+static mp_obj_t freeze_schedule_run(mp_obj_t arg) {
+    struct freeze_schedule_ctx *ctx = (void *)MP_OBJ_SMALL_INT_VALUE(arg);
+    ctx->ret = ctx->func(ctx->args);
+    xTaskNotifyGive(ctx->task);
+    return MP_OBJ_NULL;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(freeze_schedule_run_obj, freeze_schedule_run);
+
+static int freeze_schedule(freeze_schedule_fun_t fun, ...) {
+    va_list args;
+    va_start(args, fun);
+    if (mp_thread_get_state()) {
+        // Already on the MP main thread, so just execute the function.
+        int ret = fun(args);
+        va_end(args);
+        return ret;
+    }
+
+    struct freeze_schedule_ctx ctx = { fun, args, -1, xTaskGetCurrentTaskHandle() };
+    // Verify context pointer fits into a MP small int. We cannot allocate a MP large int here.
+    assert(MP_SMALL_INT_FITS((uintptr_t)&ctx));    
+    xTaskNotifyStateClear(NULL);
+    if (!mp_sched_schedule(MP_OBJ_FROM_PTR(&freeze_schedule_run_obj), MP_OBJ_NEW_SMALL_INT(&ctx))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    va_end(args);
+    return ctx.ret;
+}
+
+static int vfreeze_qstrs(va_list args) {
+    freeze_qstrs();
+    return 0;
+}
+
+static int freeze_post_link(const flash_heap_header_t *header) {
+    return freeze_schedule(vfreeze_qstrs);
+}
+
+static int vqstr_from_strn(va_list args) {
+    const char* str = va_arg(args, char *);
+    size_t len = va_arg(args, size_t);
+    return qstr_from_strn(str, len);
+}
+
+static int freeze_rewrite_obj(freeze_link_state_t *state, flash_ptr_t obj_addr);
+
+__attribute__((used))
+int ld_micropython(const dl_linker_t *link_state, dl_post_link_fun_t *post_link) {
+    freeze_link_state_t state = { link_state, 0 };
+    int result = -1;
+
+    flash_ptr_t dyn_addr = 0;
+    flash_ptr_t extmod_addr = 0;
+    Elf32_Dyn dyn;
+    while (dl_iterate_dynamic(link_state, &dyn_addr, &dyn) >= 0) {
+        if (dyn.d_tag == DT_NULL) {
+            break;
+        }
+        switch (dyn.d_tag) {
+            case DT_LOOS+1:
+                extmod_addr = dyn.d_un.d_ptr;
+                break;
+        }       
+    }
+    if (dyn_addr == 0) {
+        return -1;
+    }
+    if (extmod_addr == 0) {
+        return 0;
+    }
+
+    mp_extension_module_t extmod;
+    if (dl_linker_read(link_state, &extmod, sizeof(extmod), extmod_addr) < 0) {
+        goto cleanup;
+    }
+    state.num_qstrs = extmod.num_qstrs;
+    state.qstr_table = dl_realloc(link_state, NULL, state.num_qstrs * sizeof(uint16_t));
+    if (!state.qstr_table) {
+        goto cleanup;
+    }
+    for (size_t i = 0; i < extmod.num_qstrs; i++) {
+        const char *qstr;
+        if (dl_linker_read(link_state, &qstr, sizeof(qstr), (flash_ptr_t)(extmod.qstrs + i)) < 0) {
+            goto cleanup;
+        }
+        char str[256];
+        int br = dl_linker_read(link_state, &str, sizeof(str), (flash_ptr_t)qstr);
+        if (br < 0) {
+            goto cleanup;
+        }
+        size_t len = strnlen(str, br);
+        if (len == br) {
+            str[len] = '\0';
+            printf("qstr too long '%s...'\n", str);
+            errno = EINVAL;
+            goto cleanup;
+        }
+        uint16_t qid = freeze_schedule(vqstr_from_strn, str, len);
+        state.qstr_table[i] = qid;
+    }
+    if (dl_linker_write(link_state, state.qstr_table, extmod.num_qstrs * sizeof(uint16_t), (flash_ptr_t)extmod.qstr_table) < 0) {
+        goto cleanup;
+    }
+    for (const mp_rom_obj_t *obj = extmod.object_start; obj < extmod.object_end; obj++) {
+        if (freeze_rewrite_obj(&state, (flash_ptr_t)obj) < 0) {
+            goto cleanup;
+        }
+    }
+    *post_link = freeze_post_link;
+    result = 0;
+
+cleanup:
+    free(state.qstr_table);
+    return result;
+}
+
+void freeze_flash(const char *file) {
+    size_t start_flash_size;
+    size_t start_ram_size;
+    flash_heap_stats(&start_flash_size, &start_ram_size);    
+    if (dl_flash(file) < 0) {
+        mp_raise_OSError(errno);
+    }
+    freeze_qstrs();
+
+    size_t end_flash_size;
+    size_t end_ram_size;
+    flash_heap_stats(&end_flash_size, &end_ram_size);
+    mp_printf(&mp_plat_print, "froze %u flash bytes, %u ram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size);
+}
+
+
+// ### dict ###
+static int freeze_rewrite_map(freeze_link_state_t *state, const mp_map_t *map) {
+    for (size_t i = 0; i < map->alloc; i++) {
+        flash_ptr_t elem_addr = (flash_ptr_t)(map->table + i);
+        mp_map_elem_t elem;
+        if (dl_linker_read(state->link_state, &elem, sizeof(elem), elem_addr) < 0) {
+            return -1;
+        }
+        assert(mp_obj_is_qstr(elem.key));
+        if (freeze_rewrite_obj(state, elem_addr + offsetof(mp_map_elem_t, key)) < 0) {
+            return -1;
+        }
+        if (mp_obj_is_qstr(elem.value) && freeze_rewrite_obj(state, elem_addr + offsetof(mp_map_elem_t, value)) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int freeze_rewrite_immutable_dict_ptr(freeze_link_state_t *state, flash_ptr_t dict_addr) {
+    mp_obj_dict_t dict;
+    if (dl_linker_read(state->link_state, &dict, sizeof(dict), dict_addr) < 0) {
+        return -1;
+    }    
+    assert(dict.base.type == &mp_type_dict);
+    return freeze_rewrite_map(state, &dict.map);
+}
+
+// ### module ###
+static int freeze_rewrite_module(freeze_link_state_t *state, flash_ptr_t module_addr) {
+    mp_obj_module_t module;
+    if (dl_linker_read(state->link_state, &module, sizeof(module), module_addr) < 0) {
+        return -1;
+    }
+    assert(module.base.type == &mp_type_module);
+
+    return freeze_rewrite_immutable_dict_ptr(state, (flash_ptr_t)module.globals);
+}
+
+// ### type ###
+static int freeze_rewrite_type(freeze_link_state_t *state, flash_ptr_t type_addr) {
+    mp_obj_type_t type;
+    if (dl_linker_read(state->link_state, &type, sizeof(type), type_addr) < 0) {
+        return -1;
+    }
+    assert(type.base.type == &mp_type_type);
+
+    if (mp_extmod_qstr(state->qstr_table, state->num_qstrs, &type.name) < 0) {
+        return -1;
+    }
+    if (dl_linker_write(state->link_state, &type.name, sizeof(type.name), type_addr + offsetof(mp_obj_type_t, name)) < 0) {
+        return -1;
+    }
+
+    if (type.slot_index_locals_dict) {
+        flash_ptr_t slot_addr = type_addr + offsetof(mp_obj_type_t, slots) + (type.slot_index_locals_dict - 1) * sizeof(void *);
+        const mp_obj_dict_t *locals_dict;
+        if (dl_linker_read(state->link_state, &locals_dict, sizeof(locals_dict), slot_addr) < 0) {
+            return -1;
+        }
+        return freeze_rewrite_immutable_dict_ptr(state, (flash_ptr_t)locals_dict);
+    }
+    return 0;
+}
+
+// ### raw_obj ###
+static int freeze_rewrite_raw_obj(freeze_link_state_t *state, flash_ptr_t raw_obj_addr) {
+    if (raw_obj_addr == 0) {
+        return 0;
+    }
+
+    mp_obj_base_t base;
+    if (dl_linker_read(state->link_state, &base, sizeof(base), raw_obj_addr) < 0) {
+        return -1;
+    }
+
+    if (base.type == &mp_type_type) {
+        return freeze_rewrite_type(state, raw_obj_addr);
+    }
+    else if (base.type == &mp_type_module) {
+        return freeze_rewrite_module(state, raw_obj_addr);
+    }
+    else {
+        printf("don't know how to refreeze type %p\n", base.type);
+        errno = EINVAL;
+        return -1;
+    }
+}
+
+static int freeze_rewrite_obj(freeze_link_state_t *state, flash_ptr_t obj_addr) {
+    mp_obj_t obj;
+    if (dl_linker_read(state->link_state, &obj, sizeof(obj), obj_addr) < 0) {
+        return -1;
+    }
+    if (mp_obj_is_qstr(obj)) {
+        qstr_short_t qid = MP_OBJ_QSTR_VALUE(obj);
+        if (mp_extmod_qstr(state->qstr_table, state->num_qstrs, &qid) < 0) {
+            return -1;
+        }
+        obj = MP_OBJ_NEW_QSTR(qid);
+        dl_linker_write(state->link_state, &obj, sizeof(obj), obj_addr);
+    } else if (mp_obj_is_obj(obj)) {
+        flash_ptr_t raw_obj_addr = (flash_ptr_t)MP_OBJ_TO_PTR(obj);
+        return freeze_rewrite_raw_obj(state, raw_obj_addr);
+    } 
+    return 0;
 }

@@ -193,7 +193,7 @@ STATIC qstr qstr_add(mp_uint_t hash, mp_uint_t len, const char *q_ptr) {
 
     // make sure we have room in the pool for a new qstr
     if (MP_STATE_VM(last_pool)->len >= MP_STATE_VM(last_pool)->alloc) {
-        size_t new_alloc = MP_STATE_VM(last_pool)->alloc * 2;
+        size_t new_alloc = MAX(MICROPY_ALLOC_QSTR_ENTRIES_INIT, MP_STATE_VM(last_pool)->alloc) * 2;
         #ifdef MICROPY_QSTR_EXTRA_POOL
         // Put a lower bound on the allocation size in case the extra qstr pool has few entries
         new_alloc = MAX(MICROPY_ALLOC_QSTR_ENTRIES_INIT, new_alloc);

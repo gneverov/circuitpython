@@ -52,6 +52,10 @@ static int flash_ioctl(void *ctx, unsigned long request, va_list args) {
             return 0;
         }
 
+        case BLKFLSBUF: {
+            return 0;
+        }
+
         case BLKSSZGET: {
             int *ssize = va_arg(args, int *);
             *ssize = FLASH_SECTOR_SIZE;

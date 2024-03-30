@@ -54,8 +54,9 @@ cleanup:
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_FT6206,
-    MP_QSTR_FT6206,
+    MP_ROM_QSTR_CONST(MP_QSTR_FT6206),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_FT6206_make_new,
     parent, &lvgl_type_indev
     );
+MP_REGISTER_OBJECT(lvgl_type_FT6206);

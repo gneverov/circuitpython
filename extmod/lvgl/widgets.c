@@ -8,13 +8,14 @@
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_button,
-    MP_QSTR_Button,
+    MP_ROM_QSTR_CONST(MP_QSTR_Button),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_obj_make_new,
     attr, lvgl_obj_attr,
     parent, &lvgl_type_obj,
     protocol, &lv_button_class
     );
+MP_REGISTER_OBJECT(lvgl_type_button);
 
 
 STATIC void lvgl_label_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
@@ -30,13 +31,14 @@ STATIC void lvgl_label_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_label,
-    MP_QSTR_Label,
+    MP_ROM_QSTR_CONST(MP_QSTR_Label),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_obj_make_new,
     attr, lvgl_label_attr,
     parent, &lvgl_type_obj,
     protocol, &lv_label_class
     );
+MP_REGISTER_OBJECT(lvgl_type_label);
 
 
 STATIC void lv_slider_set_value_0(lv_obj_t * obj, int32_t value) {
@@ -56,10 +58,11 @@ STATIC void lvgl_slider_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_slider,
-    MP_QSTR_Slider,
+    MP_ROM_QSTR_CONST(MP_QSTR_Slider),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_obj_make_new,
     attr, lvgl_slider_attr,
     parent, &lvgl_type_obj,
     protocol, &lv_slider_class
     );
+MP_REGISTER_OBJECT(lvgl_type_slider);
