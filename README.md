@@ -9,7 +9,7 @@ Interoperability means the ease at which non-Python (e.g., C) code can be integr
 If you are interested in using MicroPythonRT, please open an [issue](https://github.com/gneverov/micropythonrt/issues) to let me know how MicroPythonRT helps your application, or what additional functionality you need, or to simply report bugs. Your feedback will help to direct future development efforts.
 
 ## Highlights
-- Support for dynamic linking (i.e., DLLs or shared libraries). Native code libraries can be built, distributed, and installed without recompiling or reinstalling the firmware. This allows users to add new native code to their application, with similar ease to which Python code can be added by copying files to the device.
+- Support for [dynamic linking](/examples/dynlink/README.md) (i.e., DLLs or shared libraries). Native code libraries can be built, distributed, and installed without recompiling or reinstalling the firmware. This allows users to add new native code to their application, with similar ease to which Python code can be added by copying files to the device.
 
 - All use of busy polling and background tasks have been removed from the MicroPython core and replaced with FreeRTOS-based concurrency.
 
