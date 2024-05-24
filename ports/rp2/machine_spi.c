@@ -32,6 +32,8 @@
 #include "hardware/spi.h"
 #include "hardware/dma.h"
 
+#include "pico/spi.h"
+
 #define DEFAULT_SPI_BAUDRATE    (1000000)
 #define DEFAULT_SPI_POLARITY    (0)
 #define DEFAULT_SPI_PHASE       (0)
@@ -91,7 +93,7 @@
 
 typedef struct _machine_spi_obj_t {
     mp_obj_base_t base;
-    spi_inst_t *const spi_inst;
+    // pico_spi_ll_t *spi;
     uint8_t spi_id;
     uint8_t polarity;
     uint8_t phase;
@@ -105,13 +107,13 @@ typedef struct _machine_spi_obj_t {
 
 STATIC machine_spi_obj_t machine_spi_obj[] = {
     {
-        {&machine_spi_type}, spi0, 0,
+        {&machine_spi_type}, 0,
         DEFAULT_SPI_POLARITY, DEFAULT_SPI_PHASE, DEFAULT_SPI_BITS, DEFAULT_SPI_FIRSTBIT,
         MICROPY_HW_SPI0_SCK, MICROPY_HW_SPI0_MOSI, MICROPY_HW_SPI0_MISO,
         0,
     },
     {
-        {&machine_spi_type}, spi1, 1,
+        {&machine_spi_type}, 1,
         DEFAULT_SPI_POLARITY, DEFAULT_SPI_PHASE, DEFAULT_SPI_BITS, DEFAULT_SPI_FIRSTBIT,
         MICROPY_HW_SPI1_SCK, MICROPY_HW_SPI1_MOSI, MICROPY_HW_SPI1_MISO,
         0,
@@ -186,12 +188,14 @@ mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
             mp_raise_NotImplementedError(MP_ERROR_TEXT("LSB"));
         }
 
-        spi_init(self->spi_inst, self->baudrate);
-        self->baudrate = spi_set_baudrate(self->spi_inst, self->baudrate);
-        spi_set_format(self->spi_inst, self->bits, self->polarity, self->phase, self->firstbit);
+        pico_spi_ll_t *spi = &pico_spis_ll[self->spi_id];
+        pico_spi_take(spi, portMAX_DELAY);
+        spi_init(spi->inst, self->baudrate);
+        spi_set_format(spi->inst, self->bits, self->polarity, self->phase, self->firstbit);
         gpio_set_function(self->sck, GPIO_FUNC_SPI);
         gpio_set_function(self->miso, GPIO_FUNC_SPI);
         gpio_set_function(self->mosi, GPIO_FUNC_SPI);
+        pico_spi_give(spi);
     }
 
     return MP_OBJ_FROM_PTR(self);
@@ -214,22 +218,18 @@ STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
 
     // Reconfigure the baudrate if requested.
     if (args[ARG_baudrate].u_int != -1) {
-        self->baudrate = spi_set_baudrate(self->spi_inst, args[ARG_baudrate].u_int);
+        self->baudrate = args[ARG_baudrate].u_int;
     }
 
     // Reconfigure the format if requested.
-    bool set_format = false;
     if (args[ARG_polarity].u_int != -1) {
         self->polarity = args[ARG_polarity].u_int;
-        set_format = true;
     }
     if (args[ARG_phase].u_int != -1) {
         self->phase = args[ARG_phase].u_int;
-        set_format = true;
     }
     if (args[ARG_bits].u_int != -1) {
         self->bits = args[ARG_bits].u_int;
-        set_format = true;
     }
     if (args[ARG_firstbit].u_int != -1) {
         self->firstbit = args[ARG_firstbit].u_int;
@@ -237,13 +237,14 @@ STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
             mp_raise_NotImplementedError(MP_ERROR_TEXT("LSB"));
         }
     }
-    if (set_format) {
-        spi_set_format(self->spi_inst, self->bits, self->polarity, self->phase, self->firstbit);
-    }
 }
 
 STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
     machine_spi_obj_t *self = (machine_spi_obj_t *)self_in;
+    pico_spi_ll_t *spi = &pico_spis_ll[self->spi_id];
+    pico_spi_take(spi, portMAX_DELAY);
+    spi_set_baudrate(spi->inst, self->baudrate);
+    spi_set_format(spi->inst, self->bits, self->polarity, self->phase, self->firstbit);
     // Use DMA for large transfers if channels are available
     const size_t dma_min_size_threshold = 32;
     int chan_tx = -1;
@@ -261,21 +262,21 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
         uint8_t dev_null;
         dma_channel_config c = dma_channel_get_default_config(chan_tx);
         channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-        channel_config_set_dreq(&c, spi_get_index(self->spi_inst) ? DREQ_SPI1_TX : DREQ_SPI0_TX);
+        channel_config_set_dreq(&c, self->spi_id ? DREQ_SPI1_TX : DREQ_SPI0_TX);
         dma_channel_configure(chan_tx, &c,
-            &spi_get_hw(self->spi_inst)->dr,
+            &spi_get_hw(spi->inst)->dr,
             src,
             len,
             false);
 
         c = dma_channel_get_default_config(chan_rx);
         channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-        channel_config_set_dreq(&c, spi_get_index(self->spi_inst) ? DREQ_SPI1_RX : DREQ_SPI0_RX);
+        channel_config_set_dreq(&c, self->spi_id ? DREQ_SPI1_RX : DREQ_SPI0_RX);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, !write_only);
         dma_channel_configure(chan_rx, &c,
             write_only ? &dev_null : dest,
-            &spi_get_hw(self->spi_inst)->dr,
+            &spi_get_hw(spi->inst)->dr,
             len,
             false);
 
@@ -295,11 +296,12 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
     if (!use_dma) {
         // Use software for small transfers, or if couldn't claim two DMA channels
         if (write_only) {
-            spi_write_blocking(self->spi_inst, src, len);
+            spi_write_blocking(spi->inst, src, len);
         } else {
-            spi_write_read_blocking(self->spi_inst, src, dest, len);
+            spi_write_read_blocking(spi->inst, src, dest, len);
         }
     }
+    pico_spi_give(spi);
 }
 
 STATIC const mp_machine_spi_p_t machine_spi_p = {

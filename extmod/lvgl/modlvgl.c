@@ -5,9 +5,14 @@
 #include "semphr.h"
 #include "task.h"
 
-#include "./modlvgl.h"
+#include "./anim.h"
+#include "./canvas.h"
+#include "./color.h"
 #include "./display.h"
+#include "./draw/moddraw.h"
+#include "./font.h"
 #include "./indev.h"
+#include "./modlvgl.h"
 #include "./obj.h"
 #include "./queue.h"
 #include "./style.h"
@@ -64,6 +69,7 @@ static void lvgl_loop(void *params) {
     xTaskNotifyGive(caller);
 
     lvgl_queue_default = lvgl_queue_alloc(20);
+    lvgl_ptr_copy(&lvgl_queue_default->base);
     while (!lvgl_exit) {
         uint32_t sleep_ms = lv_task_handler();
         TickType_t sleep_ticks = sleep_ms == LV_NO_TIMER_READY ? portMAX_DELAY : pdMS_TO_TICKS(sleep_ms);
@@ -72,8 +78,8 @@ static void lvgl_loop(void *params) {
         xSemaphoreTake(lvgl_mutex, portMAX_DELAY);        
     }
 
-    lvgl_queue_default->writer_closed = 1;
-    lvgl_queue_free(lvgl_queue_default);
+    lvgl_queue_close(lvgl_queue_default);
+    lvgl_ptr_delete(&lvgl_queue_default->base);
     lvgl_queue_default = NULL;
     lv_deinit();
     lvgl_task = NULL;
@@ -130,13 +136,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_deinit_obj, lvgl_deinit);
 
 STATIC mp_obj_t lvgl_run_forever(void) {
     lvgl_lock();
-    lvgl_queue_t *queue = lvgl_queue_copy(lvgl_queue_default);
-    lvgl_unlock();
-    mp_obj_t obj = lvgl_queue_from(queue);
-    lvgl_lock();
-    lvgl_queue_free(queue);
-    queue = NULL;
-    lvgl_unlock();
+    mp_obj_t obj = lvgl_unlock_ptr(&lvgl_queue_default->base);
 
     if (obj == mp_const_none) {
         return mp_const_none;
@@ -154,27 +154,100 @@ STATIC mp_obj_t lvgl_getattr(mp_obj_t attr) {
     if (MP_OBJ_QSTR_VALUE(attr) == MP_QSTR_display) {
         return lvgl_display_get_default();
     }
+    if (MP_OBJ_QSTR_VALUE(attr) == MP_QSTR_screen) {
+        lvgl_lock();
+        lv_obj_t *obj = lv_screen_active();
+        lvgl_handle_t *handle = lvgl_obj_get_handle(obj);
+        return lvgl_unlock_ptr(&handle->base);
+    }
+    if (MP_OBJ_QSTR_VALUE(attr) == MP_QSTR_indev) {
+        return lvgl_indev_get_active();
+    }    
     return MP_OBJ_NULL;
 }
 MP_DEFINE_CONST_FUN_OBJ_1(lvgl_getattr_obj, lvgl_getattr);
 
+STATIC mp_obj_t lvgl_load_screen(mp_obj_t obj_in) {
+    lvgl_handle_t *handle = lvgl_obj_get_checked(obj_in);
+    lvgl_lock();
+    lv_obj_t *scr = lvgl_lock_obj(handle);
+    lv_screen_load(scr);
+    lvgl_unlock();
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_load_screen_obj, lvgl_load_screen);
+
+STATIC mp_obj_t lvgl_color_lighten(mp_obj_t c_in, mp_obj_t lvl_in) {
+    lv_color_t c = lv_color_hex(mp_obj_get_int(c_in));
+    lv_opa_t lvl = mp_obj_get_int(lvl_in);
+    c = lv_color_lighten(c, lvl);
+    return mp_obj_new_int(lv_color_to_int(c));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_lighten_obj, lvgl_color_lighten);
+
+STATIC mp_obj_t lvgl_color_darken(mp_obj_t c_in, mp_obj_t lvl_in) {
+    lv_color_t c = lv_color_hex(mp_obj_get_int(c_in));
+    lv_opa_t lvl = mp_obj_get_int(lvl_in);
+    c = lv_color_darken(c, lvl);
+    return mp_obj_new_int(lv_color_to_int(c));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_darken_obj, lvgl_color_darken);
+
+STATIC mp_obj_t lvgl_color_black(void) {
+    lv_color_t c = lv_color_black();
+    return mp_obj_new_int(lv_color_to_int(c));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_black_obj, lvgl_color_black);
+
+STATIC mp_obj_t lvgl_color_white(void) {
+    lv_color_t c = lv_color_white();
+    return mp_obj_new_int(lv_color_to_int(c));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_white_obj, lvgl_color_white);
+
+STATIC mp_obj_t lvgl_pct(mp_obj_t value_in) {
+    int32_t value = mp_obj_get_int(value_in);
+    return mp_obj_new_int(lv_pct(value));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_pct_obj, lvgl_pct);
+
 STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_lvgl) },
+    { MP_ROM_QSTR(MP_QSTR_draw),            MP_ROM_PTR(&lvgl_module_draw) },
     { MP_ROM_QSTR(MP_QSTR___getattr__),     MP_ROM_PTR(&lvgl_getattr_obj) },
     { MP_ROM_QSTR(MP_QSTR_init),            MP_ROM_PTR(&lvgl_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit),          MP_ROM_PTR(&lvgl_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_run_forever),     MP_ROM_PTR(&lvgl_run_forever_obj) },
+    { MP_ROM_QSTR(MP_QSTR_Anim),            MP_ROM_PTR(&lvgl_type_anim) },
+    { MP_ROM_QSTR(MP_QSTR_AnimPath),        MP_ROM_PTR(&lvgl_type_anim_path) },
     // { MP_ROM_QSTR(MP_QSTR_Class),           MP_ROM_PTR(&lvgl_type_class) },
     { MP_ROM_QSTR(MP_QSTR_Button),          MP_ROM_PTR(&lvgl_type_button) },
+    { MP_ROM_QSTR(MP_QSTR_Canvas),          MP_ROM_PTR(&lvgl_type_canvas) },
+    { MP_ROM_QSTR(MP_QSTR_ColorFilter),     MP_ROM_PTR(&lvgl_type_color_filter) },
     { MP_ROM_QSTR(MP_QSTR_Display),         MP_ROM_PTR(&lvgl_type_display) },
+    { MP_ROM_QSTR(MP_QSTR_Font),            MP_ROM_PTR(&lvgl_type_font) },
+    // { MP_ROM_QSTR(MP_QSTR_GradDsc),         MP_ROM_PTR(&lvgl_type_grad_dsc) },
     { MP_ROM_QSTR(MP_QSTR_InDev),           MP_ROM_PTR(&lvgl_type_indev) },
     { MP_ROM_QSTR(MP_QSTR_Label),           MP_ROM_PTR(&lvgl_type_label) },
     { MP_ROM_QSTR(MP_QSTR_Object),          MP_ROM_PTR(&lvgl_type_obj) },
     { MP_ROM_QSTR(MP_QSTR_ObjectCollection), MP_ROM_PTR(&lvgl_type_obj_list) },
+    { MP_ROM_QSTR(MP_QSTR_Palette),         MP_ROM_PTR(&lvgl_type_palette) },
     { MP_ROM_QSTR(MP_QSTR_Slider),          MP_ROM_PTR(&lvgl_type_slider) },
+    { MP_ROM_QSTR(MP_QSTR_Style),           MP_ROM_PTR(&lvgl_type_style) },
+    { MP_ROM_QSTR(MP_QSTR_StyleTransitionDsc), MP_ROM_PTR(&lvgl_type_style_transition_dsc) },
+    { MP_ROM_QSTR(MP_QSTR_Switch),          MP_ROM_PTR(&lvgl_type_switch) },
 
     { MP_ROM_QSTR(MP_QSTR_FT6206),          MP_ROM_PTR(&lvgl_type_FT6206) },
     { MP_ROM_QSTR(MP_QSTR_ILI9341),         MP_ROM_PTR(&lvgl_type_ILI9341) },
+
+    { MP_ROM_QSTR(MP_QSTR_load_screen),     MP_ROM_PTR(&lvgl_load_screen_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_color_lighten),   MP_ROM_PTR(&lvgl_color_lighten_obj) },
+    { MP_ROM_QSTR(MP_QSTR_color_darken),    MP_ROM_PTR(&lvgl_color_darken_obj) },
+    { MP_ROM_QSTR(MP_QSTR_color_black),     MP_ROM_PTR(&lvgl_color_black_obj) },
+    { MP_ROM_QSTR(MP_QSTR_color_white),     MP_ROM_PTR(&lvgl_color_white_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_pct),             MP_ROM_PTR(&lvgl_pct_obj) },
 
 
     // enum lv_align_t
@@ -201,6 +274,58 @@ STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ALIGN_OUT_RIGHT_TOP),     MP_ROM_INT(LV_ALIGN_OUT_RIGHT_TOP) },
     { MP_ROM_QSTR(MP_QSTR_ALIGN_OUT_RIGHT_MID),     MP_ROM_INT(LV_ALIGN_OUT_RIGHT_MID) },
     { MP_ROM_QSTR(MP_QSTR_ALIGN_OUT_RIGHT_BOTTOM),  MP_ROM_INT(LV_ALIGN_OUT_RIGHT_BOTTOM) },
+
+
+    // enum lv_base_dir_t
+    { MP_ROM_QSTR(MP_QSTR_BASE_DIR_LTR),        MP_ROM_INT(LV_BASE_DIR_LTR) },
+    { MP_ROM_QSTR(MP_QSTR_BASE_DIR_RTL),        MP_ROM_INT(LV_BASE_DIR_RTL) },
+    { MP_ROM_QSTR(MP_QSTR_BASE_DIR_AUTO),       MP_ROM_INT(LV_BASE_DIR_AUTO) },
+
+    { MP_ROM_QSTR(MP_QSTR_BASE_DIR_NEUTRAL),    MP_ROM_INT(LV_BASE_DIR_NEUTRAL) },
+    { MP_ROM_QSTR(MP_QSTR_BASE_DIR_WEAK),       MP_ROM_INT(LV_BASE_DIR_WEAK) },
+
+
+    // enum lv_label_long_mode_t
+    { MP_ROM_QSTR(MP_QSTR_LABEL_LONG_WRAP),             MP_ROM_INT(LV_LABEL_LONG_WRAP) },
+    { MP_ROM_QSTR(MP_QSTR_LABEL_LONG_DOT),              MP_ROM_INT(LV_LABEL_LONG_DOT) },
+    { MP_ROM_QSTR(MP_QSTR_LABEL_LONG_SCROLL),           MP_ROM_INT(LV_LABEL_LONG_SCROLL) },
+    { MP_ROM_QSTR(MP_QSTR_LABEL_LONG_SCROLL_CIRCULAR),  MP_ROM_INT(LV_LABEL_LONG_SCROLL_CIRCULAR) },
+    { MP_ROM_QSTR(MP_QSTR_LABEL_LONG_CLIP),             MP_ROM_INT(LV_LABEL_LONG_CLIP) },
+    
+
+    { MP_ROM_QSTR(MP_QSTR_RADIUS_CIRCLE),   MP_ROM_INT(LV_RADIUS_CIRCLE) },
+    { MP_ROM_QSTR(MP_QSTR_SIZE_CONTENT),    MP_ROM_INT(LV_SIZE_CONTENT) },
+
+
+    // enum lv_state_t
+    { MP_ROM_QSTR(MP_QSTR_STATE_DEFAULT),   MP_ROM_INT(LV_STATE_DEFAULT) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_CHECKED),   MP_ROM_INT(LV_STATE_CHECKED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_FOCUSED),   MP_ROM_INT(LV_STATE_FOCUSED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_FOCUS_KEY), MP_ROM_INT(LV_STATE_FOCUS_KEY) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_EDITED),    MP_ROM_INT(LV_STATE_EDITED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_HOVERED),   MP_ROM_INT(LV_STATE_HOVERED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_PRESSED),   MP_ROM_INT(LV_STATE_PRESSED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_SCROLLED),  MP_ROM_INT(LV_STATE_SCROLLED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_DISABLED),  MP_ROM_INT(LV_STATE_DISABLED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_ANY),       MP_ROM_INT(LV_STATE_ANY) },
+
+
+    // enum lv_part_t
+    { MP_ROM_QSTR(MP_QSTR_PART_MAIN),       MP_ROM_INT(LV_PART_MAIN) },
+    { MP_ROM_QSTR(MP_QSTR_PART_SCROLLBAR),  MP_ROM_INT(LV_PART_SCROLLBAR) },
+    { MP_ROM_QSTR(MP_QSTR_PART_INDICATOR),  MP_ROM_INT(LV_PART_INDICATOR) },
+    { MP_ROM_QSTR(MP_QSTR_PART_KNOB),       MP_ROM_INT(LV_PART_KNOB) },
+    { MP_ROM_QSTR(MP_QSTR_PART_SELECTED),   MP_ROM_INT(LV_PART_SELECTED) },
+    { MP_ROM_QSTR(MP_QSTR_PART_ITEMS),      MP_ROM_INT(LV_PART_ITEMS) },
+    { MP_ROM_QSTR(MP_QSTR_PART_CURSOR),     MP_ROM_INT(LV_PART_CURSOR) },
+    { MP_ROM_QSTR(MP_QSTR_PART_ANY),         MP_ROM_INT(LV_PART_ANY) },
+
+
+    // enum lv_text_align_t
+    { MP_ROM_QSTR(MP_QSTR_TEXT_ALIGN_AUTO),     MP_ROM_INT(LV_TEXT_ALIGN_AUTO), },
+    { MP_ROM_QSTR(MP_QSTR_TEXT_ALIGN_LEFT),     MP_ROM_INT(LV_TEXT_ALIGN_LEFT), },
+    { MP_ROM_QSTR(MP_QSTR_TEXT_ALIGN_CENTER),   MP_ROM_INT(LV_TEXT_ALIGN_CENTER), },
+    { MP_ROM_QSTR(MP_QSTR_TEXT_ALIGN_RIGHT),    MP_ROM_INT(LV_TEXT_ALIGN_RIGHT), },
 
 
     // enum lv_event_code_t
@@ -273,6 +398,30 @@ STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_EVENT_FLUSH_FINISH),          MP_ROM_INT(LV_EVENT_FLUSH_FINISH) },
 
     // { MP_ROM_QSTR(MP_QSTR_EVENT_PREPROCESS = 0x80), MP_ROM_INT(LV_EVENT_PREPROCESS = 0x80) },
+
+    /**
+     * Opacity percentages.
+     */
+    { MP_ROM_QSTR(MP_QSTR_OPA_TRANSP),      MP_ROM_INT(LV_OPA_TRANSP) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_0),           MP_ROM_INT(LV_OPA_0) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_10),          MP_ROM_INT(LV_OPA_10) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_20),          MP_ROM_INT(LV_OPA_20) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_30),          MP_ROM_INT(LV_OPA_30) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_40),          MP_ROM_INT(LV_OPA_40) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_50),          MP_ROM_INT(LV_OPA_50) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_60),          MP_ROM_INT(LV_OPA_60) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_70),          MP_ROM_INT(LV_OPA_70) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_80),          MP_ROM_INT(LV_OPA_80) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_90),          MP_ROM_INT(LV_OPA_90) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_100),         MP_ROM_INT(LV_OPA_100) },
+    { MP_ROM_QSTR(MP_QSTR_OPA_COVER),       MP_ROM_INT(LV_OPA_COVER) },
+
+    /**
+     * The direction of the gradient.
+     */
+    { MP_ROM_QSTR(MP_QSTR_GRAD_DIR_NONE),   MP_ROM_INT(LV_GRAD_DIR_NONE) }, /**< No gradient (the `grad_color` property is ignored)*/
+    { MP_ROM_QSTR(MP_QSTR_GRAD_DIR_VER),    MP_ROM_INT(LV_GRAD_DIR_VER) },  /**< Vertical (top to bottom) gradient*/
+    { MP_ROM_QSTR(MP_QSTR_GRAD_DIR_HOR),    MP_ROM_INT(LV_GRAD_DIR_HOR) },  /**< Horizontal (left to right) gradient*/  
 };
 STATIC MP_DEFINE_CONST_DICT(lvgl_module_globals, lvgl_module_globals_table);
 

@@ -114,6 +114,7 @@ static int tinyuf2_read(void *ctx, void *buf, size_t size) {
         lba++;
         buffer += 512;
         count += 512;
+        file->ptr += 512;
     }
     return count;
 }
@@ -133,6 +134,7 @@ static int tinyuf2_write(void *ctx, const void *buf, size_t size) {
         lba++;
         buffer += 512;
         count += 512;
+        file->ptr += 512;
     }
     return count;
 }

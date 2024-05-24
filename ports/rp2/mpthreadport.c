@@ -25,6 +25,7 @@
  * THE SOFTWARE.
  */
 
+#include <malloc.h>
 #include <sys/unistd.h>
 
 #include "py/runtime.h"
@@ -42,25 +43,30 @@ void mp_thread_end_atomic_section(uint32_t state) {
     taskEXIT_CRITICAL();
 }
 
-#if MICROPY_PY_THREAD
-typedef struct _pythread_t {
+#if MICROPY_PY_THREAD || 1
+struct mp_thread_entry_shim {
     void *(*entry)(void *);
     void *arg;
-    uint32_t usStackDepth;
-    StackType_t *pxStackBase;
-    TaskHandle_t task;
-    struct _pythread_t *next;
-} pythread_t;
+};
 
-MP_REGISTER_ROOT_POINTER(struct _pythread_t *thread_list);
+STATIC bool mp_thread_iterate(thread_t **pthread, mp_state_thread_t **pstate) {
+    while (thread_iterate(pthread)) {
+        thread_t *thread = *pthread;
+        *pstate = pvTaskGetThreadLocalStoragePointer(thread->handle, TLS_INDEX_APP);
+        if (*pstate) {
+            return true;
+        }
+        thread_detach(thread);
+    }
+    *pstate = NULL;
+    return false;
+}
 
-STATIC void pythread_entry(void *pvParameters) {
-    pythread_t *thread = pvParameters;
-    task_init();
-    void *arg = thread->arg;
-    thread->arg = NULL;
-    thread->entry(arg);
-    vTaskDelete(NULL);
+STATIC void mp_thread_entry(void *pvParameters) {
+    struct mp_thread_entry_shim *pshim = pvParameters;
+    struct mp_thread_entry_shim shim = *pshim;
+    free(pshim);
+    shim.entry(shim.arg);
 }
 
 // Initialise threading support.
@@ -69,27 +75,44 @@ void mp_thread_init(void) {
 
 // Shutdown threading support -- stops the second thread.
 void mp_thread_deinit(void) {
+    mp_obj_t exc = mp_obj_new_exception(&mp_type_SystemExit);
+    thread_t *thread = NULL;
+    mp_state_thread_t *state;
+    while (mp_thread_iterate(&thread, &state)) {
+        if (thread == thread_current()) {
+            thread_detach(thread);
+            continue;
+        }
+        state->mp_pending_exception = exc;
+        thread_interrupt(thread);
+
+        MP_THREAD_GIL_EXIT();
+        thread_join(thread, portMAX_DELAY);
+        MP_THREAD_GIL_ENTER();
+
+        thread_detach(thread);
+        thread = NULL;
+    }
 }
 
 void mp_thread_gc_others(void) {
-    pythread_t *thread = MP_STATE_VM(thread_list);
-    while (thread) {
-        // Collect core1's stack if it is active.
-        gc_collect_root((void **)thread->pxStackBase, thread->usStackDepth);
-        gc_collect_root(&thread->arg, 1);
-        thread = thread->next;
-    }
-
-    if (!mp_thread_is_main_thread()) {
-        // GC running on core1, trace core0's stack.
-        gc_collect_root((void **)&__MpStackBottom, (&__MpStackTop - &__MpStackBottom) / sizeof(uintptr_t));
+    thread_t *thread = NULL;
+    mp_state_thread_t *state;
+    while (mp_thread_iterate(&thread, &state)) {
+        TaskHandle_t handle = thread_suspend(thread);
+        if (handle != xTaskGetCurrentTaskHandle()) {
+            void **stack_top = (void **)task_pxTopOfStack(handle);
+            void **stack_bottom = (void **)state->stack_top;
+            gc_collect_root(stack_top, stack_bottom - stack_top);
+        }
+        thread_resume(handle);
+        thread_detach(thread);
     }
 }
 
 mp_uint_t mp_thread_get_id(void) {
-    // On RP2, there are only two threads, one for each core, so the thread id
-    // is the core number.
-    return getpid();
+    thread_t *thread = thread_current();
+    return thread->id;
 }
 
 mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
@@ -104,40 +127,27 @@ mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size
     *stack_size = stack_num_words * sizeof(StackType_t);
 
     // Create thread on core1.
-    pythread_t *thread = m_new_obj(pythread_t);
-    thread->entry = entry;
-    thread->arg = arg;
-    thread->usStackDepth = stack_num_words;
-    thread->next = MP_STATE_VM(thread_list);
-    if (xTaskCreate(pythread_entry, "core1", stack_num_words, thread, 1, &thread->task) != pdPASS) {
+    struct mp_thread_entry_shim *shim = malloc(sizeof(struct mp_thread_entry_shim));
+    shim->entry = entry;
+    shim->arg = arg;
+    thread_t *thread = thread_create(mp_thread_entry, "core1", stack_num_words, shim, 1);
+    if (!thread) {
+        free(shim);
         mp_raise_OSError(MP_ENOMEM);
     }
 
-    TaskStatus_t xTaskStatus;
-    vTaskGetInfo(thread->task, &xTaskStatus, pdFALSE, eRunning);
-    thread->pxStackBase = xTaskStatus.pxStackBase;
-
     // Adjust stack_size to provide room to recover from hitting the limit.
     *stack_size -= 512;
-
-    MP_STATE_VM(thread_list) = thread;
-    return xTaskStatus.xTaskNumber;
+    UBaseType_t id = thread->id;
+    thread_detach(thread);
+    return id;
 }
 
 void mp_thread_start(void) {
 }
 
 void mp_thread_finish(void) {
-    TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
-    pythread_t **next = &MP_STATE_VM(thread_list);
-    while (*next) {
-        pythread_t *thread = *next;
-        if (thread->task == curr_task) {
-            *next = thread->next;
-        } else {
-            next = &thread->next;
-        }
-    }
+    mp_thread_set_state(NULL);
 }
 
 void mp_thread_mutex_init(mp_thread_mutex_t *m) {

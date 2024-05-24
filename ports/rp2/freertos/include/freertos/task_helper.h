@@ -4,24 +4,71 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 
-#define TLS_INDEX_REENT 0
-#define TLS_INDEX_INTERRUPT 1
-#define TLS_INDEX_CWD 2
-#define TLS_INDEX_APP 3
+#define TLS_INDEX_SYS 0
+#define TLS_INDEX_APP 1
 
 static_assert(TLS_INDEX_APP < configNUM_THREAD_LOCAL_STORAGE_POINTERS);
 
-void task_init();
+enum thread_interrupt_state {
+    TASK_INTERRUPT_SET = 0x1,
+    TASK_INTERRUPT_CAN_ABORT = 0x2,
+};
 
-void task_deinit();
+typedef struct thread {
+    struct thread *next;
+    int ref_count;
+    TaskHandle_t handle;
+    UBaseType_t id;
+    enum thread_interrupt_state state;
 
-struct _reent *task_get_reent(TaskHandle_t task);
+    TaskFunction_t entry;
+    void *param;
+    struct _reent *ptr;
+    char *cwd;
+    TaskHandle_t waiter;
+    StaticTask_t buffer;
+} thread_t;
 
-void task_enable_interrupt();
+// Thread creation
+thread_t *thread_create(TaskFunction_t pxTaskCode, const char *pcName, const uint16_t usStackDepth, void *pvParameters, UBaseType_t uxPriority);
 
-void task_disable_interrupt();
+thread_t *thread_createStatic(TaskFunction_t pxTaskCode, const char *pcName, const uint16_t usStackDepth, void *pvParameters, UBaseType_t uxPriority, StackType_t *puxStackBuffer, StaticTask_t *pxTaskBuffer);
 
-BaseType_t task_interrupt(TaskHandle_t task);
 
-int task_check_interrupted();
+// Thread interruption
+void thread_enable_interrupt();
+
+void thread_disable_interrupt();
+
+BaseType_t thread_interrupt(thread_t *thread);
+
+int thread_check_interrupted();
+
+
+// Thread join
+int thread_join(thread_t *thread, TickType_t timeout);
+
+
+// Thread reference management
+inline thread_t *thread_current(void) {
+    return pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS);
+}
+
+// thread_t *thread_attach(thread_t *thread);
+
+void thread_detach(thread_t *thread);
+
+bool thread_iterate(thread_t **pthread);
+
+thread_t *thread_lookup(UBaseType_t id);
+
+TaskHandle_t thread_suspend(thread_t *thread);
+void thread_resume(TaskHandle_t handle);
+
+// Task utilities
+inline StackType_t *task_pxTopOfStack(TaskHandle_t handle) {
+    // assert(eTaskGetState(handle) == eSuspended);
+    return *(StackType_t **)handle;
+}

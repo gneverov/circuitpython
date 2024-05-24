@@ -2,32 +2,27 @@
 // SPDX-License-Identifier: MIT
 
 #include "./modlvgl.h"
+#include "./canvas.h"
 #include "./obj_class.h"
 #include "./widgets.h"
 
 
-static const struct lvgl_class {
-    const lv_obj_class_t *type_obj;
-    const mp_obj_type_t *type;
-} lvgl_class_table[] = {
+static const struct lvgl_class lvgl_class_table[] = {
     { &lv_obj_class, &lvgl_type_obj },
     { &lv_button_class, &lvgl_type_button },
+    { &lv_canvas_class, &lvgl_type_canvas },
     { &lv_label_class, &lvgl_type_label },
     { &lv_slider_class, &lvgl_type_slider },
+    { &lv_switch_class, &lvgl_type_switch },
     { NULL, NULL },
 };
 
-static const mp_obj_type_t *lvgl_class_lookup(const lv_obj_class_t *type_obj) {
+const lvgl_class_t *lvgl_class_lookup(const lv_obj_class_t *lv_class) {
     const struct lvgl_class *elem = lvgl_class_table;
-    for (; elem->type_obj; elem++) {
-        if (elem->type_obj == type_obj) {
-            return elem->type;
+    for (; elem->lv_class; elem++) {
+        if (elem->lv_class == lv_class) {
+            return elem;
         }
     }
-    return &lvgl_type_obj;
-}
-
-const mp_obj_type_t *lvgl_obj_class_from(const lv_obj_class_t *type_obj) {
-    assert(lvgl_is_locked());
-    return lvgl_class_lookup(type_obj);
+    return &lvgl_class_table[0];
 }

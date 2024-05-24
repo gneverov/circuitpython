@@ -159,7 +159,8 @@ set_target_visibility_hidden(fatfs)
 add_subdirectory(${MICROPY_DIR}/lib/dhara dhara)
 set_target_visibility_hidden(dhara)
 
-add_firmware_executable(${MICROPY_TARGET})
+add_executable(${MICROPY_TARGET})
+# add_firmware_executable(${MICROPY_TARGET})
 
 set(MICROPY_QSTRDEFS_PORT
     ${MICROPY_PORT_DIR}/qstrdefsport.h
@@ -264,8 +265,8 @@ set(PICO_SDK_COMPONENTS
 
 if(MICROPY_LVGL)
     include(${MICROPY_DIR}/extmod/lvgl/lvgl.cmake)
-    # target_link_libraries(${MICROPY_TARGET} mp_lvgl)
-    add_micropy_extension_library(liblvgl mp_lvgl)    
+    target_link_libraries(${MICROPY_TARGET} mp_lvgl)
+    # add_micropy_extension_library(liblvgl mp_lvgl)    
 endif()
 
 if(MICROPY_PY_LWIP)

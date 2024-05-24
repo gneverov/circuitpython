@@ -12,72 +12,35 @@
 
 static void lvgl_display_event_delete(lv_event_t *e);
 
-lvgl_handle_display_t *lvgl_handle_alloc_display(lv_display_t *disp, const mp_obj_type_t *type, void (*deinit_cb)(lv_display_t *disp)) {
+lvgl_display_handle_t *lvgl_display_alloc_handle(lv_display_t *disp, void (*deinit_cb)(lv_display_t *)) {
     assert(lvgl_is_locked());
     assert(!lv_display_get_user_data(disp));
 
-    lvgl_handle_display_t *handle = malloc(sizeof(lvgl_handle_display_t));
-    handle->ref_count = 1;
-    handle->lv_disp = disp;
-    handle->mp_disp = NULL;
-    handle->type = type;
+    lvgl_display_handle_t *handle = malloc(sizeof(lvgl_display_handle_t));
+    lvgl_ptr_init_handle(&handle->base, &lvgl_display_type, disp);
     handle->deinit_cb = deinit_cb;
     handle->buf[0] = NULL;
     handle->buf[1] = NULL;
 
-    lv_display_set_user_data(disp, handle);
+    lv_display_set_user_data(disp, lvgl_ptr_copy(&handle->base));
     lv_display_add_event_cb(disp, lvgl_display_event_delete, LV_EVENT_DELETE, NULL);
 
     return handle;
 }
 
-static lvgl_handle_display_t *lvgl_handle_copy_display(lvgl_handle_display_t *handle) {
+lvgl_ptr_t lvgl_display_get_handle0(const void *lv_ptr) {
     assert(lvgl_is_locked());
-    assert(handle->ref_count > 0);
-    handle->ref_count++;
+    lv_display_t *disp = (void *)lv_ptr;
+    lvgl_display_handle_t *handle = lv_display_get_user_data(disp);
+    if (!handle) {
+        handle = lvgl_display_alloc_handle(disp, NULL);
+    }
     return handle;
 }
 
-static void lvgl_handle_free_display(lvgl_handle_display_t *handle) {
+bool lvgl_display_alloc_draw_buffers(lvgl_display_handle_t *handle, size_t buf_size) {
     assert(lvgl_is_locked());
-    assert(handle->ref_count > 0);
-    if (--handle->ref_count == 0) {
-        free(handle);
-    }
-}
-
-static lvgl_handle_display_t *lvgl_display_get_handle(lv_display_t *disp) {
-    assert(lvgl_is_locked());
-    if (!disp) {
-        return NULL;
-    }
-    lvgl_handle_display_t *handle = lv_display_get_user_data(disp);
-    if (!handle) {
-        handle = lvgl_handle_alloc_display(disp, &lvgl_type_display, NULL);
-    }
-    assert(handle->lv_disp == disp);
-    return handle;
-}
-
-lvgl_obj_display_t *lvgl_handle_get_display(lvgl_handle_display_t *handle) {
-    if (!handle) {
-        return NULL;
-    }
-    lvgl_obj_display_t *self = handle->mp_disp;
-    if (!self) {
-        self = m_new_obj_with_finaliser(lvgl_obj_display_t);
-        lvgl_lock();
-        self->base.type = handle->type;
-        self->handle = lvgl_handle_copy_display(handle);
-        handle->mp_disp = self;
-        lvgl_unlock();
-    }
-    return self;
-}
-
-bool lvgl_handle_alloc_display_draw_buffers(lvgl_handle_display_t *handle, size_t buf_size) {
-    assert(lvgl_is_locked());
-    lv_display_t *disp = handle->lv_disp;
+    lv_display_t *disp = lvgl_display_to_lv(handle);
     assert(disp);
     assert(!handle->buf[0] && !handle->buf[0]);
     if (!buf_size) {
@@ -97,10 +60,9 @@ bool lvgl_handle_alloc_display_draw_buffers(lvgl_handle_display_t *handle, size_
     return true;
 }
 
-static lv_display_t *lvgl_lock_display(lvgl_obj_display_t *self) {
+static lv_display_t *lvgl_lock_display(lvgl_display_handle_t *handle) {
     assert(lvgl_is_locked());
-    assert(self->handle->mp_disp == self);
-    lv_display_t *disp = self->handle->lv_disp;
+    lv_display_t *disp = lvgl_display_to_lv(handle);
     if (!disp) {
         lvgl_unlock();
         mp_raise_ValueError(MP_ERROR_TEXT("invalid lvgl display"));
@@ -113,57 +75,32 @@ static void lvgl_display_event_delete(lv_event_t *e) {
     assert(lvgl_is_locked());
     lv_display_t *disp = e->current_target;
 
-    lvgl_handle_display_t *handle = lv_display_get_user_data(disp);   
+    lvgl_display_handle_t *handle = lv_display_get_user_data(disp);   
     if (handle) {
-        assert(disp == handle->lv_disp);
-
-        handle->lv_disp = NULL;
         if (handle->deinit_cb) {
             handle->deinit_cb(disp);
         }
         free(handle->buf[0]);
-        free(handle->buf[1]);        
-        lvgl_handle_free_display(handle);
-
-        #ifndef NDEBUG
-        lv_display_set_user_data(disp, NULL);
-        #endif
+        free(handle->buf[1]);  
+        lvgl_ptr_reset(&handle->base);              
+        lvgl_ptr_delete(&handle->base);
     }
 }
 
-static lvgl_obj_display_t *lvgl_display_get(mp_obj_t self_in) {
-    // return MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, MP_OBJ_FROM_PTR(&lvgl_type_display)));
-    return MP_OBJ_TO_PTR(self_in);
+static lvgl_display_handle_t *lvgl_display_get(mp_obj_t self_in) {
+    return lvgl_ptr_from_mp(NULL, self_in);
 }
-
-STATIC mp_obj_t lvgl_display_del(mp_obj_t self_in) {
-    lvgl_obj_display_t *self = lvgl_display_get(self_in);
-
-    lvgl_handle_display_t *handle = self->handle;
-    if (handle) {
-        lvgl_lock();
-        assert(handle->mp_disp = self);
-        handle->mp_disp = NULL;
-        lvgl_handle_free_display(handle);
-        lvgl_unlock();
-        self->handle = NULL;
-    }
-
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_display_del_obj, lvgl_display_del);
 
 void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
-    lvgl_obj_display_t *self = lvgl_display_get(self_in);
+    lvgl_display_handle_t *handle = lvgl_display_get(self_in);
     if (attr == MP_QSTR_screen) {
         lvgl_super_attr_check(attr, true, false, false, dest);
         lvgl_lock();
-        lv_display_t *disp = lvgl_lock_display(self);
+        lv_display_t *disp = lvgl_lock_display(handle);
         if (dest[0] != MP_OBJ_SENTINEL) {
-            lv_obj_t *scr = lv_display_get_screen_active(disp);
-            lvgl_handle_t *handle = lvgl_obj_get_handle(scr);
-            lvgl_unlock();
-            dest[0] = MP_OBJ_FROM_PTR(lvgl_handle_get_obj(handle));
+            lv_obj_t *obj = lv_display_get_screen_active(disp);
+            lvgl_handle_t *obj_handle = lvgl_obj_get_handle(obj);
+            dest[0] = lvgl_unlock_ptr(&obj_handle->base);
             return;
         }
         lvgl_unlock();
@@ -192,7 +129,7 @@ void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         }
 
         lvgl_lock();
-        lv_display_t *disp = lvgl_lock_display(self);
+        lv_display_t *disp = lvgl_lock_display(handle);
         if (dest[0] != MP_OBJ_SENTINEL) {
             rot = lv_display_get_rotation(disp);
             switch (rot) {
@@ -225,9 +162,9 @@ void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 }
 
 STATIC mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
-    lvgl_obj_display_t *self = lvgl_display_get(self_in);
+    lvgl_display_handle_t *handle = lvgl_display_get(self_in);
     lvgl_lock();
-    lv_display_t *disp = lvgl_lock_display(self);
+    lv_display_t *disp = lvgl_lock_display(handle);
     lv_display_delete(disp);
     lvgl_unlock();
     return mp_const_none;
@@ -235,7 +172,7 @@ STATIC mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_display_delete_obj, lvgl_display_delete);
 
 STATIC const mp_rom_map_elem_t lvgl_display_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_display_del_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_delete),          MP_ROM_PTR(&lvgl_display_delete_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(lvgl_display_locals_dict, lvgl_display_locals_dict_table);
@@ -249,11 +186,17 @@ MP_DEFINE_CONST_OBJ_TYPE(
     );
 MP_REGISTER_OBJECT(lvgl_type_display);
 
+const lvgl_ptr_type_t lvgl_display_type = {
+    &lvgl_type_display, 
+    NULL, 
+    NULL, 
+    lvgl_display_get_handle0, 
+    NULL,
+};
+
 mp_obj_t lvgl_display_get_default(void) {
     lvgl_lock();
     lv_display_t *disp = lv_display_get_default();
-    lvgl_handle_display_t *handle = lvgl_display_get_handle(disp);
-    lvgl_unlock();
-    lvgl_obj_display_t *self = lvgl_handle_get_display(handle);
-    return self ? MP_OBJ_FROM_PTR(self) : mp_const_none;
+    lvgl_display_handle_t *handle = lvgl_display_get_handle(disp);
+    return lvgl_unlock_ptr(&handle->base);
 }

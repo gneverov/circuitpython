@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "./types/shared_ptr.h"
 #include "py/stream_poll.h"
 
 
@@ -16,10 +17,10 @@ typedef struct lvgl_queue_elem {
 struct lvgl_obj_queue;
 
 typedef struct lvgl_queue {
-    int ref_count;
-    struct lvgl_obj_queue *obj;
+    lvgl_ptr_handle_t base;
     mp_stream_poll_t poll;
     size_t size;
+    int reader_closed : 1;
     int writer_closed : 1;
     int writer_overflow : 1;
     size_t read_index;
@@ -28,8 +29,7 @@ typedef struct lvgl_queue {
 } lvgl_queue_t;
 
 typedef struct lvgl_obj_queue {
-    mp_obj_base_t base;
-    lvgl_queue_t *queue;
+    lvgl_obj_ptr_t base;
     TickType_t timeout;
 } lvgl_obj_queue_t;
 
@@ -37,14 +37,12 @@ extern lvgl_queue_t *lvgl_queue_default;
 
 lvgl_queue_t *lvgl_queue_alloc(size_t size);
 
-lvgl_queue_t *lvgl_queue_copy(lvgl_queue_t *queue);
-
-void lvgl_queue_free(lvgl_queue_t *queue);
-
-mp_obj_t lvgl_queue_from(lvgl_queue_t *queue);
-
 void lvgl_queue_send(lvgl_queue_t *queue, lvgl_queue_elem_t *elem);
+
+void lvgl_queue_close(lvgl_queue_t *queue);
 
 // lvgl_queue_elem_t *lvgl_queue_receive(lvgl_queue_t *queue);
 
 extern const mp_obj_type_t lvgl_type_queue;
+
+extern const lvgl_ptr_type_t lvgl_queue_type;

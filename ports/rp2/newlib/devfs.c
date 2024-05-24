@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <dirent.h>
 #include <errno.h>
 #include <malloc.h>
 #include <string.h>
 #include <sys/types.h>
 
 #include "newlib/devfs.h"
-#include "newlib/dirent.h"
 #include "newlib/vfs.h"
 
 // Filesystem
@@ -127,9 +127,11 @@ static int devfs_closedir(void *ctx) {
 struct dirent *devfs_readdir(void *ctx) {
     struct devfs_dir *dir = ctx;
     while (dir->index < devfs_num_drvs) {
-        char *next = vfs_compare_path(dir->dir->path, devfs_drvs[dir->index++].path);
+        const struct devfs_driver *drv = &devfs_drvs[dir->index++];
+        char *next = vfs_compare_path(dir->dir->path, drv->path);
         if ((next != NULL) && (strlen(next) > 1) && (strchr(next + 1, '/') == NULL)) {
             dir->dirent.d_ino = 0;
+            dir->dirent.d_type = drv->mode & S_IFMT;
             dir->dirent.d_name = (next + 1);
             return &dir->dirent;
         }

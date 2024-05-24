@@ -8,6 +8,7 @@
 #include "py/stream.h"
 
 #if MICROPY_PY_OS
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -15,14 +16,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/times.h>
-#include "newlib/dirent.h"
+#include <unistd.h>
 #include "newlib/dlfcn.h"
+#include "newlib/ioctl.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
 #include "newlib/random.h"
-#include "newlib/statvfs.h"
-#include "newlib/unistd.h"
 
 #if MICROPY_PY_OS_UNAME
 #include "genhdr/mpversion.h"
@@ -653,6 +654,30 @@ STATIC mp_obj_t mp_os_dllist(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
 
+// From Python fcntl module
+STATIC mp_obj_t mp_os_ioctl(mp_obj_t fd_in, mp_obj_t request_in, mp_obj_t arg_in) {
+    int fd = mp_obj_get_int(fd_in);
+    unsigned long request = mp_obj_get_int(request_in);
+    uintptr_t arg;
+    mp_buffer_info_t bufinfo;
+    uint8_t buffer[256];
+    if (mp_obj_is_int(arg_in)) {
+        arg = mp_obj_get_int(arg_in);
+    } else {
+        mp_get_buffer_raise(arg_in, &bufinfo, MP_BUFFER_READ);
+        memcpy(buffer, bufinfo.buf, bufinfo.len);
+        arg = (uintptr_t)buffer;
+    }
+    int ret;
+    MP_OS_CALL(ret, ioctl, fd, request, arg);
+    mp_obj_t ret_out = mp_os_check_ret(ret);
+    if (mp_get_buffer(arg_in, &bufinfo, MP_BUFFER_RW)) {
+        memcpy(bufinfo.buf, buffer, bufinfo.len);
+    }
+    return ret_out;
+}
+MP_DEFINE_CONST_FUN_OBJ_3(mp_os_ioctl_obj, mp_os_ioctl);
+
 STATIC mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {
     const char *source = mp_obj_str_get_str(source_in);
     const char *type = mp_obj_str_get_str(type_in);
@@ -749,6 +774,7 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_dllist),     MP_ROM_PTR(&mp_os_dllist_obj) },
     { MP_ROM_QSTR(MP_QSTR_dlopen),     MP_ROM_PTR(&mp_os_dlopen_obj) },
     { MP_ROM_QSTR(MP_QSTR_dlsym),      MP_ROM_PTR(&mp_os_dlsym_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ioctl),      MP_ROM_PTR(&mp_os_ioctl_obj) },
     { MP_ROM_QSTR(MP_QSTR_mkfs),       MP_ROM_PTR(&mp_os_mkfs_obj) },
     { MP_ROM_QSTR(MP_QSTR_mount),      MP_ROM_PTR(&mp_os_mount_obj) },
     { MP_ROM_QSTR(MP_QSTR_umount),     MP_ROM_PTR(&mp_os_umount_obj) },

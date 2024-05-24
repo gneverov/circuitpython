@@ -38,13 +38,11 @@ STATIC mp_obj_t lvgl_FT6206_make_new(const mp_obj_type_t *type, size_t n_args, s
     lv_ft6206_indev_t *drv = malloc(sizeof(lv_ft6206_indev_t));
     lv_indev_t *indev;
     int errcode = lv_ft6206_indev_init(drv, machine_i2c->i2c_inst, trig, machine_i2c->timeout, &indev);
-    lvgl_handle_indev_t *handle = lvgl_handle_alloc_indev(indev, &lvgl_type_FT6206, lv_ft6206_indev_deinit);
+    lvgl_indev_handle_t *handle = lvgl_indev_alloc_handle(indev, lv_ft6206_indev_deinit);
     if (errcode) {
         goto cleanup;
     }
-    lvgl_unlock();
-
-    return MP_OBJ_FROM_PTR(lvgl_handle_get_indev(handle));
+    return lvgl_unlock_ptr(&handle->base);
 
 cleanup:
     lv_indev_delete(indev);

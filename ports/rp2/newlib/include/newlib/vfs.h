@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 
 #include "newlib/mount.h"
-#include "newlib/statvfs.h"
 
 #define VFS_FD_MAX 8
 

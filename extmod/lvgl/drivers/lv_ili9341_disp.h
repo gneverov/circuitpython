@@ -20,7 +20,7 @@ extern "C" {
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "hardware/spi.h"
+#include "pico/spi.h"
 
 /*********************
  *      DEFINES
@@ -30,10 +30,11 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 typedef struct {
-    spi_inst_t *spi;
+    pico_spi_ll_t *spi;
     uint8_t cs;
     uint8_t dc;
     uint8_t dma;
+    uint baudrate;
     int int_count;
     volatile TaskHandle_t task;    
 } lv_ili9341_disp_t;
@@ -41,7 +42,7 @@ typedef struct {
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
-int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, spi_inst_t *spi, uint cs, uint dc, lv_display_t **disp);
+int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint dc, uint baudrate, lv_display_t **disp);
 
 void lv_ili9341_disp_deinit(lv_display_t *disp);
 

@@ -1,8 +1,6 @@
 import lvgl
 import time
 
-from . import clear_screen
-
 
 class ClockDigit:
     CODE = [
@@ -36,7 +34,6 @@ class ClockDigit:
 
 
 def clock():
-    clear_screen()
     digits = [ClockDigit(x=34 + (7 * i + i // 2) * 6, y=93, z=6) for i in range(6)]
     while True:
         values = time.localtime()

@@ -10,8 +10,71 @@
 #include "pico/fifo.h"
 #include "pico/spi.h"
 
+struct pico_spi_ll pico_spis_ll[NUM_SPIS] = {
+    { .inst = spi0, 0 },
+    { .inst = spi1, 0 },
+};
 
-static pico_spi_t *pico_spis[NUM_SPIS];
+__attribute__((constructor))
+void pico_spi_init_init(void) {
+    for (int i = 0; i < NUM_SPIS; i++) {
+        pico_spis_ll[i].mutex = xSemaphoreCreateMutexStatic(&pico_spis_ll[i].buffer);
+    }
+}
+
+BaseType_t pico_spi_take(pico_spi_ll_t *spi, TickType_t xBlockTime) {
+    if (xSemaphoreTake(spi->mutex, xBlockTime) == pdFALSE) {
+        return pdFALSE;
+    }
+    for (;;) {
+        taskDISABLE_INTERRUPTS();
+        BaseType_t in_isr = spi->in_isr;
+        taskENABLE_INTERRUPTS();
+        if (!in_isr) {
+            break;
+        }
+        if (!ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
+            return pdFALSE;
+        }
+    }
+    return pdTRUE;
+}
+
+BaseType_t pico_spi_take_to_isr(pico_spi_ll_t *spi) {
+    assert(xQueueGetMutexHolder(spi->mutex) == xTaskGetCurrentTaskHandle());
+    spi->in_isr = 1;
+    return xSemaphoreGive(spi->mutex);
+}
+
+void pico_spi_give_from_isr(pico_spi_ll_t *spi, BaseType_t *pxHigherPriorityTaskWoken) {
+    assert(spi->in_isr);
+    spi->in_isr = 0;
+    TaskHandle_t task = xQueueGetMutexHolder(spi->mutex);
+    if (task) {
+        vTaskNotifyGiveFromISR(task, pxHigherPriorityTaskWoken);
+    }
+}
+
+BaseType_t pico_spi_give(pico_spi_ll_t *spi) {
+    assert(xQueueGetMutexHolder(spi->mutex) == xTaskGetCurrentTaskHandle());
+    return xSemaphoreGive(spi->mutex);
+}
+
+
+
+// void pico_spi_ll_init(pico_spi_ll_t *spi, uint sck) {
+//     xSemaphoreTake(spi->mutex, portMAX_DELAY);
+//     spi_init(spi->inst, self->baudrate);
+//     PICO_DEFAULT_SPI
+
+//     gpio_set_function(self->sck, GPIO_FUNC_SPI);
+//     gpio_set_function(self->mosi, GPIO_FUNC_SPI);
+//     gpio_set_function(self->miso, GPIO_FUNC_SPI);
+
+//     xSemaphoreGive(spi->mutex);
+// }
+
+pico_spi_t *pico_spis[NUM_SPIS];
 
 static void pico_spi_call_handler(pico_spi_t *self, uint events) {
     if (self->handler && events) {

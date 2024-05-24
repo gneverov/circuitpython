@@ -178,6 +178,7 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
     }
 }
 
+thread_t *mp_thread;
 StaticTask_t mp_taskdef;
 
 #define DEFAULT_TTY "/dev/ttyUSB0"
@@ -185,7 +186,6 @@ StaticTask_t mp_taskdef;
 #define MIN_GC_HEAP (8 << 10)
 
 void mp_task(void *params) {
-    task_init();
     const char *gc_heap_str = getenv("GC_HEAP");
     size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;
     gc_heap_size = MAX(gc_heap_size, MIN_GC_HEAP);
@@ -218,12 +218,10 @@ void mp_task(void *params) {
     mp_main((uint8_t *)&__MpStackBottom, (uint8_t *)&__MpStackTop, gc_heap, gc_heap + gc_heap_size);
 
     free(gc_heap);
-    task_deinit();
-    vTaskDelete(NULL);
 }
 
 void mp_task_interrupt(void) {
-    task_interrupt((TaskHandle_t)&mp_taskdef);
+    thread_interrupt(mp_thread);
 }
 
 #if CFG_TUD_ENABLED
@@ -324,7 +322,7 @@ int main(int argc, char **argv) {
     xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
 
-    xTaskCreateStatic(mp_task, "mp", (&__MpStackTop - &__MpStackBottom) / sizeof(StackType_t), NULL, 1, (StackType_t *)&__MpStackBottom, &mp_taskdef);
+    mp_thread = thread_createStatic(mp_task, "mp", (&__MpStackTop - &__MpStackBottom) / sizeof(StackType_t), NULL, 1, (StackType_t *)&__MpStackBottom, &mp_taskdef);
     vTaskStartScheduler();
     return 0;
 }

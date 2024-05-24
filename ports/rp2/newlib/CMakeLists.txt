@@ -17,7 +17,8 @@ target_sources(newlib_helper INTERFACE
     vfs.c
 )
 
-target_include_directories(newlib_helper INTERFACE include)
+add_library(newlib_helper_headers INTERFACE)
+target_include_directories(newlib_helper_headers SYSTEM INTERFACE include)
 
 target_link_options(newlib_helper INTERFACE
     LINKER:--wrap=_setenv_r
@@ -25,6 +26,7 @@ target_link_options(newlib_helper INTERFACE
 )
 
 target_link_libraries(newlib_helper INTERFACE
+    newlib_helper_headers
     FreeRTOS-Kernel 
     freertos_config
     freertos_helper

@@ -12,19 +12,10 @@ lvgl_queue_t *lvgl_queue_default;
 
 lvgl_queue_t *lvgl_queue_alloc(size_t size) {
     size_t mem_size = sizeof(lvgl_queue_t) + size * sizeof(lvgl_queue_elem_t *);
-    lvgl_queue_t *queue = malloc(mem_size);
-    assert(queue);
-    memset(queue, 0, mem_size);
-    queue->ref_count = 1;
-    queue->obj = MP_OBJ_NULL;
+    lvgl_queue_t *queue = lv_malloc_zeroed(mem_size);
+    lvgl_ptr_init_handle(&queue->base, &lvgl_queue_type, NULL);
     mp_stream_poll_init(&queue->poll);
     queue->size = size;
-    return queue;
-}
-
-lvgl_queue_t *lvgl_queue_copy(lvgl_queue_t *queue) {
-    assert(lvgl_is_locked());
-    queue->ref_count++;
     return queue;
 }
 
@@ -35,35 +26,26 @@ static void lvgl_queue_clear(lvgl_queue_t *queue) {
     }
 }
 
-void lvgl_queue_free(lvgl_queue_t *queue) {
-    assert(lvgl_is_locked());
-    assert(queue->ref_count > 0);
-    if (--queue->ref_count == 0) {
-        lvgl_queue_clear(queue);
-        free(queue);
-    }
+void lvgl_queue_deinit(lvgl_ptr_t ptr) {
+    lvgl_queue_t *queue = ptr;
+    lvgl_queue_clear(queue);
 }
 
-mp_obj_t lvgl_queue_from(lvgl_queue_t *queue) {
-    if (!queue) {
-        return mp_const_none;
-    }
-    lvgl_obj_queue_t *self = queue->obj;
-    if (!self) {
-        self = m_new_obj_with_finaliser(lvgl_obj_queue_t);
-        lvgl_lock();
-        self->base.type = &lvgl_type_queue;
-        self->queue = lvgl_queue_copy(queue);
-        self->timeout = portMAX_DELAY;
-        queue->obj = self;
-        lvgl_unlock();
-    }
+mp_obj_t lvgl_queue_new(lvgl_ptr_t ptr) {
+    lvgl_queue_t *queue = ptr;
+    lvgl_obj_queue_t *self = m_new_obj_with_finaliser(lvgl_obj_queue_t);
+    lvgl_ptr_init_obj(&self->base, &lvgl_type_queue, &queue->base);
+    self->timeout = portMAX_DELAY;
     return MP_OBJ_FROM_PTR(self);
 }
 
 void lvgl_queue_send(lvgl_queue_t *queue, lvgl_queue_elem_t *elem) {
     assert(lvgl_is_locked());
-    assert(queue->obj);
+
+    if (queue->reader_closed) {
+        elem->del(elem);
+        return;
+    }
 
     if ((queue->write_index - queue->read_index) >= queue->size) {
         queue->writer_overflow = 1;
@@ -72,6 +54,12 @@ void lvgl_queue_send(lvgl_queue_t *queue, lvgl_queue_elem_t *elem) {
     }
 
     queue->ring[queue->write_index++ % queue->size] = elem;
+    mp_stream_poll_signal(&queue->poll, MP_STREAM_POLL_RD, NULL);
+}
+
+void lvgl_queue_close(lvgl_queue_t *queue) {
+    assert(lvgl_is_locked());
+    queue->writer_closed = 1;
     mp_stream_poll_signal(&queue->poll, MP_STREAM_POLL_RD, NULL);
 }
 
@@ -95,45 +83,29 @@ lvgl_queue_elem_t *lvgl_queue_receive(lvgl_queue_t *queue) {
 //     return MP_OBJ_FROM_PTR(self);
 // }
 
-STATIC void lvgl_obj_queue_deinit(lvgl_obj_queue_t *self ) {
-    lvgl_queue_t *queue = self->queue;
-    if (queue) {
-        lvgl_lock();
-        assert(queue->obj = self);
-        queue->obj = NULL;
-        lvgl_queue_free(queue);
-        lvgl_unlock();
-        self->queue = NULL;
-    }
-}
-
-STATIC mp_obj_t lvgl_obj_queue_del(mp_obj_t self_in) {
-    lvgl_obj_queue_t *self = MP_OBJ_TO_PTR(self_in);
-    lvgl_obj_queue_deinit(self);
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_obj_queue_del_obj, lvgl_obj_queue_del);
-
 STATIC mp_uint_t lvgl_obj_queue_close(mp_obj_t self_in, int *errcode) {
-    lvgl_obj_queue_t *self = MP_OBJ_TO_PTR(self_in);
-    lvgl_obj_queue_deinit(self);
+    lvgl_queue_t *queue = lvgl_ptr_from_mp(NULL, self_in);
+    lvgl_lock();
+    lvgl_queue_clear(queue);
+    queue->reader_closed = 1;
+    lvgl_unlock();
     return 0;
 }
 
 STATIC mp_uint_t lvgl_obj_queue_run_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
-    lvgl_obj_queue_t *self = MP_OBJ_TO_PTR(self_in);
-    if (!self->queue) {
+    lvgl_queue_t *queue = lvgl_ptr_from_mp(NULL, self_in);
+    lvgl_lock();
+    bool reader_closed = queue->reader_closed;
+    lvgl_queue_elem_t *elem = lvgl_queue_receive(queue);
+    bool writer_closed = queue->writer_closed;
+    lvgl_unlock();
+
+    if (reader_closed) {
         *errcode = MP_EBADF;
         return MP_STREAM_ERROR;
     }
-
-    lvgl_lock();
-    lvgl_queue_elem_t *elem = lvgl_queue_receive(self->queue);
-    bool closed = self->queue->writer_closed;
-    lvgl_unlock();
-
     if (!elem) {
-        if (closed) {
+        if (writer_closed) {
             return 0;
         }
         else {
@@ -169,7 +141,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_obj_queue_run_obj, lvgl_obj_queue_run);
 
 STATIC mp_uint_t lvgl_obj_queue_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     lvgl_obj_queue_t *self = MP_OBJ_TO_PTR(self_in);
-    if (!self->queue && (request != MP_STREAM_CLOSE)) {
+    lvgl_queue_t *queue = (void *)self->base.handle;
+    if (queue->reader_closed && (request != MP_STREAM_CLOSE)) {
         *errcode = MP_EBADF;
         return MP_STREAM_ERROR;
     }
@@ -181,7 +154,7 @@ STATIC mp_uint_t lvgl_obj_queue_ioctl(mp_obj_t self_in, mp_uint_t request, uintp
             break;
         case MP_STREAM_POLL_CTL:
             lvgl_lock();
-            ret = mp_stream_poll_ctl(&self->queue->poll, (void *)arg, errcode);
+            ret = mp_stream_poll_ctl(&queue->poll, (void *)arg, errcode);
             lvgl_unlock();
             break;
         case MP_STREAM_CLOSE:
@@ -200,7 +173,7 @@ STATIC const mp_stream_p_t lvgl_obj_queue_p = {
 };
 
 STATIC const mp_rom_map_elem_t lvgl_obj_queue_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_obj_queue_del_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_run),             MP_ROM_PTR(&lvgl_obj_queue_run_obj) },
     { MP_ROM_QSTR(MP_QSTR_close),           MP_ROM_PTR(&mp_stream_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_settimeout),      MP_ROM_PTR(&mp_stream_settimeout_obj) },
@@ -216,3 +189,11 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &lvgl_obj_queue_locals_dict 
     );
 MP_REGISTER_OBJECT(lvgl_type_queue);
+
+const lvgl_ptr_type_t lvgl_queue_type = {
+    &lvgl_type_queue,
+    lvgl_queue_new,
+    lvgl_queue_deinit,
+    NULL,
+    NULL,
+};

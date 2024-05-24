@@ -1,20 +1,20 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <dirent.h>
 #include <errno.h>
 #include <malloc.h>
 #include <reent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "freertos/task_helper.h"
-#include "newlib/dirent.h"
 #include "newlib/time.h"
-#include "newlib/unistd.h"
 #include "newlib/vfs.h"
 
 
@@ -172,13 +172,13 @@ int nanosleep(const struct timespec *rqtp, struct timespec *rmtp) {
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
     while (!xTaskCheckForTimeOut(&xTimeOut, &xTicksToWait)) {
-        if (task_check_interrupted()) {
+        if (thread_check_interrupted()) {
             ret = -1;
             break;
         }
-        task_enable_interrupt();
+        thread_enable_interrupt();
         vTaskDelay(xTicksToWait);
-        task_disable_interrupt();
+        thread_disable_interrupt();
     }
     if (rmtp) {
         rmtp->tv_sec = xTicksToWait / configTICK_RATE_HZ;

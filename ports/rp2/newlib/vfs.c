@@ -42,11 +42,13 @@ static void vfs_unlock(void) {
 }
 
 char *vfs_getcwd(void) {
-    return pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_CWD);
+    thread_t *thread = thread_current();
+    return thread->cwd;
 }
 
 void vfs_setcwd(char *value) {
-    vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_CWD, value);
+    thread_t *thread = thread_current();
+    thread->cwd = value;
 }
 
 static const struct vfs_filesystem *vfs_lookup_filesystem(const char *type) {

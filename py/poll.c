@@ -80,14 +80,14 @@ bool mp_poll_wait(mp_obj_poll_t *self, TickType_t *timeout) {
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
     while (!ok && !xTaskCheckForTimeOut(&xTimeOut, timeout)) {
-        if (task_check_interrupted()) {
+        if (thread_check_interrupted()) {
             mp_handle_pending(true);
         }
 
         MP_THREAD_GIL_EXIT();
-        task_enable_interrupt();
+        thread_enable_interrupt();
         ok = xTaskNotifyWait(0, -1, &e, *timeout);
-        task_disable_interrupt();
+        thread_disable_interrupt();
         MP_THREAD_GIL_ENTER();
     }
     return ok;

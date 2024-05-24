@@ -47,13 +47,13 @@ static int terminal_uart_read(void *state, void *buf, size_t size) {
     terminal_uart_t *self = state;
     int br = pico_uart_read(&self->uart, buf, size);
     while (br == 0) {
-        if (task_check_interrupted()) {
+        if (thread_check_interrupted()) {
             return -1;
         }
 
-        task_enable_interrupt();
+        thread_enable_interrupt();
         xEventGroupWaitBits(self->events, ~POLLOUT & 0xff, pdTRUE, pdFALSE, portMAX_DELAY);
-        task_disable_interrupt();
+        thread_disable_interrupt();
 
         br = pico_uart_read(&self->uart, buf, size);
     }
@@ -66,13 +66,13 @@ static int terminal_uart_write(void *state, const void *buf, size_t size) {
     while (total < size) {
         int bw = pico_uart_write(&self->uart, buf + total, size - total);
         if (bw == 0) {
-            if (task_check_interrupted()) {
+            if (thread_check_interrupted()) {
                 return -1;
             }
 
-            task_enable_interrupt();
+            thread_enable_interrupt();
             xEventGroupWaitBits(self->events, ~POLLIN & 0xff, pdTRUE, pdFALSE, portMAX_DELAY);
-            task_disable_interrupt();
+            thread_disable_interrupt();
         } else if (bw > 0) {
             total += bw;
         } else {

@@ -124,7 +124,7 @@ STATIC mp_obj_t pin_del(mp_obj_t self_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(pin_del_obj, pin_del);
 
 STATIC mp_obj_t pin_set_pulls(size_t n_args, const mp_obj_t *args) {
-    const qstr kws[] = { MP_QSTR_, MP_QSTR_pin_mask, MP_QSTR_pull_up, MP_QSTR_pull_down, 0 };
+    const qstr kws[] = { MP_QSTR_, MP_QSTR_pull_up, MP_QSTR_pull_down, 0 };
     mp_obj_t self_in;
     mp_int_t pull_up = 0, pull_down = 0;
     parse_args_and_kw(n_args, 0, args, "O|pp", kws, &self_in, &pull_up, &pull_down);

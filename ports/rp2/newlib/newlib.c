@@ -89,58 +89,28 @@ int _kill(int pid, int sig) {
         return -1;
     }
 
-    UBaseType_t num_tasks;
-    TaskStatus_t *task_status_array = NULL;
-    while (1) {
-        num_tasks = uxTaskGetNumberOfTasks();
-        task_status_array = malloc(num_tasks * sizeof(TaskStatus_t));
-        if (!task_status_array) {
-            errno = ENOMEM;
-            return -1;
-        }
-        vTaskSuspendAll();
-        num_tasks = uxTaskGetSystemState(task_status_array, num_tasks, NULL);
-        if (num_tasks == uxTaskGetNumberOfTasks()) {
-            break;
-        }
-        xTaskResumeAll();
-        free(task_status_array);
-    }
-
-    for (size_t i = 0; i < num_tasks; i++) {
-        TaskStatus_t *task_status = &task_status_array[i];
-        if ((pid != 0) && (pid != task_status->xTaskNumber)) {
-            task_status->xHandle = NULL;
-            continue;
-        }
-        struct _reent *other_ptr = task_get_reent(task_status->xHandle);
-        if (!other_ptr) {
-            task_status->xHandle = NULL;
-            continue;
-        }
-        if (task_status->xHandle != xTaskGetCurrentTaskHandle()) {
-            task_interrupt(task_status->xHandle);
-            vTaskSuspend(task_status->xHandle);
-        }
-    }
-    xTaskResumeAll();
-
     int num_signals = 0;
-    for (size_t i = 0; i < num_tasks; i++) {
-        TaskHandle_t task = task_status_array[i].xHandle;
-        if (task == NULL) {
+    for (thread_t *thread = NULL; thread_iterate(&thread); thread_detach(thread)) {
+        if ((pid != 0) && (pid != thread->id)) {
             continue;
         }
+
+        TaskHandle_t handle = thread_suspend(thread);
+        if (!handle) {
+            continue;
+        }
+
         struct _reent *ptr = _impure_ptr;
-        _impure_ptr = task_get_reent(task);
+        _impure_ptr = thread->ptr;
         __sigtramp(sig);
         _impure_ptr = ptr;
-        if (task != xTaskGetCurrentTaskHandle()) {
-            vTaskResume(task);
-        }
+
+        thread_resume(handle);
+
+        thread_interrupt(thread);
+
         num_signals++;
     }
-    free(task_status_array);
 
     if (num_signals == 0) {
         errno = ESRCH;

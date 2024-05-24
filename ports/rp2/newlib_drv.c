@@ -2,6 +2,7 @@
 #include "newlib/dhara.h"
 #include "newlib/fatfs.h"
 #include "newlib/flash.h"
+#include "pico/sdcard.h"
 #include "pico/terminal.h"
 #include "tinyuf2/tinyuf2.h"
 #include "tinyusb/terminal.h"
@@ -24,6 +25,8 @@ const struct devfs_driver devfs_drvs[] = {
     { "/ttyUSB0", S_IFCHR, DEV_TTYUSB0, terminal_usb_open },
 
     { "/uf2", S_IFBLK, 0, tinyuf2_open },
+
+    { "/sdcard", S_IFBLK, 0, sdcard_open },
 };
 
 const size_t devfs_num_drvs = sizeof(devfs_drvs) / sizeof(devfs_drvs[0]);

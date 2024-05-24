@@ -16,6 +16,8 @@ STATIC mp_obj_t freeze_clear_py(void) {
     if (!freeze_clear()) {
         mp_raise_msg(&mp_type_RuntimeError, "Freezing in progress");
     }
+    // Restart for changes to take effect
+    exit(0);
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_0(freeze_clear_obj, freeze_clear_py);

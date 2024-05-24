@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <malloc.h>
@@ -9,7 +10,6 @@
 #include <string.h>
 #include <sys/unistd.h>
 
-#include "newlib/dirent.h"
 #include "newlib/ioctl.h"
 #include "newlib/vfs.h"
 
@@ -425,6 +425,7 @@ struct dirent *fatfs_readdir(void *ctx) {
     }
     errno = orig_errno;
     dir->dirent.d_ino = 0;
+    dir->dirent.d_type = dir->fno.fattrib & AM_DIR ? DT_DIR : DT_REG;
     dir->dirent.d_name = dir->fno.fname;
     return strlen(dir->dirent.d_name) ? &dir->dirent : NULL;
 }

@@ -78,14 +78,14 @@ STATIC mp_obj_t thread_lock_acquire(size_t n_args, const mp_obj_t *args) {
 
     BaseType_t ok = xSemaphoreTake(self->lock, 0);
     while (!ok && wait) {
-        if (task_check_interrupted()) {
+        if (thread_check_interrupted()) {
             mp_handle_pending(true);
         }
 
         MP_THREAD_GIL_EXIT();
-        task_enable_interrupt();
+        thread_enable_interrupt();
         ok = xSemaphoreTake(self->lock, portMAX_DELAY);
-        task_disable_interrupt();
+        thread_disable_interrupt();
         MP_THREAD_GIL_ENTER();
     }
 
@@ -353,6 +353,7 @@ STATIC const mp_rom_map_elem_t mp_module_thread_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_start_new_thread), MP_ROM_PTR(&mod_thread_start_new_thread_obj) },
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mod_thread_exit_obj) },
     { MP_ROM_QSTR(MP_QSTR_allocate_lock), MP_ROM_PTR(&mod_thread_allocate_lock_obj) },
+    { MP_ROM_QSTR(MP_QSTR_TIMEOUT_MAX), MP_ROM_INT(portMAX_DELAY / configTICK_RATE_HZ) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_thread_globals, mp_module_thread_globals_table);

@@ -16,6 +16,15 @@
 //     return make_new_fun(type, n_args, n_kw, args);
 // }
 
+void lvgl_super_update(mp_obj_t self_in, size_t n_kw, const mp_map_elem_t *kw) {
+    const mp_map_elem_t *kw_end = kw + n_kw;
+    for (; kw < kw_end; kw++) {
+        if (kw->key) {
+            mp_store_attr(self_in, mp_obj_str_get_qstr(kw->key), kw->value);
+        }
+    }
+}
+
 void lvgl_super_attr_check(qstr attr, bool getter, bool setter, bool deleter, mp_obj_t *dest) {
     if (dest[0] != MP_OBJ_SENTINEL) {
         if (!getter) {
