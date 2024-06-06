@@ -451,6 +451,7 @@ STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_EVENT_SCROLL),                MP_ROM_INT(LV_EVENT_SCROLL) },
     { MP_ROM_QSTR(MP_QSTR_EVENT_GESTURE),               MP_ROM_INT(LV_EVENT_GESTURE) },
     { MP_ROM_QSTR(MP_QSTR_EVENT_KEY),                   MP_ROM_INT(LV_EVENT_KEY) },
+    { MP_ROM_QSTR(MP_QSTR_EVENT_ROTARY),                MP_ROM_INT(LV_EVENT_ROTARY) },
     { MP_ROM_QSTR(MP_QSTR_EVENT_FOCUSED),               MP_ROM_INT(LV_EVENT_FOCUSED) },
     { MP_ROM_QSTR(MP_QSTR_EVENT_DEFOCUSED),             MP_ROM_INT(LV_EVENT_DEFOCUSED) },
     { MP_ROM_QSTR(MP_QSTR_EVENT_LEAVE),                 MP_ROM_INT(LV_EVENT_LEAVE) },
