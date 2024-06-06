@@ -67,10 +67,9 @@ static int terminal_usb_close(void *state) {
 static int terminal_usb_read(void *state, void *buf, size_t size) {
     terminal_usb_t *self = state;
     while (!tud_cdc_n_available(self->usb_itf)) {
-        if (thread_check_interrupted()) {
+        if (thread_enable_interrupt()) {
             return -1;
         }
-        thread_enable_interrupt();
         xEventGroupWaitBits(self->events, ~POLLOUT & 0xff, pdTRUE, pdFALSE, portMAX_DELAY);
         thread_disable_interrupt();
     }
@@ -82,10 +81,9 @@ static int terminal_usb_read(void *state, void *buf, size_t size) {
 static int terminal_usb_write(void *state, const void *buf, size_t size) {
     terminal_usb_t *self = state;
     while (!tud_cdc_n_write_available(self->usb_itf)) {
-        if (thread_check_interrupted()) {
+        if (thread_enable_interrupt()) {
             return -1;
         }
-        thread_enable_interrupt();
         xEventGroupWaitBits(self->events, ~POLLIN & 0xff, pdTRUE, pdFALSE, portMAX_DELAY);
         thread_disable_interrupt();
     }

@@ -25,11 +25,3 @@ mp_obj_t lvgl_display_get_default(void);
 extern const mp_obj_type_t lvgl_type_display;
 
 extern const lvgl_ptr_type_t lvgl_display_type;
-
-inline lvgl_display_handle_t *lvgl_display_get_handle(lv_display_t *disp) {
-    return lvgl_ptr_from_lv(&lvgl_display_type, disp);
-}
-
-inline lv_display_t *lvgl_display_to_lv(lvgl_display_handle_t *handle) {
-    return lvgl_ptr_to_lv(&handle->base);
-}

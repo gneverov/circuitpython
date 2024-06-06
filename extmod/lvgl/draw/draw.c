@@ -5,9 +5,12 @@
 #include "./draw.h"
 #include "./layer.h"
 #include "../font.h"
+#include "../misc.h"
 #include "../modlvgl.h"
 #include "../super.h"
 #include "../types.h"
+
+#include "extmod/freeze/extmod.h"
 
 
 typedef struct lvgl_dsc_handle {
@@ -48,18 +51,8 @@ STATIC mp_obj_t lvgl_dsc_draw(size_t n_args, const mp_obj_t *args) {
         if (!dsc_type->draw_coords) {
             mp_raise_TypeError(NULL);
         }
-        size_t coords_len;
-        mp_obj_t *coords_items;
-        mp_obj_tuple_get(args[2], &coords_len, &coords_items);
-        if (coords_len != 4) {
-            mp_raise_ValueError(NULL);
-        }
-        lv_area_t coords = {
-            mp_obj_get_int(coords_items[0]),
-            mp_obj_get_int(coords_items[1]),
-            mp_obj_get_int(coords_items[2]),
-            mp_obj_get_int(coords_items[3]),
-        };
+        lv_area_t coords;
+        lvgl_area_from_mp(args[2], &coords);
         lvgl_lock();
         dsc_type->draw_coords(layer, handle->dsc, &coords);
         lvgl_unlock();        
@@ -83,6 +76,22 @@ STATIC const mp_rom_map_elem_t lvgl_dsc_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(lvgl_dsc_locals_dict, lvgl_dsc_locals_dict_table);
 
+STATIC void lvgl_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    lvgl_ptr_attr(self_in, attr, dest);
+    if (dest[1] == MP_OBJ_SENTINEL) {
+        lvgl_super_attr(self_in, &lvgl_type_dsc, attr, dest);
+    }
+}
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    lvgl_type_dsc,
+    MP_ROM_QSTR_CONST(MP_QSTR_Dsc),
+    MP_TYPE_FLAG_NONE,
+    attr, lvgl_dsc_attr,
+    locals_dict, &lvgl_dsc_locals_dict
+    );
+MP_REGISTER_OBJECT(lvgl_type_dsc);
+
 static lvgl_ptr_t lvgl_dsc_get_handle(const void *value) {
     const lv_draw_dsc_base_t *dsc = value;
     return dsc->user_data;
@@ -100,6 +109,7 @@ STATIC const lvgl_type_attr_t lvgl_arc_dsc_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_opa), offsetof(lv_draw_arc_dsc_t, opa), LV_TYPE_INT8 },
     { 0 },
  };
+MP_REGISTER_STRUCT(lvgl_arc_dsc_attrs, lvgl_type_attr_t);
 
 const struct lvgl_dsc_type lvgl_arc_dsc_type = {
     .base = { &lvgl_type_arc_dsc, NULL, NULL, lvgl_dsc_get_handle, lvgl_arc_dsc_attrs },
@@ -113,20 +123,20 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_ROM_QSTR_CONST(MP_QSTR_ArcDsc),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_dsc_make_new,
-    attr, lvgl_ptr_attr,
-    locals_dict, &lvgl_dsc_locals_dict,
+    attr, lvgl_dsc_attr,
     protocol, &lvgl_arc_dsc_type
     );
 MP_REGISTER_OBJECT(lvgl_type_arc_dsc);
 
 
 STATIC const lvgl_type_attr_t lvgl_image_dsc_attrs[] = {
-    { MP_ROM_QSTR_CONST(MP_QSTR_src), offsetof(lv_draw_image_dsc_t, src), LV_TYPE_DRAW_BUFFER },
+    { MP_ROM_QSTR_CONST(MP_QSTR_src), offsetof(lv_draw_image_dsc_t, src), LV_TYPE_IMAGE_SRC },
     { MP_ROM_QSTR_CONST(MP_QSTR_rotation), offsetof(lv_draw_image_dsc_t, rotation), LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_pivot_x), offsetof(lv_draw_image_dsc_t, pivot) + offsetof(lv_point_t, x), LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_pivot_y), offsetof(lv_draw_image_dsc_t, pivot) + offsetof(lv_point_t, y), LV_TYPE_INT32 },
     { 0 },
  };
+MP_REGISTER_STRUCT(lvgl_image_dsc_attrs, lvgl_type_attr_t);
 
 const struct lvgl_dsc_type lvgl_image_dsc_type = {
     .base = { &lvgl_type_image_dsc, NULL, NULL, lvgl_dsc_get_handle, lvgl_image_dsc_attrs },
@@ -140,8 +150,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_ROM_QSTR_CONST(MP_QSTR_ImageDsc),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_dsc_make_new,
-    attr, lvgl_ptr_attr,
-    locals_dict, &lvgl_dsc_locals_dict,
+    attr, lvgl_dsc_attr,
     protocol, &lvgl_image_dsc_type
     );
 MP_REGISTER_OBJECT(lvgl_type_image_dsc);
@@ -153,6 +162,7 @@ STATIC const lvgl_type_attr_t lvgl_label_dsc_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_color), offsetof(lv_draw_label_dsc_t, color), LV_TYPE_COLOR },
     { 0 },
  };
+MP_REGISTER_STRUCT(lvgl_label_dsc_attrs, lvgl_type_attr_t);
 
 const struct lvgl_dsc_type lvgl_label_dsc_type = {
     .base = { &lvgl_type_label_dsc, NULL, NULL, lvgl_dsc_get_handle, lvgl_label_dsc_attrs },
@@ -168,7 +178,7 @@ STATIC void lvgl_label_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         dsc->decor = lvgl_bitfield_attr_int(attr, dest, dsc->decor);
     }  
     else {
-        lvgl_ptr_attr(self_in, attr, dest);
+        lvgl_dsc_attr(self_in, attr, dest);
     }
 }
 
@@ -178,7 +188,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_dsc_make_new,
     attr, lvgl_label_dsc_attr,
-    locals_dict, &lvgl_dsc_locals_dict,
     protocol, &lvgl_label_dsc_type
     );
 MP_REGISTER_OBJECT(lvgl_type_label_dsc);
@@ -194,6 +203,7 @@ STATIC const lvgl_type_attr_t lvgl_line_dsc_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_opa), offsetof(lv_draw_line_dsc_t, opa), LV_TYPE_INT8 },
     { 0 },
  };
+MP_REGISTER_STRUCT(lvgl_line_dsc_attrs, lvgl_type_attr_t);
 
 const struct lvgl_dsc_type lvgl_line_dsc_type = {
     .base = { &lvgl_type_line_dsc, NULL, NULL, lvgl_dsc_get_handle, lvgl_line_dsc_attrs },
@@ -212,7 +222,7 @@ STATIC void lvgl_line_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         dsc->round_end = lvgl_bitfield_attr_bool(attr, dest, dsc->round_end);
     }    
     else {
-        lvgl_ptr_attr(self_in, attr, dest);
+        lvgl_dsc_attr(self_in, attr, dest);
     }
 }
 
@@ -222,7 +232,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_dsc_make_new,
     attr, lvgl_line_dsc_attr,
-    locals_dict, &lvgl_dsc_locals_dict,
     protocol, &lvgl_line_dsc_type
     );
 MP_REGISTER_OBJECT(lvgl_type_line_dsc);
@@ -257,6 +266,7 @@ STATIC const lvgl_type_attr_t lvgl_rect_dsc_attrs[] = {
 
     { 0 },
  };
+MP_REGISTER_STRUCT(lvgl_rect_dsc_attrs, lvgl_type_attr_t);
 
 const struct lvgl_dsc_type lvgl_rect_dsc_type = {
     .base = { &lvgl_type_rect_dsc, NULL, NULL, lvgl_dsc_get_handle, lvgl_rect_dsc_attrs },
@@ -270,8 +280,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_ROM_QSTR_CONST(MP_QSTR_RectDsc),
     MP_TYPE_FLAG_NONE,
     make_new, lvgl_dsc_make_new,
-    attr, lvgl_ptr_attr,
-    locals_dict, &lvgl_dsc_locals_dict,
+    attr, lvgl_dsc_attr,
     protocol, &lvgl_rect_dsc_type
     );
 MP_REGISTER_OBJECT(lvgl_type_rect_dsc);

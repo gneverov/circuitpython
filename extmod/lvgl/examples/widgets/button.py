@@ -13,8 +13,8 @@ def button_1():
         x=0,
         y=-40,
     )
-    btn1.add_event(event_handler, lvgl.EVENT_ALL)
-    btn1.update_flag(1 << 13, False)  # LV_OBJ_FLAG_PRESS_LOCK
+    btn1.add_event_cb(event_handler, lvgl.EVENT_ALL)
+    btn1.flags &= ~lvgl.OBJ_FLAG_PRESS_LOCK
 
     lvgl.Label(
         btn1,
@@ -28,8 +28,8 @@ def button_1():
         y=40,
         height=lvgl.SIZE_CONTENT,
     )
-    btn2.add_event(event_handler, lvgl.EVENT_ALL)
-    btn2.update_flag(1 << 3, True)  # LV_OBJ_FLAG_CHECKABLE
+    btn2.add_event_cb(event_handler, lvgl.EVENT_ALL)
+    btn2.flags |= lvgl.OBJ_FLAG_CHECKABLE
 
     lvgl.Label(
         btn2,

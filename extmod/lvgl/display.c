@@ -28,7 +28,7 @@ lvgl_display_handle_t *lvgl_display_alloc_handle(lv_display_t *disp, void (*dein
     return handle;
 }
 
-lvgl_ptr_t lvgl_display_get_handle0(const void *lv_ptr) {
+static lvgl_ptr_t lvgl_display_get_handle(const void *lv_ptr) {
     assert(lvgl_is_locked());
     lv_display_t *disp = (void *)lv_ptr;
     lvgl_display_handle_t *handle = lv_display_get_user_data(disp);
@@ -36,6 +36,10 @@ lvgl_ptr_t lvgl_display_get_handle0(const void *lv_ptr) {
         handle = lvgl_display_alloc_handle(disp, NULL);
     }
     return handle;
+}
+
+static inline lv_display_t *lvgl_display_to_lv(lvgl_display_handle_t *handle) {
+    return lvgl_ptr_to_lv(&handle->base);
 }
 
 bool lvgl_display_alloc_draw_buffers(lvgl_display_handle_t *handle, size_t buf_size) {
@@ -87,19 +91,15 @@ static void lvgl_display_event_delete(lv_event_t *e) {
     }
 }
 
-static lvgl_display_handle_t *lvgl_display_get(mp_obj_t self_in) {
-    return lvgl_ptr_from_mp(NULL, self_in);
-}
-
 void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
-    lvgl_display_handle_t *handle = lvgl_display_get(self_in);
+    lvgl_display_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     if (attr == MP_QSTR_screen) {
         lvgl_super_attr_check(attr, true, false, false, dest);
         lvgl_lock();
         lv_display_t *disp = lvgl_lock_display(handle);
         if (dest[0] != MP_OBJ_SENTINEL) {
             lv_obj_t *obj = lv_display_get_screen_active(disp);
-            lvgl_handle_t *obj_handle = lvgl_obj_get_handle(obj);
+            lvgl_obj_handle_t *obj_handle = lvgl_obj_from_lv(obj);
             dest[0] = lvgl_unlock_ptr(&obj_handle->base);
             return;
         }
@@ -162,7 +162,7 @@ void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 }
 
 STATIC mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
-    lvgl_display_handle_t *handle = lvgl_display_get(self_in);
+    lvgl_display_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_display_t *disp = lvgl_lock_display(handle);
     lv_display_delete(disp);
@@ -190,13 +190,13 @@ const lvgl_ptr_type_t lvgl_display_type = {
     &lvgl_type_display, 
     NULL, 
     NULL, 
-    lvgl_display_get_handle0, 
+    lvgl_display_get_handle, 
     NULL,
 };
 
 mp_obj_t lvgl_display_get_default(void) {
     lvgl_lock();
     lv_display_t *disp = lv_display_get_default();
-    lvgl_display_handle_t *handle = lvgl_display_get_handle(disp);
+    lvgl_display_handle_t *handle = lvgl_ptr_from_lv(&lvgl_display_type, disp);
     return lvgl_unlock_ptr(&handle->base);
 }

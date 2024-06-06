@@ -17,7 +17,7 @@ def event_1():
         height=50,
         align=lvgl.ALIGN_CENTER,
     )
-    btn.add_event(event_cb, lvgl.EVENT_CLICKED)
+    btn.add_event_cb(event_cb, lvgl.EVENT_CLICKED)
 
     label = lvgl.Label(
         btn,
@@ -52,7 +52,7 @@ def event_2():
 
     label = lvgl.Label(text="The last button event:\nNone")
 
-    btn.add_event(event_cb, lvgl.EVENT_ALL)
+    btn.add_event_cb(event_cb, lvgl.EVENT_ALL)
 
 
 # Demonstrate event bubbling
@@ -75,8 +75,8 @@ def event_3():
         width=290,
         height=200,
         align=lvgl.ALIGN_CENTER,
-        flex_flow=4,  # LV_FLEX_FLOW_ROW_WRAP
-        layout=1,  # LV_LAYOUT_FLEX
+        flex_flow=lvgl.FLEX_FLOW_ROW_WRAP,
+        layout=lvgl.LAYOUT_FLEX,
     )
 
     for i in range(30):
@@ -85,8 +85,7 @@ def event_3():
             width=70,
             height=50,
         )
-        # btn.add_flag(1 << 14)  # lvgl.LV_OBJ_FLAG_EVENT_BUBBLE
-        btn.update_flag(1 << 14, True)
+        btn.flags |= lvgl.OBJ_FLAG_EVENT_BUBBLE
 
         lvgl.Label(
             btn,
@@ -94,4 +93,4 @@ def event_3():
             align=lvgl.ALIGN_CENTER,
         )
 
-    cont.add_event(event_cb, lvgl.EVENT_CLICKED)
+    cont.add_event_cb(event_cb, lvgl.EVENT_CLICKED)

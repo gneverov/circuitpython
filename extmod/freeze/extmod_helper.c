@@ -20,3 +20,9 @@ int mp_extmod_qstr(const uint16_t *qstr_table, size_t num_qstrs, uint16_t *qstr)
         return -1;
     }
 }
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_type_qstr_array,
+    MP_ROM_QSTR_CONST(MP_QSTRnull),
+    MP_TYPE_FLAG_NONE
+    );

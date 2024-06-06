@@ -165,12 +165,11 @@ STATIC mp_obj_t select_selector_select(size_t n_args, const mp_obj_t *args) {
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
     while (!ok && !xTaskCheckForTimeOut(&xTimeOut, &timeout)) {
-        if (thread_check_interrupted()) {
+        while (thread_enable_interrupt()) {
             mp_handle_pending(true);
         }
 
         MP_THREAD_GIL_EXIT();
-        thread_enable_interrupt();
         ok = xQueueReceive(self->queue, &event, timeout);
         thread_disable_interrupt();
         MP_THREAD_GIL_ENTER();

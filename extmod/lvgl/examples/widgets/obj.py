@@ -37,7 +37,7 @@ def obj_2():
         width=150,
         height=100,
     )
-    obj.add_event(drag_event_handler, lvgl.EVENT_PRESSING)
+    obj.add_event_cb(drag_event_handler, lvgl.EVENT_PRESSING)
 
     lvgl.Label(
         obj,

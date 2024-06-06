@@ -17,7 +17,7 @@ def slider_1():
         slider_label.text = f"{slider.value}%"
         slider_label.align_to(slider, lvgl.ALIGN_OUT_BOTTOM_MID, 0, 10)
 
-    slider.add_event(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)
+    slider.add_event_cb(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)
 
 
 # Show how to style a slider.
@@ -89,4 +89,4 @@ def slider_4():
         slider_label.text = f"{slider.value}%"
         slider_label.align_to(slider, lvgl.ALIGN_OUT_BOTTOM_MID, 0, 10)
 
-    slider.add_event(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)
+    slider.add_event_cb(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)

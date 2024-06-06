@@ -74,7 +74,7 @@ def get_started_2():
             btn.count += 1
             lbl.text = f"Button: {btn.count}"
 
-    btn.add_event(btn_event_cb, lvgl.EVENT_ALL)
+    btn.add_event_cb(btn_event_cb, lvgl.EVENT_ALL)
     lvgl.run_forever()
 
 
@@ -86,7 +86,7 @@ def get_started_4():
     def slider_event_cb(e):
         label.text = str(slider.value)
 
-    slider.add_event(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)
+    slider.add_event_cb(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)
     lvgl.run_forever()
 ```
 

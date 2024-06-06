@@ -3,6 +3,7 @@
 
 #include "./buffer.h"
 #include "./draw.h"
+#include "./image_decoder.h"
 #include "./layer.h"
 #include "./moddraw.h"
 
@@ -11,6 +12,7 @@ STATIC const mp_rom_map_elem_t lvgl_module_draw_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_lvgl_dot_draw) },
 
     { MP_ROM_QSTR(MP_QSTR_Buffer),          MP_ROM_PTR(&lvgl_type_draw_buf) },
+    { MP_ROM_QSTR(MP_QSTR_ImageDecoder),    MP_ROM_PTR(&lvgl_type_image_decoder) },
     { MP_ROM_QSTR(MP_QSTR_Layer),           MP_ROM_PTR(&lvgl_type_layer) },
 
     { MP_ROM_QSTR(MP_QSTR_ArcDsc),          MP_ROM_PTR(&lvgl_type_arc_dsc) },

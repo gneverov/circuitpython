@@ -18,6 +18,15 @@ static gc_handle_t *gc_handle_list;
 
 gc_handle_t *gc_handle_alloc(void *gc_ptr) {
     gc_handle_check();
+    gc_handle_t **next = &gc_handle_list;
+    while (*next) {
+        gc_handle_t *gc_handle = *next;
+        if (gc_handle->gc_ptr == gc_ptr) {
+            return gc_handle_copy(gc_handle);
+        }
+        next = &gc_handle->next;
+    }
+
     gc_handle_t *gc_handle = malloc(sizeof(gc_handle_t));
     gc_handle->gc_ptr = gc_ptr;
     gc_handle->ref_count = 1;
@@ -33,7 +42,7 @@ void *gc_handle_get(const gc_handle_t *gc_handle) {
 }
 
 gc_handle_t *gc_handle_copy(gc_handle_t *gc_handle) {
-    assert(gc_handle->ref_count > 0);
+    assert(gc_handle->ref_count >= 0);
     uint32_t state = MICROPY_BEGIN_ATOMIC_SECTION();
     gc_handle->ref_count++;
     MICROPY_END_ATOMIC_SECTION(state);

@@ -64,9 +64,13 @@ MP_DEFINE_CONST_OBJ_TYPE(
     );
 MP_REGISTER_OBJECT(lvgl_type_draw_buf);
 
-static lvgl_ptr_t lvgl_draw_buf_get_handle0(const void *lv_ptr) {
+static lvgl_ptr_t lvgl_draw_buf_get_handle(const void *lv_ptr) {
     const lv_draw_buf_t *draw_buf = lv_ptr;
     return draw_buf->user_data;
+}
+
+lvgl_draw_buf_handle_t *lvgl_draw_buf_from_lv(const lv_draw_buf_t *draw_buf) {
+    return lvgl_ptr_from_lv(&lvgl_draw_buf_type, draw_buf);
 }
 
 static void lvgl_draw_buf_deinit(lvgl_ptr_t ptr) {
@@ -79,6 +83,6 @@ const lvgl_ptr_type_t lvgl_draw_buf_type = {
     &lvgl_type_draw_buf,
     NULL,
     lvgl_draw_buf_deinit,
-    lvgl_draw_buf_get_handle0,
+    lvgl_draw_buf_get_handle,
     NULL,
 };

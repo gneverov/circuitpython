@@ -12,11 +12,11 @@ target_sources(mp_lvgl INTERFACE
     ${MICROPY_DIR}/extmod/lvgl/drivers/lv_ft6206_indev.c
 
     ${MICROPY_DIR}/extmod/lvgl/anim.c
-    ${MICROPY_DIR}/extmod/lvgl/canvas.c
     ${MICROPY_DIR}/extmod/lvgl/color.c
     ${MICROPY_DIR}/extmod/lvgl/display.c
     ${MICROPY_DIR}/extmod/lvgl/draw/buffer.c
     ${MICROPY_DIR}/extmod/lvgl/draw/draw.c
+    ${MICROPY_DIR}/extmod/lvgl/draw/image_decoder.c
     ${MICROPY_DIR}/extmod/lvgl/draw/layer.c
     ${MICROPY_DIR}/extmod/lvgl/draw/moddraw.c
     ${MICROPY_DIR}/extmod/lvgl/font.c    
@@ -24,6 +24,7 @@ target_sources(mp_lvgl INTERFACE
     ${MICROPY_DIR}/extmod/lvgl/ili9341.c
     ${MICROPY_DIR}/extmod/lvgl/indev.c
     ${MICROPY_DIR}/extmod/lvgl/modlvgl.c
+    ${MICROPY_DIR}/extmod/lvgl/misc.c
     ${MICROPY_DIR}/extmod/lvgl/obj.c
     ${MICROPY_DIR}/extmod/lvgl/obj_class.c
     ${MICROPY_DIR}/extmod/lvgl/queue.c
@@ -32,7 +33,11 @@ target_sources(mp_lvgl INTERFACE
     ${MICROPY_DIR}/extmod/lvgl/types.c
     ${MICROPY_DIR}/extmod/lvgl/types/shared_ptr.c
     ${MICROPY_DIR}/extmod/lvgl/types/static_ptr.c
-    ${MICROPY_DIR}/extmod/lvgl/widgets.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/arc.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/canvas.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/image.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/line.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/widgets.c
 )
 
 target_link_libraries(mp_lvgl INTERFACE
@@ -48,6 +53,7 @@ set_source_files_properties(
     ${MICROPY_DIR}/extmod/lvgl/display.c
     ${MICROPY_DIR}/extmod/lvgl/draw/buffer.c
     ${MICROPY_DIR}/extmod/lvgl/draw/draw.c
+    ${MICROPY_DIR}/extmod/lvgl/draw/image_decoder.c
     ${MICROPY_DIR}/extmod/lvgl/draw/layer.c
     ${MICROPY_DIR}/extmod/lvgl/draw/moddraw.c
     ${MICROPY_DIR}/extmod/lvgl/font.c
@@ -55,13 +61,17 @@ set_source_files_properties(
     ${MICROPY_DIR}/extmod/lvgl/ili9341.c
     ${MICROPY_DIR}/extmod/lvgl/indev.c
     ${MICROPY_DIR}/extmod/lvgl/modlvgl.c
+    ${MICROPY_DIR}/extmod/lvgl/misc.c
     ${MICROPY_DIR}/extmod/lvgl/obj.c
     ${MICROPY_DIR}/extmod/lvgl/obj_class.c
     ${MICROPY_DIR}/extmod/lvgl/queue.c
     ${MICROPY_DIR}/extmod/lvgl/style.c
     ${MICROPY_DIR}/extmod/lvgl/super.c
-    # ${MICROPY_DIR}/extmod/lvgl/types.c
-    ${MICROPY_DIR}/extmod/lvgl/widgets.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/arc.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/canvas.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/image.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/line.c
+    ${MICROPY_DIR}/extmod/lvgl/widgets/widgets.c
 
     PROPERTIES MICROPY_SOURCE_QSTR ON
 )

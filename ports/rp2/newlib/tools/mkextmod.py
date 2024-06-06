@@ -26,8 +26,8 @@ module_name = args.input
 elffile = open_elffile(module_name)
 
 for section in elffile.sections:
-    if section.name.startswith(".debug"):
-        section.delete()
+    # if section.name.startswith(".debug"):
+    #     section.delete()
     if section.name.startswith(".data"):
         section.struct.sh_flags |= elf32.SHF_WRITE
     if section.name.startswith(".uninitialized_data"):

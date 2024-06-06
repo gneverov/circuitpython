@@ -24,7 +24,7 @@ def get_started_2():
         height=50,
     )
     btn.count = 0
-    btn.add_event(btn_event_cb, lvgl.EVENT_ALL)  # Assign a callback to the button
+    btn.add_event_cb(btn_event_cb, lvgl.EVENT_ALL)  # Assign a callback to the button
 
     lbl = lvgl.Label(
         btn,  # Add a label to the button
@@ -95,7 +95,7 @@ def get_started_4():
         width=200,  # Set the width
         align=lvgl.ALIGN_CENTER,  # Align to the center of the parent (screen)
     )
-    slider.add_event(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)  # Assign an event function
+    slider.add_event_cb(slider_event_cb, lvgl.EVENT_VALUE_CHANGED)  # Assign an event function
 
     # Create a label above the slider
     label = lvgl.Label(text="0")

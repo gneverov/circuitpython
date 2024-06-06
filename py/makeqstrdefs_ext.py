@@ -90,7 +90,8 @@ def gen_source(module_name, qstrs, modules, file=None):
     print("", file=file)
 
     if modules:
-        _, m = modules[0]
+        # The module with the shortest name is the "main" module.
+        _, m = min(modules, key=lambda x: x[0])
         print(f"extern const mp_obj_module_t {m};", file=file)
         print(file=file)
 

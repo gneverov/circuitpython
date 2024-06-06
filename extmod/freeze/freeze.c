@@ -1296,6 +1296,31 @@ static int freeze_rewrite_type(freeze_link_state_t *state, flash_ptr_t type_addr
     return 0;
 }
 
+// ### qstr array ###
+static int freeze_rewrite_qstr_array(freeze_link_state_t *state, flash_ptr_t qstr_obj_addr) {
+    mp_obj_qstr_array_t qstr_obj;
+    if (dl_linker_read(state->link_state, &qstr_obj, sizeof(qstr_obj), qstr_obj_addr) < 0) {
+        return -1;
+    }
+    assert(qstr_obj.base.type == &mp_type_qstr_array);
+
+    size_t num_elems = qstr_obj.array_size / qstr_obj.elem_size;
+    for (size_t i = 0; i < num_elems; i++) {
+        uint16_t qstr_short;
+        flash_ptr_t qstr_addr = ((flash_ptr_t)qstr_obj.array) + i * qstr_obj.elem_size + qstr_obj.qstr_offset;
+        if (dl_linker_read(state->link_state, &qstr_short, sizeof(uint16_t), qstr_addr) < 0) {
+            return -1;
+        }
+        if (mp_extmod_qstr(state->qstr_table, state->num_qstrs, &qstr_short) < 0) {
+            return -1;
+        }
+        if (dl_linker_write(state->link_state, &qstr_short, sizeof(uint16_t), qstr_addr) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 // ### raw_obj ###
 static int freeze_rewrite_raw_obj(freeze_link_state_t *state, flash_ptr_t raw_obj_addr) {
     if (raw_obj_addr == 0) {
@@ -1312,6 +1337,9 @@ static int freeze_rewrite_raw_obj(freeze_link_state_t *state, flash_ptr_t raw_ob
     }
     else if (base.type == &mp_type_module) {
         return freeze_rewrite_module(state, raw_obj_addr);
+    }
+    else if (base.type == &mp_type_qstr_array) {
+        return freeze_rewrite_qstr_array(state, raw_obj_addr);
     }
     else {
         printf("don't know how to refreeze type %p\n", base.type);

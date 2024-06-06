@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "./draw/layer.h"
-#include "./obj.h"
+#include "lvgl.h"
+#include "../draw/layer.h"
 
 
 typedef struct lvgl_obj_canvas_layer {
@@ -16,3 +16,5 @@ typedef struct lvgl_obj_canvas_layer {
 extern const mp_obj_type_t lvgl_type_canvas;
 
 extern const mp_obj_type_t lvgl_type_canvas_layer;
+
+void lvgl_canvas_event_delete(lv_obj_t *obj);

@@ -51,9 +51,7 @@ void lvgl_ptr_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest);
 lvgl_ptr_t lvgl_ptr_from_lv(const lvgl_ptr_type_t *type, const void* lv_ptr);
 
 inline void *lvgl_ptr_to_lv(lvgl_ptr_handle_t *handle) {
-    return handle->lv_ptr;
+    return handle ? handle->lv_ptr : NULL;
 }
 
-inline void lvgl_ptr_reset(lvgl_ptr_handle_t *handle) {
-    handle->lv_ptr = NULL;
-}
+void lvgl_ptr_reset(lvgl_ptr_handle_t *handle);

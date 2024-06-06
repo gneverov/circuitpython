@@ -6,12 +6,33 @@
 #include "./obj.h"
 #include "./super.h"
 #include "./types.h"
+
+#include "extmod/freeze/extmod.h"
 #include "py/runtime.h"
 
 
 lvgl_ptr_t lvgl_anim_get_handle(const void *lv_ptr) {
     const lv_anim_t *anim = lv_ptr;
     return lv_anim_get_user_data(anim);
+}
+
+static void lvgl_anim_del_event(void *arg) {
+    lvgl_anim_event_t *event = arg;
+    lvgl_ptr_delete(&event->handle->base);
+    free(event);
+}
+
+static void lvgl_anim_run_event(void *arg) {
+    lvgl_anim_event_t *event = arg;
+    mp_obj_t func = gc_handle_get(event->handle->mp_exec_cb);
+    if (func == MP_OBJ_NULL) {
+        return;
+    }
+    if (!lvgl_ptr_to_lv(&event->handle->base)) {
+        return;
+    }
+    mp_obj_t anim = lvgl_ptr_to_mp(&event->handle->base);
+    mp_call_function_2(func, anim, MP_OBJ_NEW_SMALL_INT(event->value));
 }
 
 STATIC void lvgl_anim_custom_exec_cb(lv_anim_t *anim, int32_t value) {
@@ -26,6 +47,22 @@ STATIC void lvgl_anim_custom_exec_cb(lv_anim_t *anim, int32_t value) {
         lv_obj_set_local_style_prop(anim->var, *prop, svalue, 0);
         prop++;
     }
+   
+    if (!handle->mp_exec_cb) {
+        return;
+    }
+
+    lvgl_queue_t *queue = lvgl_queue_default;
+    if (!queue) {
+        return;
+    }
+
+    lvgl_anim_event_t *event = malloc(sizeof(lvgl_anim_event_t));
+    event->elem.run = lvgl_anim_run_event;
+    event->elem.del = lvgl_anim_del_event;
+    event->handle = lvgl_ptr_copy(&handle->base);
+    event->value = value;
+    lvgl_queue_send(queue, &event->elem);
 }
 
 STATIC void lvgl_anim_deleted_cb(lv_anim_t *anim) {
@@ -51,6 +88,7 @@ STATIC mp_obj_t lvgl_anim_make_new(const mp_obj_type_t *type, size_t n_args, siz
         lvgl_type_clone(LV_TYPE_OBJ_HANDLE, &handle->var, &other->var);
         lvgl_unlock();
         lvgl_type_clone(LV_TYPE_PROP_LIST, &handle->props, &other->props);
+        lvgl_type_clone(LV_TYPE_GC_HANDLE, &handle->mp_exec_cb, &other->mp_exec_cb);
     }
     else {
         lv_anim_init(&handle->anim);
@@ -72,6 +110,9 @@ STATIC void lvgl_anim_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
     else if (attr == MP_QSTR_props) {
         lvgl_type_attr(attr, dest, LV_TYPE_PROP_LIST, &handle->props);
+    }
+    else if (attr == MP_QSTR_exec_cb) {
+        lvgl_type_attr(attr, dest, LV_TYPE_GC_HANDLE, &handle->mp_exec_cb);
     }
     else if (attr == MP_QSTR_delay) {
         uint32_t delay = lv_anim_get_delay(&handle->anim);
@@ -134,11 +175,13 @@ STATIC const lvgl_type_attr_t lvgl_anim_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_repeat_delay), offsetof(lv_anim_t, repeat_delay), LV_TYPE_INT32 },
     { 0 },
 };
+MP_REGISTER_STRUCT(lvgl_anim_attrs, lvgl_type_attr_t);
 
 static void lvgl_anim_deinit(lvgl_ptr_t ptr) {
     lvgl_anim_handle_t *handle = ptr;
     lvgl_type_free(LV_TYPE_OBJ_HANDLE, &handle->var);
     lvgl_type_free(LV_TYPE_PROP_LIST, &handle->props);
+    lvgl_type_free(LV_TYPE_GC_HANDLE, &handle->mp_exec_cb);
 }
 
 const lvgl_ptr_type_t lvgl_anim_type = {

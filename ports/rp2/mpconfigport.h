@@ -273,5 +273,10 @@ extern uint32_t rosc_random_u32(void);
 #define MICROPY_PY_BLUETOOTH_EXIT (void)atomic_state;
 #endif
 
+// This hook is called from inside a critical section, which we don't want.
+// Undo the critical section.
 extern void mp_task_interrupt(void);
-#define MICROPY_SCHED_HOOK_SCHEDULED mp_task_interrupt()
+#define MICROPY_SCHED_HOOK_SCHEDULED \
+    mp_thread_end_atomic_section(0); \
+    mp_task_interrupt(); \
+    mp_thread_begin_atomic_section()

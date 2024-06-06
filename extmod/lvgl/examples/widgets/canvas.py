@@ -28,7 +28,7 @@ def canvas_1():
     )
 
     # Create a buffer for the canvas
-    draw_buf_16bpp = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x12)  # LV_COLOR_FORMAT_RGB565
+    draw_buf_16bpp = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_RGB565)
 
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
     canvas.set_buffer(draw_buf_16bpp)
@@ -43,7 +43,7 @@ def canvas_1():
     draw_buf_32bpp = lvgl.draw.Buffer(
         CANVAS_WIDTH,
         CANVAS_HEIGHT,
-        0x10,  # LV_COLOR_FORMAT_ARGB8888
+        lvgl.COLOR_FORMAT_ARGB8888,
     )
     # Create a canvas and initialize its palette
     canvas2 = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
@@ -70,7 +70,7 @@ def canvas_2():
     lvgl.screen.bg_color = lvgl.Palette.RED.lighten(5)
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
     canvas.set_buffer(draw_buf)
@@ -99,7 +99,7 @@ def canvas_3():
     CANVAS_HEIGHT = 50
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
 
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
@@ -127,7 +127,7 @@ def canvas_4():
     CANVAS_HEIGHT = 50
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
 
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
@@ -137,7 +137,7 @@ def canvas_4():
     dsc = lvgl.draw.LabelDsc(
         color=lvgl.Palette.RED.main(),
         font=lvgl.Font.MONTSERRAT_18,
-        decor=1,  # LV_TEXT_DECOR_UNDERLINE
+        decor=lvgl.TEXT_DECOR_UNDERLINE,
         text="Hello",
     )
 
@@ -151,7 +151,7 @@ def canvas_5():
     CANVAS_HEIGHT = 50
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
 
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
@@ -178,23 +178,20 @@ def canvas_6():
     CANVAS_HEIGHT = 50
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
 
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)
     canvas.set_buffer(draw_buf)
     canvas.fill_bg(0xCCC)
 
-    IMG_STAR_WIDTH = 30
-    IMG_STAR_HEIGHT = 29
-    img_star = lvgl.draw.Buffer(IMG_STAR_WIDTH, IMG_STAR_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
-    with open("star.bin", "rb") as fp:
-        data = fp.read()
-        memoryview(img_star)[0 : len(data)] = data
-    dsc = lvgl.draw.ImageDsc(src=img_star)
+    from .. import get_asset
+
+    header = lvgl.draw.ImageDecoder.get_info(get_asset("img_star.bin"))
+    dsc = lvgl.draw.ImageDsc(src=get_asset("img_star.bin"))
 
     with canvas.layer() as layer:
-        dsc.draw(layer, (10, 10, 10 + IMG_STAR_WIDTH - 1, 10 + IMG_STAR_HEIGHT - 1))
+        dsc.draw(layer, (10, 10, 10 + header.w - 1, 10 + header.h - 1))
 
 
 # Draw a line to the canvas
@@ -203,7 +200,7 @@ def canvas_7():
     CANVAS_HEIGHT = 50
 
     # Create a buffer for the canvas
-    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, 0x10)  # LV_COLOR_FORMAT_ARGB8888
+    draw_buf = lvgl.draw.Buffer(CANVAS_WIDTH, CANVAS_HEIGHT, lvgl.COLOR_FORMAT_ARGB8888)
 
     # Create a canvas and initialize its palette
     canvas = lvgl.Canvas(align=lvgl.ALIGN_CENTER)

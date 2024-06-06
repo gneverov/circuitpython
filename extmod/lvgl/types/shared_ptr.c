@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-
 #include "../modlvgl.h"
 #include "../super.h"
 #include "./shared_ptr.h"
@@ -42,10 +41,7 @@ void lvgl_ptr_delete(lvgl_ptr_handle_t *handle) {
 }
 
 lvgl_ptr_t lvgl_ptr_from_mp(const lvgl_ptr_type_t *type, mp_obj_t obj_in) {
-    if (obj_in == mp_const_none) {
-        return NULL;
-    }
-    if (type && !mp_obj_is_exact_type(obj_in, MP_OBJ_FROM_PTR(type->mp_type))) {
+    if (!mp_obj_is_obj(obj_in) || (type && !mp_obj_is_exact_type(obj_in, MP_OBJ_FROM_PTR(type->mp_type)))) {
         mp_raise_TypeError(NULL);
     }
     lvgl_obj_ptr_t *obj = MP_OBJ_TO_PTR(obj_in);
@@ -78,8 +74,15 @@ lvgl_ptr_t lvgl_ptr_from_lv(const lvgl_ptr_type_t *type, const void* lv_ptr) {
     if (!lv_ptr) {
         return NULL;
     }
+    assert(type->get_handle);
     lvgl_ptr_handle_t *handle = type->get_handle(lv_ptr);
     return handle;
+}
+
+void lvgl_ptr_reset(lvgl_ptr_handle_t *handle) {
+    if (handle) {
+        handle->lv_ptr = NULL;
+    }
 }
 
 mp_obj_t lvgl_unlock_ptr(lvgl_ptr_handle_t *handle) {
@@ -103,7 +106,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(lvgl_ptr_del_obj, lvgl_ptr_del);
 
 void lvgl_ptr_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_ptr_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
-    if (!lvgl_attrs_attr(attr, dest, handle->type->attrs, (void *)handle->lv_ptr)) {
+    if (!lvgl_attrs_attr(attr, dest, handle->type->attrs, handle->lv_ptr)) {
         dest[1] = MP_OBJ_SENTINEL;
     }
 }

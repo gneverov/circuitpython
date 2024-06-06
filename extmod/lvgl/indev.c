@@ -26,7 +26,7 @@ lvgl_indev_handle_t *lvgl_indev_alloc_handle(lv_indev_t *indev, void (*deinit_cb
     return handle;
 }
 
-lvgl_ptr_t lvgl_indev_get_handle0(const void *lv_ptr) {
+static lvgl_ptr_t lvgl_indev_get_handle(const void *lv_ptr) {
     assert(lvgl_is_locked());    
     lv_indev_t *indev = (void *)lv_ptr;
     lvgl_indev_handle_t *handle = lv_indev_get_user_data(indev);
@@ -38,7 +38,7 @@ lvgl_ptr_t lvgl_indev_get_handle0(const void *lv_ptr) {
 
 static lv_indev_t *lvgl_lock_indev(lvgl_indev_handle_t *handle) {
     assert(lvgl_is_locked());
-    lv_indev_t *indev = lvgl_indev_to_lv(handle);
+    lv_indev_t *indev = lvgl_ptr_to_lv(&handle->base);
     if (!indev) {
         lvgl_unlock();
         mp_raise_ValueError(MP_ERROR_TEXT("invalid lvgl indev"));
@@ -61,12 +61,8 @@ static void lvgl_indev_event_delete(lv_event_t *e) {
     }
 }
 
-static lvgl_indev_handle_t *lvgl_indev_get(mp_obj_t self_in) {
-    return lvgl_ptr_from_mp(NULL, self_in);
-}
-
 STATIC mp_obj_t lvgl_indev_delete(mp_obj_t self_in) {
-    lvgl_indev_handle_t *handle = lvgl_indev_get(self_in);
+    lvgl_indev_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_indev_t *indev = lvgl_lock_indev(handle);
     lv_indev_delete(indev);
@@ -76,7 +72,7 @@ STATIC mp_obj_t lvgl_indev_delete(mp_obj_t self_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_delete_obj, lvgl_indev_delete);
 
 STATIC mp_obj_t lvgl_indev_get_vect(mp_obj_t self_in) {
-    lvgl_indev_handle_t *handle = lvgl_indev_get(self_in);
+    lvgl_indev_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_indev_t *indev = lvgl_lock_indev(handle);
     lv_point_t point;
@@ -107,13 +103,32 @@ const lvgl_ptr_type_t lvgl_indev_type = {
     &lvgl_type_indev, 
     NULL, 
     NULL, 
-    lvgl_indev_get_handle0, 
+    lvgl_indev_get_handle, 
     NULL,
 };
 
-mp_obj_t lvgl_indev_get_active(void) {
+mp_obj_t lvgl_indev_list(void) {
+    mp_obj_t list = mp_obj_new_list(0, NULL);
     lvgl_lock();
-    lv_indev_t *indev = lv_indev_active();
-    lvgl_indev_handle_t *handle = lvgl_indev_get_handle(indev);
-    return lvgl_unlock_ptr(&handle->base);
+    lv_indev_t *indev = lv_indev_get_next(NULL);
+    lvgl_indev_handle_t *handle = lvgl_ptr_from_lv(&lvgl_indev_type, indev);
+    lvgl_unlock();
+
+    while (handle) {
+        mp_obj_t elem = lvgl_ptr_to_mp(&handle->base);
+        mp_obj_list_append(list, elem);
+
+        lvgl_lock();
+        lv_indev_t *indev = lvgl_ptr_to_lv(&handle->base);
+        lvgl_indev_handle_t *tmp = NULL;
+        if (indev) {
+            indev = lv_indev_get_next(indev);
+            tmp = lvgl_ptr_from_lv(&lvgl_indev_type, indev);
+        }
+        lvgl_unlock();
+
+        lvgl_ptr_delete(&handle->base);
+        handle = tmp;
+    }
+    return list;
 }

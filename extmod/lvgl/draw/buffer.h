@@ -16,9 +16,7 @@ extern const mp_obj_type_t lvgl_type_draw_buf;
 
 extern const lvgl_ptr_type_t lvgl_draw_buf_type;
 
-inline lvgl_draw_buf_handle_t *lvgl_draw_buf_get_handle(const lv_draw_buf_t *draw_buf) {
-    return lvgl_ptr_from_lv(&lvgl_draw_buf_type, draw_buf);
-}
+lvgl_draw_buf_handle_t *lvgl_draw_buf_from_lv(const lv_draw_buf_t *draw_buf);
 
 inline lv_draw_buf_t *lvgl_draw_buf_to_lv(lvgl_draw_buf_handle_t *handle) {
     return lvgl_ptr_to_lv(&handle->base);

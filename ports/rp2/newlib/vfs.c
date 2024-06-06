@@ -20,6 +20,8 @@ static struct vfs_mount *vfs_table;
 
 static struct vfs_file *vfs_fd_table[VFS_FD_MAX];
 
+static char *vfs_cwd;
+
 __attribute__((constructor))
 void vfs_init(void) {
     vfs_mutex = xSemaphoreCreateMutex();
@@ -41,14 +43,18 @@ static void vfs_unlock(void) {
     xSemaphoreGive(vfs_mutex);
 }
 
-char *vfs_getcwd(void) {
-    thread_t *thread = thread_current();
-    return thread->cwd;
+void vfs_getcwd(char *buf, size_t size) {
+    vfs_lock();
+    strncpy(buf, vfs_cwd ? vfs_cwd : "/", size);
+    vfs_unlock();
 }
 
 void vfs_setcwd(char *value) {
-    thread_t *thread = thread_current();
-    thread->cwd = value;
+    size_t len = strlen(value);
+    vfs_lock();
+    vfs_cwd = realloc(vfs_cwd, len + 1);
+    strcpy(vfs_cwd, value);
+    vfs_unlock();
 }
 
 static const struct vfs_filesystem *vfs_lookup_filesystem(const char *type) {
@@ -101,10 +107,11 @@ int vfs_expand_path(vfs_path_buffer_t *vfs_path, const char *path) {
         path++;
     } else if (*path != '\0') {
         // relative path
-        const char *cwd = vfs_getcwd();
-        if (cwd && (strlen(cwd) > 1)) {
-            out = stpcpy(out, cwd);
+        vfs_lock();
+        if (vfs_cwd && (strlen(vfs_cwd) > 1)) {
+            out = stpcpy(out, vfs_cwd);
         }
+        vfs_unlock();
     } else {
         // empty path is invalid
         errno = ENOENT;

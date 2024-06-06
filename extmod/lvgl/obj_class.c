@@ -2,18 +2,24 @@
 // SPDX-License-Identifier: MIT
 
 #include "./modlvgl.h"
-#include "./canvas.h"
 #include "./obj_class.h"
-#include "./widgets.h"
+#include "./widgets/arc.h"
+#include "./widgets/canvas.h"
+#include "./widgets/image.h"
+#include "./widgets/line.h"
+#include "./widgets/widgets.h"
 
 
 static const struct lvgl_class lvgl_class_table[] = {
-    { &lv_obj_class, &lvgl_type_obj },
-    { &lv_button_class, &lvgl_type_button },
-    { &lv_canvas_class, &lvgl_type_canvas },
-    { &lv_label_class, &lvgl_type_label },
-    { &lv_slider_class, &lvgl_type_slider },
-    { &lv_switch_class, &lvgl_type_switch },
+    { &lv_obj_class,    &lvgl_type_obj,     NULL },
+    { &lv_arc_class,    &lvgl_type_arc,     NULL },
+    { &lv_button_class, &lvgl_type_button,  NULL },
+    { &lv_canvas_class, &lvgl_type_canvas,  lvgl_canvas_event_delete },
+    { &lv_image_class,  &lvgl_type_image,   lvgl_image_event_delete },
+    { &lv_label_class,  &lvgl_type_label,   NULL },
+    { &lv_line_class,   &lvgl_type_line,    lvgl_line_event_delete },
+    { &lv_slider_class, &lvgl_type_slider,  NULL },
+    { &lv_switch_class, &lvgl_type_switch,  NULL },
     { NULL, NULL },
 };
 

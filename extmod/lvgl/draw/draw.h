@@ -16,6 +16,7 @@ typedef struct lvgl_dsc_type {
     void (*draw_coords)(lv_layer_t *layer, lv_draw_dsc_base_t *dsc, const lv_area_t *coords);
 } lvgl_dsc_type_t;
 
+extern const mp_obj_type_t lvgl_type_dsc;
 extern const mp_obj_type_t lvgl_type_arc_dsc;
 extern const mp_obj_type_t lvgl_type_image_dsc;
 extern const mp_obj_type_t lvgl_type_label_dsc;

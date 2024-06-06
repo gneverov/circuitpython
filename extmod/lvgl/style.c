@@ -62,16 +62,16 @@ static struct lvgl_style {
 
     { MP_ROM_QSTR_CONST(MP_QSTR_bg_main_opa), LV_STYLE_BG_MAIN_OPA, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_bg_grad_opa), LV_STYLE_BG_GRAD_OPA, LV_TYPE_INT32 },
-    { MP_ROM_QSTR_CONST(MP_QSTR_bg_grad), LV_STYLE_BG_GRAD, LV_TYPE_NONE },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_grad), LV_STYLE_BG_GRAD, LV_TYPE_GRAD_DSC },
     { MP_ROM_QSTR_CONST(MP_QSTR_base_dir), LV_STYLE_BASE_DIR, LV_TYPE_INT32 },
 
-    // { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_src), LV_STYLE_BG_IMAGE_SRC, LV_STYLE_TYPE_PTR },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_opa), LV_STYLE_BG_IMAGE_OPA, LV_TYPE_INT32 },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_recolor), LV_STYLE_BG_IMAGE_RECOLOR, LV_TYPE_COLOR },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_recolor_opa), LV_STYLE_BG_IMAGE_RECOLOR_OPA, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_src), LV_STYLE_BG_IMAGE_SRC, LV_TYPE_IMAGE_SRC },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_opa), LV_STYLE_BG_IMAGE_OPA, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_recolor), LV_STYLE_BG_IMAGE_RECOLOR, LV_TYPE_COLOR },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_recolor_opa), LV_STYLE_BG_IMAGE_RECOLOR_OPA, LV_TYPE_INT32 },
 
-    // { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_tiled), LV_STYLE_BG_IMAGE_TILED, LV_TYPE_INT32 },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_clip_corner), LV_STYLE_CLIP_CORNER, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_bg_image_tiled), LV_STYLE_BG_IMAGE_TILED, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_clip_corner), LV_STYLE_CLIP_CORNER, LV_TYPE_INT32 },
 
     /*Group 3*/
     { MP_ROM_QSTR_CONST(MP_QSTR_border_width), LV_STYLE_BORDER_WIDTH, LV_TYPE_INT32 },
@@ -95,9 +95,9 @@ static struct lvgl_style {
     { MP_ROM_QSTR_CONST(MP_QSTR_shadow_offset_y), LV_STYLE_SHADOW_OFFSET_Y, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_shadow_spread), LV_STYLE_SHADOW_SPREAD, LV_TYPE_INT32 },
 
-    // { MP_ROM_QSTR_CONST(MP_QSTR_image_opa), LV_STYLE_IMAGE_OPA, LV_TYPE_INT32 },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_image_recolor), LV_STYLE_IMAGE_RECOLOR, LV_TYPE_COLOR },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_image_recolor_opa), LV_STYLE_IMAGE_RECOLOR_OPA, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_image_opa), LV_STYLE_IMAGE_OPA, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_image_recolor), LV_STYLE_IMAGE_RECOLOR, LV_TYPE_COLOR },
+    { MP_ROM_QSTR_CONST(MP_QSTR_image_recolor_opa), LV_STYLE_IMAGE_RECOLOR_OPA, LV_TYPE_INT32 },
 
     { MP_ROM_QSTR_CONST(MP_QSTR_line_width), LV_STYLE_LINE_WIDTH, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_line_dash_width), LV_STYLE_LINE_DASH_WIDTH, LV_TYPE_INT32 },
@@ -123,13 +123,13 @@ static struct lvgl_style {
     { MP_ROM_QSTR_CONST(MP_QSTR_text_align), LV_STYLE_TEXT_ALIGN, LV_TYPE_INT32 },
 
     { MP_ROM_QSTR_CONST(MP_QSTR_opa), LV_STYLE_OPA, LV_TYPE_INT32 },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_opa_layered), LV_STYLE_OPA_LAYERED, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_opa_layered), LV_STYLE_OPA_LAYERED, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_color_filter_dsc), LV_STYLE_COLOR_FILTER_DSC, LV_TYPE_COLOR_FILTER },
     { MP_ROM_QSTR_CONST(MP_QSTR_color_filter_opa), LV_STYLE_COLOR_FILTER_OPA, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_anim), LV_STYLE_ANIM, LV_TYPE_ANIM },
     { MP_ROM_QSTR_CONST(MP_QSTR_anim_duration), LV_STYLE_ANIM_DURATION, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_transition), LV_STYLE_TRANSITION, LV_TYPE_STYLE_TRANSITION_DSC },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_blend_mode), LV_STYLE_BLEND_MODE, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_blend_mode), LV_STYLE_BLEND_MODE, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_transform_width), LV_STYLE_TRANSFORM_WIDTH, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_transform_height), LV_STYLE_TRANSFORM_HEIGHT, LV_TYPE_INT32 },
     { MP_ROM_QSTR_CONST(MP_QSTR_translate_x), LV_STYLE_TRANSLATE_X, LV_TYPE_INT32 },
@@ -144,10 +144,10 @@ static struct lvgl_style {
 
 #if LV_USE_FLEX
     { MP_ROM_QSTR_CONST(MP_QSTR_flex_flow), LV_STYLE_FLEX_FLOW, LV_TYPE_INT32 },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_flex_main_place), LV_STYLE_FLEX_MAIN_PLACE, LV_TYPE_NONE },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_flex_cross_place), LV_STYLE_FLEX_CROSS_PLACE, LV_TYPE_NONE },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_flex_track_place), LV_STYLE_FLEX_TRACK_PLACE, LV_TYPE_NONE },
-    // { MP_ROM_QSTR_CONST(MP_QSTR_flex_grow), LV_STYLE_FLEX_GROW, LV_TYPE_NONE },
+    { MP_ROM_QSTR_CONST(MP_QSTR_flex_main_place), LV_STYLE_FLEX_MAIN_PLACE, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_flex_cross_place), LV_STYLE_FLEX_CROSS_PLACE, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_flex_track_place), LV_STYLE_FLEX_TRACK_PLACE, LV_TYPE_INT32 },
+    { MP_ROM_QSTR_CONST(MP_QSTR_flex_grow), LV_STYLE_FLEX_GROW, LV_TYPE_INT32 },
 #endif
 
 #if LV_USE_GRID
@@ -194,18 +194,21 @@ lv_style_prop_t lvgl_style_lookup(qstr qstr, lv_type_code_t *type_code) {
     return value->prop;
 }
 
-inline void lvgl_style_value_free(lv_type_code_t type_code, lv_style_value_t value) {
+void lvgl_style_value_free(lv_type_code_t type_code, lv_style_value_t value) {
     lvgl_type_free(type_code, &value.ptr);
 }
-inline lv_style_value_t lvgl_style_value_from_mp(lv_type_code_t type_code, mp_obj_t obj) {
+
+lv_style_value_t lvgl_style_value_from_mp(lv_type_code_t type_code, mp_obj_t obj) {
     lv_style_value_t value = { 0 };
     lvgl_type_from_mp(type_code, obj, &value.ptr);
     return value;
 }
-inline mp_obj_t lvgl_style_value_to_mp(lv_type_code_t type_code, lv_style_value_t value) {
+
+mp_obj_t lvgl_style_value_to_mp(lv_type_code_t type_code, lv_style_value_t value) {
     return lvgl_type_to_mp(type_code, &value.ptr);
 }
-inline lv_style_value_t lvgl_style_value_clone(lv_type_code_t type_code, lv_style_value_t src) {
+
+static lv_style_value_t lvgl_style_value_clone(lv_type_code_t type_code, lv_style_value_t src) {
     lv_style_value_t dst = { 0 };
     lvgl_type_clone(type_code, &dst.ptr, &src.ptr);
     return dst;
@@ -227,6 +230,10 @@ static lvgl_ptr_t lvgl_style_get_handle0(const void *lv_ptr) {
         lvgl_unlock();
     }
     return handle;
+}
+
+lvgl_style_handle_t *lvgl_style_from_mp(mp_obj_t self_in) {
+    return lvgl_ptr_from_mp(&lvgl_style_type, self_in);
 }
 
 STATIC mp_obj_t lvgl_style_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
@@ -330,62 +337,112 @@ const lvgl_ptr_type_t lvgl_style_type = {
 };
 
 
-// typedef struct lvgl_grad_dsc_handle {
-//     lvgl_ptr_handle_t base;
-//     lv_grad_dsc_t dsc;
-// } lvgl_grad_dsc_handle_t;
+typedef struct lvgl_grad_dsc_handle {
+    lvgl_ptr_handle_t base;
+    lv_grad_dsc_t dsc;
+} lvgl_grad_dsc_handle_t;
 
-// STATIC mp_obj_t lvgl_style_transition_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-//     mp_arg_check_num(n_args, n_kw, 0, 0, true);
+STATIC mp_obj_t lvgl_grad_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 0, 0, true);
     
-//     lvgl_grad_dsc_handle *handle = lv_malloc_zeroed(sizeof(lvgl_grad_dsc_handle));
-//     lvgl_ptr_init_handle(&handle->base, &lvgl_grad_dsc_type, &handle->dsc);
-//     mp_obj_t self_out = lvgl_ptr_to_mp(&handle->base);
+    lvgl_grad_dsc_handle_t *handle = lv_malloc_zeroed(sizeof(lvgl_grad_dsc_handle_t));
+    lvgl_ptr_init_handle(&handle->base, &lvgl_grad_dsc_type, &handle->dsc);
+    mp_obj_t self_out = lvgl_ptr_to_mp(&handle->base);
 
-//     lvgl_super_update(self_out, (mp_map_elem_t *)(n_kw, args + n_args));
-//     return self_out;
-// }
+    lvgl_super_update(self_out, n_kw, (mp_map_elem_t *)(args + n_args));
+    return self_out;
+}
 
-// STATIC void lvgl_grad_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
-//     lv_grad_dsc_t *dsc = lvgl_struct_from_mp(NULL, self_in);
+STATIC const qstr lvgl_gradient_stop_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_color), MP_ROM_QSTR_CONST(MP_QSTR_opa), MP_ROM_QSTR_CONST(MP_QSTR_frac) };
+MP_REGISTER_STRUCT(lvgl_gradient_stop_attrs, qstr);
 
-//     if (attr == MP_QSTR_dir) {
-//         dsc->dir = lvgl_bitfield_attr_int(attr, dest, dsc->dir);
-//     }
-//     else {
-//         lvgl_struct_attr(self_in, attr, dest);
-//     }
-// }
+STATIC void lvgl_grad_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    lvgl_grad_dsc_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
 
-// STATIC const mp_rom_map_elem_t lvgl_grad_dsc_locals_dict_table[] = {
-//     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
-// };
-// STATIC MP_DEFINE_CONST_DICT(lvgl_grad_dsc_locals_dict, lvgl_grad_dsc_locals_dict_table);
+    if (attr == MP_QSTR_dir) {
+        handle->dsc.dir = lvgl_bitfield_attr_int(attr, dest, handle->dsc.dir);
+    }
+    else if (attr == MP_QSTR_stops) {
+        lvgl_super_attr_check(attr, true, true, false, dest);
+        if (dest[0] != MP_OBJ_SENTINEL) {
+            mp_obj_t stops[LV_GRADIENT_MAX_STOPS] = { 0 };
+            for (size_t i = 0; i < handle->dsc.stops_count; i++) {
+                mp_obj_t items[] = {
+                    mp_obj_new_int(lv_color_to_int(handle->dsc.stops[i].color)),
+                    MP_OBJ_NEW_SMALL_INT(handle->dsc.stops[i].opa),
+                    MP_OBJ_NEW_SMALL_INT(handle->dsc.stops[i].frac),
+                };
+                stops[i] = mp_obj_new_attrtuple(lvgl_gradient_stop_attrs, 3, items);
+            }
+            dest[0] = mp_obj_new_list(handle->dsc.stops_count, stops);
+        }
+        else if (dest[1] != MP_OBJ_NULL) {
+            size_t len;
+            mp_obj_t *items;
+            if (mp_obj_is_type(dest[1], MP_OBJ_FROM_PTR(&mp_type_list))) {
+                mp_obj_list_get(dest[1], &len, &items);
+            }
+            else if (mp_obj_is_type(dest[1], MP_OBJ_FROM_PTR(&mp_type_tuple))) {
+                mp_obj_tuple_get(dest[1], &len, &items);
+            }
+            else {
+                mp_raise_TypeError(NULL);
+            }
+            if (len > LV_GRADIENT_MAX_STOPS) {
+                mp_raise_ValueError(MP_ERROR_TEXT("too many stops"));
+            }
+            lv_gradient_stop_t stops[LV_GRADIENT_MAX_STOPS] = { 0 };
+            for (size_t i = 0; i < len; i++) {
+                if (!mp_obj_is_type(items[i], MP_OBJ_FROM_PTR(&mp_type_tuple))) {
+                    mp_raise_TypeError(NULL);
+                }
+                size_t tuple_len;
+                mp_obj_t *tuple_items;                
+                mp_obj_tuple_get(items[i], &tuple_len, &tuple_items);
+                if (tuple_len != 3) {
+                    mp_raise_TypeError(NULL);
+                }
+                stops[i].color = lv_color_hex(mp_obj_get_int(tuple_items[0]));
+                stops[i].opa = mp_obj_get_int(tuple_items[1]);
+                stops[i].frac = mp_obj_get_int(tuple_items[2]);
+            }
+            memcpy(handle->dsc.stops, stops, sizeof(stops));
+            handle->dsc.stops_count = len;
+            dest[0] = MP_OBJ_NULL;
+        }
+    }
+    else {
+        dest[1] = MP_OBJ_SENTINEL;
+    }
+}
 
-// MP_DEFINE_CONST_OBJ_TYPE(
-//     lvgl_type_grad_dsc,
-//     MP_ROM_QSTR_CONST(MP_QSTR_GradDsc),
-//     MP_TYPE_FLAG_NONE,
-//     make_new, lvgl_struct_make_new,
-//     attr, lvgl_grad_dsc_attr,
-//     locals_dict, &lvgl_grad_dsc_locals_dict
-//     );
-// MP_REGISTER_OBJECT(lvgl_type_grad_dsc);
+STATIC const mp_rom_map_elem_t lvgl_grad_dsc_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
+};
+STATIC MP_DEFINE_CONST_DICT(lvgl_grad_dsc_locals_dict, lvgl_grad_dsc_locals_dict_table);
 
-// STATIC const lvgl_type_attr_t lvgl_grad_dsc_attrs[] = {
-//     // { MP_ROM_QSTR_CONST(MP_QSTR_time), offsetof(lv_grad_dsc_t, time), LV_TYPE_INT32 },
-//     // { MP_ROM_QSTR_CONST(MP_QSTR_delay), offsetof(lv_grad_dsc_t, delay), LV_TYPE_INT32 },
-//     { 0 },
-// };
+MP_DEFINE_CONST_OBJ_TYPE(
+    lvgl_type_grad_dsc,
+    MP_ROM_QSTR_CONST(MP_QSTR_GradDsc),
+    MP_TYPE_FLAG_NONE,
+    make_new, lvgl_grad_dsc_make_new,
+    attr, lvgl_grad_dsc_attr,
+    locals_dict, &lvgl_grad_dsc_locals_dict
+    );
+MP_REGISTER_OBJECT(lvgl_type_grad_dsc);
 
-// const lvgl_ptr_type_t lvgl_grad_dsc_type = {
-//     &lvgl_type_grad_dsc,
-//     NULL,
-//     NULL,
-//     NULL,
-//     lvgl_grad_dsc_attrs,
-// };
+static lvgl_ptr_t lvgl_grad_dsc_get_handle(const void *value) {
+    // const lv_grad_dsc_t *dsc = value;
+    return (void *)value - offsetof(lvgl_grad_dsc_handle_t, dsc);
+}
 
+const lvgl_ptr_type_t lvgl_grad_dsc_type = {
+    &lvgl_type_grad_dsc,
+    NULL,
+    NULL,
+    lvgl_grad_dsc_get_handle,
+    NULL,
+};
 
 
 typedef struct lvgl_style_transition_dsc_handle {
@@ -440,6 +497,7 @@ STATIC const lvgl_type_attr_t lvgl_style_transition_dsc_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_delay), offsetof(lv_style_transition_dsc_t, delay), LV_TYPE_INT32 },
     { 0 },
 };
+MP_REGISTER_STRUCT(lvgl_style_transition_dsc_attrs, lvgl_type_attr_t);
 
 const lvgl_ptr_type_t lvgl_style_transition_dsc_type = {
     &lvgl_type_style_transition_dsc,

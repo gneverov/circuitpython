@@ -229,14 +229,13 @@ STATIC struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_
     vTaskSetTimeOutState(&xTimeOut);
     while (pcb->scan_active && !xTaskCheckForTimeOut(&xTimeOut, &timeout)) {
         xSemaphoreGive(pcb->mutex);
-        if (task_check_interrupted()) {
+        while (thread_enable_interrupt()) {
             mp_handle_pending(true);
         }
 
         MP_THREAD_GIL_EXIT();
-        task_enable_interrupt();
         ulTaskNotifyTake(pdTRUE, timeout);
-        task_disable_interrupt();
+        thread_disable_interrupt();
         MP_THREAD_GIL_ENTER();
 
         xSemaphoreTake(pcb->mutex, portMAX_DELAY);

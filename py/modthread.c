@@ -78,12 +78,11 @@ STATIC mp_obj_t thread_lock_acquire(size_t n_args, const mp_obj_t *args) {
 
     BaseType_t ok = xSemaphoreTake(self->lock, 0);
     while (!ok && wait) {
-        if (thread_check_interrupted()) {
+        while (thread_enable_interrupt()) {
             mp_handle_pending(true);
         }
 
         MP_THREAD_GIL_EXIT();
-        thread_enable_interrupt();
         ok = xSemaphoreTake(self->lock, portMAX_DELAY);
         thread_disable_interrupt();
         MP_THREAD_GIL_ENTER();

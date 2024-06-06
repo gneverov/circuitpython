@@ -26,9 +26,7 @@ typedef struct thread {
     TaskFunction_t entry;
     void *param;
     struct _reent *ptr;
-    char *cwd;
-    TaskHandle_t waiter;
-    StaticTask_t buffer;
+    SemaphoreHandle_t joiner;
 } thread_t;
 
 // Thread creation
@@ -38,13 +36,13 @@ thread_t *thread_createStatic(TaskFunction_t pxTaskCode, const char *pcName, con
 
 
 // Thread interruption
-void thread_enable_interrupt();
+int thread_enable_interrupt();
 
 void thread_disable_interrupt();
 
-BaseType_t thread_interrupt(thread_t *thread);
+void thread_interrupt(thread_t *thread);
 
-int thread_check_interrupted();
+// int thread_check_interrupted();
 
 
 // Thread join
@@ -52,9 +50,7 @@ int thread_join(thread_t *thread, TickType_t timeout);
 
 
 // Thread reference management
-inline thread_t *thread_current(void) {
-    return pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS);
-}
+thread_t *thread_current(void);
 
 // thread_t *thread_attach(thread_t *thread);
 

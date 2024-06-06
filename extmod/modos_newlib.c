@@ -654,6 +654,33 @@ STATIC mp_obj_t mp_os_dllist(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
 
+#ifndef NDEBUG
+STATIC mp_obj_t mp_os_dldebug(void) {
+    puts("Module               Flash base RAM base");
+    const flash_heap_header_t *header = NULL;
+    while (dl_iterate(&header)) {
+        Elf32_Addr strtab = 0;
+        Elf32_Word soname = 0;
+        for (const Elf32_Dyn *dyn = header->entry; dyn->d_tag != DT_NULL; dyn++) {
+            switch (dyn->d_tag) {
+                case DT_STRTAB:
+                    strtab = dyn->d_un.d_ptr;
+                    break;
+                case DT_SONAME:
+                    soname = dyn->d_un.d_val;
+                    break;
+            }
+        }
+        const char *name = (strtab && soname) ? (char *)(strtab + soname) : NULL;
+        uintptr_t flash_base = (((uintptr_t)header) + sizeof(flash_heap_header_t) + 7) & ~7;
+        uintptr_t ram_base = (((uintptr_t)header->ram_base) + 7) & ~7;
+        printf("%-20s 0x%08x 0x%08x\n", name, flash_base, ram_base);
+    }
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dldebug_obj, mp_os_dldebug);
+#endif
+
 // From Python fcntl module
 STATIC mp_obj_t mp_os_ioctl(mp_obj_t fd_in, mp_obj_t request_in, mp_obj_t arg_in) {
     int fd = mp_obj_get_int(fd_in);
@@ -778,6 +805,9 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_mkfs),       MP_ROM_PTR(&mp_os_mkfs_obj) },
     { MP_ROM_QSTR(MP_QSTR_mount),      MP_ROM_PTR(&mp_os_mount_obj) },
     { MP_ROM_QSTR(MP_QSTR_umount),     MP_ROM_PTR(&mp_os_umount_obj) },
+    #ifndef NDEBUG
+    { MP_ROM_QSTR(MP_QSTR_dldebug),    MP_ROM_PTR(&mp_os_dldebug_obj) },
+    #endif
 
 
     // Flags for lseek

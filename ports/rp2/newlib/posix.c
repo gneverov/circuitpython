@@ -48,11 +48,7 @@ int chdir(const char *path) {
     if (vfs_expand_path(&vfs_path, path) < 0) {
         return -1;
     }
-    size_t len = strlen(vfs_path.begin);
-    char *cwd = vfs_getcwd();
-    cwd = realloc(cwd, len + 1);
-    strcpy(cwd, vfs_path.begin);
-    vfs_setcwd(cwd);
+    vfs_setcwd(vfs_path.begin);
     return 0;
 }
 
@@ -130,8 +126,8 @@ int ftruncate(int fd, off_t length) {
 }
 
 char *getcwd(char *buf, size_t size) {
-    const char *cwd = vfs_getcwd();
-    return strncpy(buf, cwd ? cwd : "/", size);
+    vfs_getcwd(buf, size);
+    return buf;
 }
 
 int gethostname(char *name, size_t namelen) {
@@ -172,11 +168,10 @@ int nanosleep(const struct timespec *rqtp, struct timespec *rmtp) {
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
     while (!xTaskCheckForTimeOut(&xTimeOut, &xTicksToWait)) {
-        if (thread_check_interrupted()) {
+        if (thread_enable_interrupt()) {
             ret = -1;
             break;
         }
-        thread_enable_interrupt();
         vTaskDelay(xTicksToWait);
         thread_disable_interrupt();
     }

@@ -7,7 +7,11 @@
 
 extern const mp_obj_type_t lvgl_type_button;
 
+extern const mp_obj_type_t lvgl_type_image;
+
 extern const mp_obj_type_t lvgl_type_label;
+
+extern const mp_obj_type_t lvgl_type_line;
 
 extern const mp_obj_type_t lvgl_type_slider;
 

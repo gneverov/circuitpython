@@ -6,6 +6,7 @@
 
 #include "freertos/task_helper.h"
 
+
 // Global mutex for thread operations
 static SemaphoreHandle_t thread_mutex;
 
@@ -17,20 +18,21 @@ void thread_init(void) {
     thread_mutex = xSemaphoreCreateMutexStatic(&buffer);
 }
 
-static inline void thread_lock(void) {
-    xSemaphoreTake(thread_mutex, portMAX_DELAY);
-}
-
-static inline void thread_unlock(void) {
-    xSemaphoreGive(thread_mutex);
-}
-
 #ifndef NDEBUG
 static inline bool thread_check_locked(void) {
     return xSemaphoreGetMutexHolder(thread_mutex) == xTaskGetCurrentTaskHandle();
 }
 #endif
 
+static inline void thread_lock(void) {
+    assert(!thread_check_locked());
+    xSemaphoreTake(thread_mutex, portMAX_DELAY);
+}
+
+static inline void thread_unlock(void) {
+    assert(thread_check_locked());
+    xSemaphoreGive(thread_mutex);
+}
 
 // Thread creation
 static void thread_entry(void *pvParameters) {
@@ -61,9 +63,8 @@ static void thread_entry(void *pvParameters) {
     }
 
     thread->ptr = NULL;
-    if (thread->waiter) {
-        xTaskNotifyGive(thread->waiter);
-        thread->waiter = NULL;
+    if (thread->joiner) {
+        xSemaphoreGive(thread->joiner);
     }
     thread_unlock();
     thread_detach(thread);
@@ -82,8 +83,7 @@ static thread_t *thread_alloc(TaskFunction_t pxTaskCode, void *pvParameters) {
         thread->entry = pxTaskCode;
         thread->param = pvParameters;
         thread->ptr = NULL;
-        thread->cwd = NULL;
-        thread->waiter = NULL;
+        thread->joiner = NULL;
     }
     return thread;
 }
@@ -142,16 +142,27 @@ thread_t *thread_createStatic(TaskFunction_t pxTaskCode, const char *pcName, con
 }
 
 
-void thread_enable_interrupt(void) {
+int thread_enable_interrupt(void) {
     thread_t *thread = thread_current();
     thread_lock();
+    if (thread->state & TASK_INTERRUPT_SET) {
+        thread->state &= ~TASK_INTERRUPT_SET;
+        thread_unlock();
+        errno = EINTR;
+        return -1;
+    }
     thread->state |= TASK_INTERRUPT_CAN_ABORT;
     thread_unlock();
+    return 0;
 }
 
 void thread_disable_interrupt(void) {
     thread_t *thread = thread_current();
-    thread_lock();
+    // Because thread interrupts are enabled, waiting for the thread mutex may be aborted.
+    // Ignore aborts and keep retrying to acquire mutex.
+    while (!xSemaphoreTake(thread_mutex, portMAX_DELAY)) {
+        ;
+    }
     thread->state &= ~TASK_INTERRUPT_CAN_ABORT;
 
     /* This code sets pxCurrentTCB->ucDelayAborted to pdFALSE. This flag is not useful for us
@@ -163,31 +174,39 @@ void thread_disable_interrupt(void) {
     thread_unlock();
 }
 
-BaseType_t thread_interrupt(thread_t *thread) {
-    BaseType_t ret = pdFAIL;
+void thread_interrupt(thread_t *thread) {
     thread_lock();
     thread->state |= TASK_INTERRUPT_SET;
     if ((thread->state & TASK_INTERRUPT_CAN_ABORT) && thread->handle) {
-        ret = xTaskAbortDelay(thread->handle);
+        while (xTaskAbortDelay(thread->handle) == pdFAIL) {
+            // If xTaskAbortDelay fails, it means the target thread is in between calling thread_enable_interrupt and starting its blocking call.
+            // Wait a minimal amount of time for the target thread to start blocking so that xTaskAbortDelay succeeds.
+            // The target thread cannot disable thread interrupts because we hold the thread lock, so the target thread will eventually block trying to acquire the thread lock.
+            vTaskDelay(1);
+        }
     }
     thread_unlock();
-    return ret;
 }
 
-int thread_check_interrupted(void) {
-    thread_t *thread = thread_current();
-    thread_lock();
-    enum thread_interrupt_state state = thread->state;
-    thread->state &= ~TASK_INTERRUPT_SET;
-    thread_unlock();
+// int thread_check_interrupted(void) {
+//     thread_t *thread = thread_current();
+//     thread_lock();
+//     enum thread_interrupt_state state = thread->state;
+//     thread->state &= ~TASK_INTERRUPT_SET;
+//     thread_unlock();
 
-    if (state & TASK_INTERRUPT_SET) {
-        errno = EINTR;
-        return -1;
-    }
-    return 0;
+//     if (state & TASK_INTERRUPT_SET) {
+//         errno = EINTR;
+//         return -1;
+//     }
+//     return 0;
+// }
+
+thread_t *thread_current(void) {
+    thread_t *thread = pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS);
+    assert(thread);
+    return thread;
 }
-
 
 // void thread_attach(thread_t *thread) {
 //     assert(thread_check_locked());
@@ -209,7 +228,9 @@ void thread_detach(thread_t *thread) {
     if (ref_count == 0) {
         assert(thread->handle == NULL);
         thread_detach(thread->next);
-        free(thread->cwd);
+        if (thread->joiner) {
+            vSemaphoreDelete(thread->joiner);
+        }
         free(thread);
     }
 }
@@ -223,23 +244,23 @@ int thread_join(thread_t *thread, TickType_t timeout) {
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
     while (!xTaskCheckForTimeOut(&xTimeOut, &timeout)) {
-        if (thread_check_interrupted()) {
-            return -1;
-        }
-
         thread_lock();
-        TaskHandle_t handle = thread->handle;
-        if (handle) {
-            // assert(!thread->waiter);
-            thread->waiter = xTaskGetCurrentTaskHandle();
-        }
-        thread_unlock();
-        if (!handle) {
+        if (!thread->handle) {
+            thread_unlock();
             return 0;
         }
+        if (!thread->joiner) {
+            thread->joiner = xSemaphoreCreateBinary();
+        }
+        SemaphoreHandle_t joiner = thread->joiner;
+        thread_unlock();
 
-        thread_enable_interrupt();
-        ulTaskNotifyTake(pdTRUE, timeout);
+        if (thread_enable_interrupt()) {
+            return -1;
+        }
+        if (xSemaphoreTake(joiner, timeout)) {
+            xSemaphoreGive(joiner);
+        }
         thread_disable_interrupt();
     }
     errno = EAGAIN;

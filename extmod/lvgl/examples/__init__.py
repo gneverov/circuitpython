@@ -1,6 +1,7 @@
 import lvgl
 import micropython
 import machine
+import sys
 import threading
 
 
@@ -44,10 +45,13 @@ def setup():
     # If lvgl is not already initialized, set up the display
     if lvgl.init():
         print("LVGL initialized")
+
+    if not lvgl.display:
         machine.SPI(SPI_ID, sck=SCK, mosi=MOSI, miso=MISO)
         disp = lvgl.ILI9341(SPI_ID, CS, DC, SPI_BAUDRATE)
         disp.rotation = 270
 
+    if not lvgl.indevs:
         i2c = machine.I2C(I2C_ID, freq=I2C_FREQ, scl=SCL, sda=SDA)
         trig = machine.Pin(TRIG)
         lvgl.FT6206(i2c, trig)
@@ -66,6 +70,10 @@ def teardown():
         event_thread = None
 
 
+def get_asset(file):
+    return f"/{__path__}/assets/{file}"
+
+
 def clear_screen():
     old_scr = lvgl.display.screen
     lvgl.load_screen(lvgl.Object(None))
@@ -78,14 +86,64 @@ def run(func):
 
 
 def run_module(mod):
+    print(mod.__name__)
     for name, func in mod.__dict__.items():
-        if callable(func):
+        if not callable(func):
+            continue
+        print(f"Running {name}", end="")
+        try:
             run(func)
-            input(f"Running {name}")
+        except Exception as e:
+            sys.print_exception(e)
+        else:
+            input()
     clear_screen()
     micropython.malloc_stats()
 
 
-setup()
+def run_all():
+    from . import anim
 
-from .clock import *
+    run_module(anim)
+    from . import event
+
+    run_module(event)
+    from . import get_started
+
+    run_module(get_started)
+    from . import scroll
+
+    run_module(scroll)
+    from . import styles
+
+    run_module(styles)
+    from .widgets import arc
+
+    run_module(arc)
+    from .widgets import button
+
+    run_module(button)
+    from .widgets import canvas
+
+    run_module(canvas)
+    from .widgets import image
+
+    run_module(image)
+    from .widgets import label
+
+    run_module(label)
+    from .widgets import line
+
+    run_module(line)
+    from .widgets import obj
+
+    run_module(obj)
+    from .widgets import slider
+
+    run_module(slider)
+    from .widgets import switch
+
+    run_module(switch)
+
+
+setup()
