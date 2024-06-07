@@ -27,7 +27,7 @@
 #include "py/obj.h"
 
 #if MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_DETAILED
-STATIC void cell_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t kind) {
+static void cell_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t kind) {
     (void)kind;
     mp_obj_cell_t *o = MP_OBJ_TO_PTR(o_in);
     mp_printf(print, "<cell %p ", o->obj);

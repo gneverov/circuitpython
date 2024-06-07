@@ -24,25 +24,21 @@
  * THE SOFTWARE.
  */
 
+#include <errno.h>
+#include <stdio.h>
+
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "py/runtime.h"
-#include "py/stream.h"
-#include "py/mphal.h"
-#include "extmod/misc.h"
 #include "shared/timeutils/timeutils.h"
-#include "tusb.h"
 #include "hardware/rtc.h"
+#include "pico/time.h"
 #include "pico/unique_id.h"
-
-#if MICROPY_PY_NETWORK_CYW43
-#include "lib/cyw43-driver/src/cyw43.h"
-#endif
 
 // This needs to be added to the result of time_us_64() to get the number of
 // microseconds since the Epoch.
-STATIC uint64_t time_us_64_offset_from_epoch;
+static uint64_t time_us_64_offset_from_epoch;
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     panic("mp_hal_stdio_poll not implemented");
@@ -57,7 +53,7 @@ int mp_hal_stdin_rx_chr(void) {
         MP_THREAD_GIL_ENTER();
         mp_handle_pending(false);
     }
-    while ((ch == -1) && (errno == MP_EINTR));
+    while ((ch == -1) && (errno == EINTR));
 
     return ch;
 }

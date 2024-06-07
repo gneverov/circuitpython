@@ -7,9 +7,9 @@
 #include "./error.h"
 
 
-STATIC void socket_udp_lwip_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port);
+static void socket_udp_lwip_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port);
 
-STATIC err_t socket_udp_lwip_new(socket_obj_t *socket) {
+static err_t socket_udp_lwip_new(socket_obj_t *socket) {
     if (socket->pcb.udp) {
         return ERR_VAL;
     }
@@ -24,7 +24,7 @@ STATIC err_t socket_udp_lwip_new(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC err_t socket_udp_lwip_abort(socket_obj_t *socket) {
+static err_t socket_udp_lwip_abort(socket_obj_t *socket) {
     if (socket->pcb.udp) {
         udp_recv(socket->pcb.udp, NULL, NULL);
         udp_remove(socket->pcb.udp);
@@ -33,7 +33,7 @@ STATIC err_t socket_udp_lwip_abort(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC err_t socket_udp_lwip_bind(socket_obj_t *socket, const struct sockaddr *address) {
+static err_t socket_udp_lwip_bind(socket_obj_t *socket, const struct sockaddr *address) {
     err_t err = udp_bind(socket->pcb.udp, &address->addr, address->port);
     if (err == ERR_OK) {
         socket_acquire(socket);
@@ -44,7 +44,7 @@ STATIC err_t socket_udp_lwip_bind(socket_obj_t *socket, const struct sockaddr *a
     return err;
 }
 
-STATIC err_t socket_udp_lwip_connect(socket_obj_t *socket, const struct sockaddr *address) {
+static err_t socket_udp_lwip_connect(socket_obj_t *socket, const struct sockaddr *address) {
     struct udp_pcb *pcb = socket->pcb.udp;
     err_t err = udp_connect(pcb, &address->addr, address->port);
     if (err == ERR_OK) {
@@ -64,7 +64,7 @@ struct socket_udp_recv_result {
     struct sockaddr remote;
 };
 
-STATIC void socket_udp_lwip_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
+static void socket_udp_lwip_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
     printf("udp_recv: local=%s:%hu", ipaddr_ntoa(&pcb->local_ip), pcb->local_port);
     printf(", remote=%s:%hu, len=%i\n", ipaddr_ntoa(&pcb->remote_ip), pcb->remote_port, p ? (int)p->tot_len : -1);
     socket_obj_t *socket = arg;
@@ -87,7 +87,7 @@ STATIC void socket_udp_lwip_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     socket_release(socket);    
 }
 
-STATIC err_t socket_udp_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
+static err_t socket_udp_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, args->len, PBUF_RAM);
     if (!p) {
         return ERR_MEM;

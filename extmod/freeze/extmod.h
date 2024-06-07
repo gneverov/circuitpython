@@ -29,7 +29,7 @@ extern const mp_obj_type_t mp_type_qstr_array;
 
 #if MICROPY_PY_EXTENSION
 #define MP_REGISTER_STRUCT(var, type) \
-STATIC const mp_obj_qstr_array_t var##_link = { \
+static const mp_obj_qstr_array_t var##_link = { \
     .base = { &mp_type_qstr_array }, \
     .array = &var, \
     .array_size = sizeof(var), \

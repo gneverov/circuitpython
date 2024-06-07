@@ -22,7 +22,7 @@ static void lv_image_set_scale_y_0(lv_obj_t *obj, int32_t value) {
     lv_image_set_scale_y(obj, value);
 }
 
-STATIC void lvgl_image_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_image_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
 
     if (attr == MP_QSTR_src) {

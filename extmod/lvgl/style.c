@@ -238,7 +238,7 @@ lvgl_style_handle_t *lvgl_style_from_mp(mp_obj_t self_in) {
     return lvgl_ptr_from_mp(&lvgl_style_type, self_in);
 }
 
-STATIC mp_obj_t lvgl_style_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_style_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, true);
 
     lvgl_style_handle_t *handle = malloc(sizeof(lvgl_style_handle_t));
@@ -267,7 +267,7 @@ void lvgl_style_deinit(lvgl_ptr_t ptr) {
     lv_style_reset(&handle->style);
 }
 
-STATIC void lvgl_style_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_style_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lv_type_code_t type_code;
     lv_style_prop_t prop = lvgl_style_lookup(attr, &type_code);
     if (!prop) {
@@ -315,10 +315,10 @@ STATIC void lvgl_style_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC const mp_rom_map_elem_t lvgl_style_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_style_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_style_locals_dict, lvgl_style_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_style_locals_dict, lvgl_style_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_style,
@@ -344,7 +344,7 @@ typedef struct lvgl_grad_dsc_handle {
     lv_grad_dsc_t dsc;
 } lvgl_grad_dsc_handle_t;
 
-STATIC mp_obj_t lvgl_grad_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_grad_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, true);
     
     lvgl_grad_dsc_handle_t *handle = lv_malloc_zeroed(sizeof(lvgl_grad_dsc_handle_t));
@@ -355,10 +355,10 @@ STATIC mp_obj_t lvgl_grad_dsc_make_new(const mp_obj_type_t *type, size_t n_args,
     return self_out;
 }
 
-STATIC const qstr lvgl_gradient_stop_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_color), MP_ROM_QSTR_CONST(MP_QSTR_opa), MP_ROM_QSTR_CONST(MP_QSTR_frac) };
+static const qstr lvgl_gradient_stop_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_color), MP_ROM_QSTR_CONST(MP_QSTR_opa), MP_ROM_QSTR_CONST(MP_QSTR_frac) };
 MP_REGISTER_STRUCT(lvgl_gradient_stop_attrs, qstr);
 
-STATIC void lvgl_grad_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_grad_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_grad_dsc_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
 
     if (attr == MP_QSTR_dir) {
@@ -418,10 +418,10 @@ STATIC void lvgl_grad_dsc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC const mp_rom_map_elem_t lvgl_grad_dsc_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_grad_dsc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_grad_dsc_locals_dict, lvgl_grad_dsc_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_grad_dsc_locals_dict, lvgl_grad_dsc_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_grad_dsc,
@@ -452,7 +452,7 @@ typedef struct lvgl_style_transition_dsc_handle {
     lv_style_transition_dsc_t dsc;
 } lvgl_style_transition_dsc_handle_t;
 
-STATIC mp_obj_t lvgl_style_transition_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_style_transition_dsc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 4, 4, false);
     
     lvgl_style_transition_dsc_handle_t *handle = lv_malloc_zeroed(sizeof(lvgl_style_transition_dsc_handle_t));
@@ -472,10 +472,10 @@ STATIC mp_obj_t lvgl_style_transition_dsc_make_new(const mp_obj_type_t *type, si
     return self_out;
 }
 
-STATIC const mp_rom_map_elem_t lvgl_style_transition_dsc_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_style_transition_dsc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_style_transition_dsc_locals_dict, lvgl_style_transition_dsc_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_style_transition_dsc_locals_dict, lvgl_style_transition_dsc_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_style_transition_dsc,
@@ -492,7 +492,7 @@ static lvgl_ptr_t lvgl_style_transition_dsc_get_handle(const void *value) {
     return dsc->user_data;
 }
 
-STATIC const lvgl_type_attr_t lvgl_style_transition_dsc_attrs[] = {
+static const lvgl_type_attr_t lvgl_style_transition_dsc_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_props), offsetof(lv_style_transition_dsc_t, props), LV_TYPE_PROP_LIST },
     { MP_ROM_QSTR_CONST(MP_QSTR_path_cb), offsetof(lv_style_transition_dsc_t, path_xcb), LV_TYPE_ANIM_PATH },
     { MP_ROM_QSTR_CONST(MP_QSTR_time), offsetof(lv_style_transition_dsc_t, time), LV_TYPE_INT32 },

@@ -43,7 +43,7 @@ void socket_release(socket_obj_t *socket) {
 }
 
 socket_obj_t *socket_new(const mp_obj_type_t *type, const struct socket_vtable *vtable) {
-    socket_obj_t *self = m_new_obj_with_finaliser(socket_obj_t);
+    socket_obj_t *self = mp_obj_malloc_with_finaliser(socket_obj_t, type);
     memset(self, 0, sizeof(socket_obj_t));
     self->base.type = type;
     self->func = vtable;
@@ -68,7 +68,7 @@ void socket_call_cleanup(socket_obj_t *socket) {
     socket->rx_data = NULL;
 }
 
-STATIC struct pbuf *pbuf_advance(struct pbuf *p, u16_t *offset, u16_t len) {
+static struct pbuf *pbuf_advance(struct pbuf *p, u16_t *offset, u16_t len) {
     struct pbuf *new_p = pbuf_skip(p, *offset + len, offset);
     if (new_p != p) {
         pbuf_ref(new_p);
@@ -77,7 +77,7 @@ STATIC struct pbuf *pbuf_advance(struct pbuf *p, u16_t *offset, u16_t len) {
     return new_p;
 }
 
-STATIC struct pbuf *pbuf_concat(struct pbuf *p, struct pbuf *new_p) {
+static struct pbuf *pbuf_concat(struct pbuf *p, struct pbuf *new_p) {
     if (p) {
         if (new_p) {
             pbuf_cat(p, new_p);
@@ -89,7 +89,7 @@ STATIC struct pbuf *pbuf_concat(struct pbuf *p, struct pbuf *new_p) {
     }
 }
 
-STATIC struct pbuf *pbuf_grow(struct pbuf *p, u16_t new_len) {
+static struct pbuf *pbuf_grow(struct pbuf *p, u16_t new_len) {
     ssize_t delta = new_len - (p ? p->tot_len : 0);
     if (delta > 0) {
         struct pbuf *new_p = pbuf_alloc(PBUF_RAW, delta, PBUF_RAM);

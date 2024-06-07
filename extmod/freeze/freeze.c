@@ -22,17 +22,17 @@
 #include "py/smallint.h"
 
 
-STATIC uint8_t ram_data[1024] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
-STATIC size_t freeze_last_ram_size;
-STATIC int freeze_mode;
-STATIC const flash_heap_header_t *freeze_checkpoint;
+static uint8_t ram_data[1024] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
+static size_t freeze_last_ram_size;
+static int freeze_mode;
+static const flash_heap_header_t *freeze_checkpoint;
 
-STATIC void freeze_writer_nlr_callback(void *ctx) {
+static void freeze_writer_nlr_callback(void *ctx) {
     freeze_writer_t *self = ctx - offsetof(freeze_writer_t, nlr_callback);
     flash_heap_free(&self->heap);
 }
 
-STATIC void freeze_writer_init(freeze_writer_t *self, uint32_t type) {
+static void freeze_writer_init(freeze_writer_t *self, uint32_t type) {
     if (flash_heap_open(&self->heap, type) < 0) {
         mp_raise_OSError(errno);
     }
@@ -48,18 +48,18 @@ STATIC void freeze_writer_init(freeze_writer_t *self, uint32_t type) {
     }    
 }
 
-STATIC void freeze_writer_deinit(freeze_writer_t *self) {
+static void freeze_writer_deinit(freeze_writer_t *self) {
     nlr_pop_jump_callback(true);
 }
 
-STATIC void freeze_writer_commit(freeze_writer_t *self) {
+static void freeze_writer_commit(freeze_writer_t *self) {
     if (flash_heap_close(&self->heap) < 0) {
         mp_raise_OSError(errno);
     }
     freeze_last_ram_size += self->ram_end - self->ram_start;
 }
 
-STATIC flash_ptr_t freeze_tell(freeze_writer_t *self) {
+static flash_ptr_t freeze_tell(freeze_writer_t *self) {
     if (!self->ram_pos) {
         return flash_heap_tell(&self->heap);
     }
@@ -69,12 +69,12 @@ STATIC flash_ptr_t freeze_tell(freeze_writer_t *self) {
 }
 
 #ifndef NDEBUG
-STATIC bool freeze_is_valid_ptr(freeze_writer_t *self, flash_ptr_t fptr) {
+static bool freeze_is_valid_ptr(freeze_writer_t *self, flash_ptr_t fptr) {
     return flash_heap_is_valid_ptr(&self->heap, fptr) || ((fptr >= (flash_ptr_t)self->ram_start) && (fptr <= (flash_ptr_t)self->ram_limit));
 }
 #endif
 
-STATIC flash_ptr_t freeze_seek(freeze_writer_t *self, flash_ptr_t fptr) {
+static flash_ptr_t freeze_seek(freeze_writer_t *self, flash_ptr_t fptr) {
     flash_ptr_t old_fptr = freeze_tell(self);
     if (flash_heap_is_valid_ptr(&self->heap, fptr)) {
         if (flash_heap_seek(&self->heap, fptr) < 0) {
@@ -95,13 +95,13 @@ STATIC flash_ptr_t freeze_seek(freeze_writer_t *self, flash_ptr_t fptr) {
     return old_fptr;
 }
 
-STATIC void freeze_align(freeze_writer_t *self, size_t align) {
+static void freeze_align(freeze_writer_t *self, size_t align) {
     flash_ptr_t fptr = freeze_tell(self);
     fptr = flash_heap_align(fptr, align); 
     freeze_seek(self, fptr);
 }
 
-STATIC void freeze_read(freeze_writer_t *self, uint8_t *buffer, size_t length) {
+static void freeze_read(freeze_writer_t *self, uint8_t *buffer, size_t length) {
     if (!self->ram_pos) {
         if (flash_heap_read(&self->heap, buffer, length) < 0) {
             mp_raise_OSError(errno);
@@ -116,7 +116,7 @@ STATIC void freeze_read(freeze_writer_t *self, uint8_t *buffer, size_t length) {
     }
 }
 
-STATIC void freeze_write(freeze_writer_t *self, const uint8_t *buffer, size_t length) {
+static void freeze_write(freeze_writer_t *self, const uint8_t *buffer, size_t length) {
     if (!self->ram_pos) {
         if (flash_heap_write(&self->heap, buffer, length) < 0) {
             mp_raise_OSError(errno);
@@ -131,44 +131,44 @@ STATIC void freeze_write(freeze_writer_t *self, const uint8_t *buffer, size_t le
     }
 }
 
-STATIC void freeze_write_char(freeze_writer_t *self, uint8_t value) {
+static void freeze_write_char(freeze_writer_t *self, uint8_t value) {
     freeze_align(self, __alignof__(uint8_t));
     freeze_write(self, &value, sizeof(uint8_t));
 }
 
-STATIC void freeze_write_short(freeze_writer_t *self, uint16_t value) {
+static void freeze_write_short(freeze_writer_t *self, uint16_t value) {
     freeze_align(self, __alignof__(uint16_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uint16_t));
 }
 
-STATIC void freeze_write_int(freeze_writer_t *self, uint32_t value) {
+static void freeze_write_int(freeze_writer_t *self, uint32_t value) {
     freeze_align(self, __alignof__(uint32_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uint32_t));
 }
 
-STATIC void freeze_write_size(freeze_writer_t *self, size_t value) {
+static void freeze_write_size(freeze_writer_t *self, size_t value) {
     freeze_align(self, __alignof__(size_t));
     freeze_write(self, (uint8_t *)&value, sizeof(size_t));
 }
 
-STATIC void freeze_write_intptr(freeze_writer_t *self, uintptr_t value) {
+static void freeze_write_intptr(freeze_writer_t *self, uintptr_t value) {
     freeze_align(self, __alignof__(uintptr_t));
     freeze_write(self, (uint8_t *)&value, sizeof(uintptr_t));
 }
 
-STATIC bool freeze_is_freezable_ptr(freeze_writer_t *self, const void *ptr) {
+static bool freeze_is_freezable_ptr(freeze_writer_t *self, const void *ptr) {
     extern uint8_t end;
     return (ptr == 0) || 
         ((ptr >= (void *)XIP_BASE) && (ptr <= (void *)self->heap.flash_end)) || 
         ((ptr >= (void *)SRAM_BASE) && (ptr <= (void *)&end));
 }
 
-STATIC void freeze_write_fptr(freeze_writer_t *self, flash_ptr_t fptr) {
+static void freeze_write_fptr(freeze_writer_t *self, flash_ptr_t fptr) {
     assert(freeze_is_valid_ptr(self, fptr) || freeze_is_freezable_ptr(self, (void *)fptr));
     freeze_write_intptr(self, (uintptr_t)fptr);
 }
 
-STATIC flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t align, bool ram) {
+static flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t align, bool ram) {
     flash_ptr_t fptr = ram ? (flash_ptr_t)self->ram_end : self->heap.flash_end;
     fptr = flash_heap_align(fptr, align);
     if (!ram) {
@@ -189,7 +189,7 @@ STATIC flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t al
     return fptr;
 }
 
-STATIC void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *ptr) {
+static void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *ptr) {
     assert(freeze_is_valid_ptr(self, fptr));
     assert(!freeze_is_freezable_ptr(self, ptr));
 
@@ -201,7 +201,7 @@ STATIC void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *
     elem->value = MP_OBJ_NEW_SMALL_INT(fptr);
 }
 
-STATIC bool freeze_lookup_ptr(freeze_writer_t *self, flash_ptr_t *fptr, const void *ptr) {
+static bool freeze_lookup_ptr(freeze_writer_t *self, flash_ptr_t *fptr, const void *ptr) {
     if (freeze_is_freezable_ptr(self, ptr)) {
         *fptr = (flash_ptr_t)ptr;
         return true;
@@ -223,7 +223,7 @@ STATIC bool freeze_lookup_ptr(freeze_writer_t *self, flash_ptr_t *fptr, const vo
 typedef void (*freeze_write_t)(freeze_writer_t *self, const void *value);
 typedef size_t (*freeze_sizeof_t)(const void *value);
 
-STATIC void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
+static void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
     if (freeze_is_freezable_ptr(self, ptr)) {
         freeze_write_fptr(self, (flash_ptr_t)ptr);
         return;
@@ -237,7 +237,7 @@ STATIC void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size
     freeze_write_fptr(self, fptr);
 }
 
-STATIC void freeze_write_aliased_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
+static void freeze_write_aliased_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
     flash_ptr_t fptr;
     if (!freeze_lookup_ptr(self, &fptr, ptr)) {
         fptr = freeze_allocate(self, size, align, ram);
@@ -249,9 +249,9 @@ STATIC void freeze_write_aliased_ptr(freeze_writer_t *self, const void *ptr, siz
     freeze_write_fptr(self, fptr);
 }
 
-STATIC void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj);
+static void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj);
 
-STATIC void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, size_t count, bool ram) {
+static void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, size_t count, bool ram) {
     flash_ptr_t fobjs = 0;
     if (objs) {
         fobjs = freeze_allocate(self, count * sizeof(mp_obj_t), __alignof__(mp_obj_t), ram);
@@ -266,9 +266,9 @@ STATIC void freeze_write_obj_array(freeze_writer_t *self, const mp_obj_t *objs, 
 }
 
 // ### base ###
-STATIC void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj);
+static void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj);
 
-STATIC void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) {
+static void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) {
     freeze_align(self, __alignof__(mp_obj_base_t));
     freeze_write_raw_obj(self, &base->type->base);
 }
@@ -276,7 +276,7 @@ STATIC void freeze_write_base(freeze_writer_t *self, const mp_obj_base_t *base) 
 // ### cell ###
 extern const mp_obj_type_t mp_type_cell;
 
-STATIC void freeze_write_cell(freeze_writer_t *self, const mp_obj_cell_t *cell) {
+static void freeze_write_cell(freeze_writer_t *self, const mp_obj_cell_t *cell) {
     assert(cell->base.type == &mp_type_cell);
 
     freeze_align(self, __alignof__(mp_obj_cell_t));
@@ -294,11 +294,11 @@ typedef struct _mp_obj_closure_t {
 
 extern const mp_obj_type_t mp_type_closure;
 
-STATIC size_t freeze_sizeof_closure(const mp_obj_closure_t *closure) {
+static size_t freeze_sizeof_closure(const mp_obj_closure_t *closure) {
     return closure->n_closed * sizeof(mp_obj_t);
 }
 
-STATIC void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *closure) {
+static void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *closure) {
     assert(closure->base.type == &mp_type_closure);
 
     freeze_align(self, __alignof__(mp_obj_closure_t));
@@ -311,7 +311,7 @@ STATIC void freeze_write_closure(freeze_writer_t *self, const mp_obj_closure_t *
 }
 
 // ### dict ###
-STATIC void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mutable) {
+static void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mutable) {
     union mp_map_header {
         mp_map_t map;
         size_t header;
@@ -324,7 +324,7 @@ STATIC void freeze_write_map(freeze_writer_t *self, const mp_map_t *map, bool mu
     freeze_write_obj_array(self, (mp_obj_t *)map->table, 2 * map->alloc, mutable);
 }
 
-STATIC void freeze_write_immutable_dict_ptr(freeze_writer_t *self, const mp_obj_dict_t *dict) {
+static void freeze_write_immutable_dict_ptr(freeze_writer_t *self, const mp_obj_dict_t *dict) {
     assert(dict->base.type == &mp_type_dict);
 
     flash_ptr_t fdict = freeze_allocate(self, sizeof(mp_obj_dict_t), __alignof__(mp_obj_dict_t), false);
@@ -335,7 +335,7 @@ STATIC void freeze_write_immutable_dict_ptr(freeze_writer_t *self, const mp_obj_
     freeze_write_fptr(self, fdict);    
 }
 
-STATIC void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t *dict) {
+static void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t *dict) {
     assert(dict->base.type == &mp_type_dict);
 
     freeze_write_base(self, &dict->base);
@@ -343,7 +343,7 @@ STATIC void freeze_write_mutable_dict(freeze_writer_t *self, const mp_obj_dict_t
 }
 
 // ### fun_bc ###
-STATIC flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc) {
+static flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_t *rc) {
     flash_ptr_t frc;
     if (!freeze_lookup_ptr(self, &frc, rc)) {
         frc = freeze_allocate(self, sizeof(mp_raw_code_t), __alignof__(mp_raw_code_t), false);
@@ -354,8 +354,6 @@ STATIC flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_
 
         freeze_write_ptr(self, rc->fun_data, rc->fun_data_len, __alignof__(char), false);
         
-        freeze_write_size(self, rc->fun_data_len);
-
         flash_ptr_t fchild_table = 0;
         if (rc->children) {
             fchild_table = freeze_allocate(self, rc->n_children * sizeof(mp_raw_code_t *), __alignof__(mp_raw_code_t *), false);
@@ -368,12 +366,22 @@ STATIC flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_
         }
         freeze_write_fptr(self, fchild_table);
 
+        freeze_write_size(self, rc->fun_data_len);
+
         freeze_write_size(self, rc->n_children);
 
 #if MICROPY_EMIT_MACHINE_CODE
         freeze_write_short(self, rc->prelude_offset);
+#endif
 
-        freeze_write_int(self, rc->type_sig);
+#if MICROPY_PY_SYS_SETTRACE
+        freeze_write_int(self, rc->line_of_definition);
+        freeze_align(self, __alignof__(mp_bytecode_prelude_t));
+        freeze_write(self, &rc->prelude, sizeof(mp_bytecode_prelude_t));
+#endif
+
+#if MICROPY_EMIT_INLINE_ASM
+        freeze_write_int(self, rc->asm_n_pos_args | (rc->asm_type_sig << 8));
 #endif
 
         freeze_seek(self, ret);
@@ -381,11 +389,11 @@ STATIC flash_ptr_t freeze_new_raw_code(freeze_writer_t *self, const mp_raw_code_
     return frc;
 }
 
-STATIC size_t freeze_sizeof_fun_bc(const mp_obj_fun_bc_t *fun_bc) {
+static size_t freeze_sizeof_fun_bc(const mp_obj_fun_bc_t *fun_bc) {
     return fun_bc->n_extra_args * sizeof(mp_obj_t);
 }
 
-STATIC void freeze_write_fun_bc(freeze_writer_t *self, const mp_obj_fun_bc_t *fun_bc) {
+static void freeze_write_fun_bc(freeze_writer_t *self, const mp_obj_fun_bc_t *fun_bc) {
     assert((fun_bc->base.type == &mp_type_fun_bc) || (fun_bc->base.type == &mp_type_gen_wrap));
 
     freeze_align(self, __alignof__(mp_obj_fun_bc_t));
@@ -431,7 +439,7 @@ typedef struct _mp_obj_bound_meth_t {
 
 extern const mp_obj_type_t mp_type_bound_meth;
 
-STATIC void freeze_write_bound_meth(freeze_writer_t *self, const mp_obj_bound_meth_t *bound_meth) {
+static void freeze_write_bound_meth(freeze_writer_t *self, const mp_obj_bound_meth_t *bound_meth) {
     assert((bound_meth->base.type == &mp_type_bound_meth));
 
     freeze_align(self, __alignof__(mp_obj_bound_meth_t));
@@ -446,7 +454,7 @@ typedef struct _mp_obj_float_t {
     mp_float_t value;
 } mp_obj_float_t;
 
-STATIC void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *float_obj) {
+static void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *float_obj) {
     assert(float_obj->base.type == &mp_type_float);
     freeze_align(self, __alignof__(mp_obj_float_t));
     freeze_write_base(self, &float_obj->base);
@@ -455,14 +463,14 @@ STATIC void freeze_write_float_obj(freeze_writer_t *self, const mp_obj_float_t *
 }
 
 // ### int ###
-STATIC void freeze_write_mpz(freeze_writer_t *self, const mpz_t *mpz) {
+static void freeze_write_mpz(freeze_writer_t *self, const mpz_t *mpz) {
     freeze_align(self, __alignof__(mpz_t));
     freeze_write_size(self, *(size_t *)mpz);
     freeze_write_size(self, mpz->len);
     freeze_write_ptr(self, mpz->dig, mpz->len * sizeof(mpz_dig_t), __alignof__(mpz_dig_t), false);
 }
 
-STATIC void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_obj) {
+static void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_obj) {
     assert(int_obj->base.type == &mp_type_int);
     freeze_align(self, __alignof__(mp_obj_int_t));
     freeze_write_base(self, &int_obj->base);
@@ -470,7 +478,7 @@ STATIC void freeze_write_int_obj(freeze_writer_t *self, const mp_obj_int_t *int_
 }
 
 // ### module ###
-STATIC void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *module) {
+static void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *module) {
     assert(module->base.type == &mp_type_module);
 
     mp_obj_t dest[2];
@@ -487,7 +495,7 @@ STATIC void freeze_write_module(freeze_writer_t *self, const mp_obj_module_t *mo
     }
 }
 
-STATIC void freeze_write_module_context(freeze_writer_t *self, const mp_module_context_t *context) {
+static void freeze_write_module_context(freeze_writer_t *self, const mp_module_context_t *context) {
     // printf("module_context: n_qstr=%d, n_obj=%d\n", context->constants.n_qstr, context->constants.n_obj);
 
     freeze_align(self, __alignof__(mp_module_context_t));
@@ -500,7 +508,7 @@ STATIC void freeze_write_module_context(freeze_writer_t *self, const mp_module_c
     freeze_write_size(self, context->constants.n_obj);
 }
 
-STATIC flash_ptr_t freeze_new_module(freeze_writer_t *self, mp_obj_t module_obj) {
+static flash_ptr_t freeze_new_module(freeze_writer_t *self, mp_obj_t module_obj) {
     const mp_module_context_t *module = MP_OBJ_TO_PTR(module_obj);
     flash_ptr_t fmodule;
     if (freeze_lookup_ptr(self, &fmodule, module)) {
@@ -515,7 +523,7 @@ STATIC flash_ptr_t freeze_new_module(freeze_writer_t *self, mp_obj_t module_obj)
     return fmodule;
 }
 
-STATIC void freeze_write_non_frozen_module(freeze_writer_t *self, const mp_module_context_t *context) {
+static void freeze_write_non_frozen_module(freeze_writer_t *self, const mp_module_context_t *context) {
     mp_obj_t dest[2];
     mp_load_method_maybe(MP_OBJ_FROM_PTR(context), MP_QSTR___name__, dest);
     mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("module '%s' already loaded but not frozen"), mp_obj_str_get_str(dest[0]));
@@ -527,7 +535,7 @@ typedef struct _mp_obj_property_t {
     mp_obj_t proxy[3]; // getter, setter, deleter
 } mp_obj_property_t;
 
-STATIC void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t *property) {
+static void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t *property) {
     assert(property->base.type == &mp_type_property);
 
     freeze_align(self, __alignof__(mp_obj_property_t));
@@ -538,7 +546,7 @@ STATIC void freeze_write_property(freeze_writer_t *self, const mp_obj_property_t
 }
 
 // ### static/class method ###
-STATIC void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj_static_class_method_t *scm) {
+static void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj_static_class_method_t *scm) {
     assert((scm->base.type == &mp_type_staticmethod) || (scm->base.type == &mp_type_classmethod));
 
     freeze_align(self, __alignof__(mp_obj_static_class_method_t));
@@ -547,7 +555,7 @@ STATIC void freeze_write_static_class_method(freeze_writer_t *self, const mp_obj
 }
 
 // ### str ###
-STATIC void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
+static void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
     assert((str->base.type == &mp_type_str) || (str->base.type == &mp_type_bytes));
 
     freeze_align(self, __alignof__(mp_obj_str_t));
@@ -558,11 +566,11 @@ STATIC void freeze_write_str(freeze_writer_t *self, const mp_obj_str_t *str) {
 }
 
 // ### tuple ###
-STATIC size_t freeze_sizeof_tuple(const mp_obj_tuple_t *tuple) {
+static size_t freeze_sizeof_tuple(const mp_obj_tuple_t *tuple) {
     return tuple->len * sizeof(mp_obj_t);
 }
 
-STATIC void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tuple) {
+static void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tuple) {
     assert(tuple->base.type == &mp_type_tuple);
 
     freeze_align(self, __alignof__(mp_obj_tuple_t));
@@ -574,7 +582,7 @@ STATIC void freeze_write_tuple(freeze_writer_t *self, const mp_obj_tuple_t *tupl
 }
 
 // ### type ###
-STATIC size_t freeze_type_num_slots(const mp_obj_type_t *type) {
+static size_t freeze_type_num_slots(const mp_obj_type_t *type) {
     size_t n = 0;
     n = MAX(n, type->slot_index_make_new);
     n = MAX(n, type->slot_index_print);
@@ -591,11 +599,11 @@ STATIC size_t freeze_type_num_slots(const mp_obj_type_t *type) {
     return n;
 }
 
-STATIC size_t freeze_sizeof_type(const mp_obj_type_t *type) {
+static size_t freeze_sizeof_type(const mp_obj_type_t *type) {
     return freeze_type_num_slots(type) * sizeof(void *);
 }
 
-STATIC void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) {
+static void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) {
     assert(type->base.type == &mp_type_type);
 
     freeze_align(self, __alignof__(mp_obj_type_t));
@@ -631,13 +639,13 @@ STATIC void freeze_write_type(freeze_writer_t *self, const mp_obj_type_t *type) 
 }
 
 // ### instance ###
-STATIC size_t freeze_sizeof_instance(const mp_obj_instance_t *obj) {
+static size_t freeze_sizeof_instance(const mp_obj_instance_t *obj) {
     const mp_obj_type_t *native_base;
     size_t num_native_bases = instance_count_native_bases(obj->base.type, &native_base);
     return num_native_bases * sizeof(native_base);
 }
 
-STATIC void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t *obj) {
+static void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t *obj) {
     assert(obj->base.type->flags & MP_TYPE_FLAG_INSTANCE_TYPE);
 
     const mp_obj_type_t *native_base;
@@ -652,7 +660,7 @@ STATIC void freeze_write_instance(freeze_writer_t *self, const mp_obj_instance_t
 }
 
 // ## list ##
-STATIC void freeze_write_list(freeze_writer_t *self, const mp_obj_list_t *list) {
+static void freeze_write_list(freeze_writer_t *self, const mp_obj_list_t *list) {
     assert(list->base.type == &mp_type_list);
 
     freeze_align(self, __alignof__(mp_obj_list_t));
@@ -668,7 +676,7 @@ typedef struct _mp_obj_set_t {
     mp_set_t set;
 } mp_obj_set_t;
 
-STATIC void freeze_write_set(freeze_writer_t *self, const mp_obj_set_t *set) {
+static void freeze_write_set(freeze_writer_t *self, const mp_obj_set_t *set) {
     assert(set->base.type == &mp_type_set);
 
     freeze_align(self, __alignof__(mp_obj_set_t));
@@ -689,11 +697,11 @@ typedef struct _mp_obj_re_t {
 
 extern const mp_obj_type_t re_type;
 
-STATIC size_t freeze_sizeof_re(const mp_obj_re_t *re) {
+static size_t freeze_sizeof_re(const mp_obj_re_t *re) {
     return re->re.bytelen;
 }
 
-STATIC void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
+static void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
     assert(re->base.type == &re_type);
 
     freeze_align(self, __alignof__(mp_obj_re_t));
@@ -706,7 +714,7 @@ STATIC void freeze_write_re(freeze_writer_t *self, const mp_obj_re_t *re) {
 #endif
 
 // ### raw_obj ###
-STATIC struct freeze_type {
+static struct freeze_type {
     const mp_obj_type_t *type;
     size_t size;
     size_t align;
@@ -744,7 +752,7 @@ STATIC struct freeze_type {
 },
 freeze_type_instance = { NULL, sizeof(mp_obj_instance_t), __alignof__(mp_obj_instance_t), true, (freeze_write_t)freeze_write_instance, (freeze_sizeof_t)freeze_sizeof_instance };
 
-STATIC const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) { 
+static const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) { 
     const struct freeze_type *ftype = freeze_type_table;
     while (ftype->type) {
         if (type == ftype->type) {
@@ -758,7 +766,7 @@ STATIC const struct freeze_type *freeze_get_type(const mp_obj_type_t *type) {
     return NULL;
 }
 
-STATIC flash_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
+static flash_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
     if (raw_obj == NULL) {
         return 0;
     }
@@ -785,12 +793,12 @@ STATIC flash_ptr_t freeze_new_raw_obj(freeze_writer_t *self, const mp_obj_base_t
     return fraw_obj;
 }
 
-STATIC void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
+static void freeze_write_raw_obj(freeze_writer_t *self, const mp_obj_base_t *raw_obj) {
     flash_ptr_t fraw_obj = freeze_new_raw_obj(self, raw_obj);
     freeze_write_fptr(self, fraw_obj);
 }
 
-STATIC void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj) {
+static void freeze_write_obj(freeze_writer_t *self, mp_const_obj_t obj) {
     if (obj == MP_OBJ_NULL) {
         freeze_write_intptr(self, (uintptr_t)obj);
     } else if (mp_obj_is_small_int(obj)) {
@@ -815,7 +823,7 @@ enum qstr_pool_field {
     QSTR_POOL_FIELD_QSTRS,
 };
 
-STATIC void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum qstr_pool_field field) {
+static void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum qstr_pool_field field) {
     if (freeze_is_freezable_ptr(self, pool)) {
         return;
     }
@@ -843,7 +851,7 @@ STATIC void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *poo
     }
 }
 
-STATIC flash_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last_pool) {
+static flash_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last_pool) {
     const qstr_pool_t *first_pool = last_pool;
     while (!freeze_is_freezable_ptr(self, first_pool) && first_pool->prev != NULL) {
         first_pool = first_pool->prev;
@@ -908,7 +916,7 @@ void freeze_gc() {
     }
 }
 
-STATIC void freeze_set_qstr_pool(qstr_pool_t *qstr_pool) {
+static void freeze_set_qstr_pool(qstr_pool_t *qstr_pool) {
     MP_STATE_VM(last_pool) = qstr_pool;
     MP_STATE_VM(qstr_last_chunk) = NULL;
     MP_STATE_VM(qstr_last_alloc) = 0;
@@ -933,7 +941,7 @@ void freeze_init() {
     freeze_checkpoint = flash_heap_next_header();
 }
 
-STATIC bool freeze_check_module_name(mp_obj_t module_obj, qstr module_name) {
+static bool freeze_check_module_name(mp_obj_t module_obj, qstr module_name) {
     if (module_obj == MP_OBJ_NULL) {
         return false;
     }
@@ -1007,7 +1015,7 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     return module_obj;
 }
 
-STATIC void freeze_qstrs(void) {
+static void freeze_qstrs(void) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         freeze_writer_t freezer;
@@ -1030,7 +1038,7 @@ STATIC void freeze_qstrs(void) {
     }
 }
 
-STATIC void freeze_mode_nlr_callback(void *ctx) {
+static void freeze_mode_nlr_callback(void *ctx) {
         freeze_mode--;
 }
 
@@ -1103,7 +1111,7 @@ static mp_obj_t freeze_schedule_run(mp_obj_t arg) {
     xTaskNotifyGive(ctx->task);
     return MP_OBJ_NULL;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(freeze_schedule_run_obj, freeze_schedule_run);
+static MP_DEFINE_CONST_FUN_OBJ_1(freeze_schedule_run_obj, freeze_schedule_run);
 
 static int freeze_schedule(freeze_schedule_fun_t fun, ...) {
     va_list args;

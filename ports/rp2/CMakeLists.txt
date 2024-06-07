@@ -33,7 +33,7 @@ if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
 endif()
 
 # Include board config, it may override MICROPY_FROZEN_MANIFEST
-include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake) 
+include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
 
 # Set the PICO_BOARD if it's not already set (allow a board to override it).
 if(NOT PICO_BOARD)
@@ -52,16 +52,11 @@ set(PICO_NO_GC_SECTIONS ON)
 # A board may also have enabled additional components.
 set(MICROPY_SSL_MBEDTLS OFF)
 
-# Use the pico-sdk cyw43_driver instead of the local one
-if (MICROPY_PY_NETWORK_CYW43)
-    # set(PICO_CYW43_DRIVER_PATH ${MICROPY_DIR}/lib/cyw43-driver)
-endif()
-
 # Necessary submodules for all boards.
 find_package (Python3 COMPONENTS Interpreter)
 string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
 string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/mbedtls)
-# string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
+string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
 
 function(add_micropy_extension_library TARGET LIB)
     add_dynamic_library(${TARGET} ${ARGN})
@@ -210,7 +205,6 @@ set(MICROPY_SOURCE_PORT
 set(MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_PY}
     ${MICROPY_DIR}/shared/readline/readline.c
-    ${MICROPY_DIR}/shared/runtime/mpirq.c
     ${MICROPY_PORT_DIR}/machine_adc.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
     ${MICROPY_PORT_DIR}/machine_pin.c
@@ -576,6 +570,15 @@ target_compile_options(${MICROPY_TARGET} PRIVATE
     -g  # always include debug information in the ELF
 )
 
+# Apply optimisations to performance-critical source code.
+set_source_files_properties(
+    ${MICROPY_PY_DIR}/map.c
+    ${MICROPY_PY_DIR}/mpz.c
+    ${MICROPY_PY_DIR}/vm.c
+    PROPERTIES
+    COMPILE_OPTIONS "-O2"
+)
+
 set_source_files_properties(
     ${PICO_SDK_PATH}/src/rp2_common/pico_double/double_math.c
     ${PICO_SDK_PATH}/src/rp2_common/pico_float/float_math.c
@@ -588,13 +591,13 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_HEAP_SIZE=0
     PICO_STACK_SIZE=1024
     PICO_CORE1_STACK_SIZE=0
+    PICO_MAX_SHARED_IRQ_HANDLERS=8 # we need more than the default
     PICO_PROGRAM_NAME="MicroPythonRT"
     PICO_NO_PROGRAM_VERSION_STRING=1 # do it ourselves in main.c
     MICROPY_BUILD_TYPE="${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION} ${CMAKE_BUILD_TYPE}"
     PICO_NO_BI_STDIO_UART=1 # we call it UART REPL
     PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
     PICO_INT64_OPS_IN_RAM=1
-    PICO_MAX_SHARED_IRQ_HANDLERS=8
 )
 
 target_link_libraries(${MICROPY_TARGET}
@@ -660,7 +663,7 @@ add_custom_command(
 
 add_import_library(micropython_import ${MICROPY_TARGET})
 
-# Explicitly add certian objects from libc_nano.a to support dynamic linking
+# Explicitly add certain objects from libc_nano.a to support dynamic linking
 include(newlib_obj.cmake)
 get_target_property(DIR extract_stdlib BINARY_DIR)
 list(TRANSFORM STDLIB_OBJECTS PREPEND "${DIR}/stdlib/")

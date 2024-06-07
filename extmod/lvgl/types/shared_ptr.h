@@ -31,7 +31,7 @@ typedef struct lvgl_obj_ptr {
 
 void lvgl_ptr_init_handle(lvgl_ptr_handle_t *handle, const struct lvgl_ptr_type *type, void *lv_ptr);
 
-void lvgl_ptr_init_obj(lvgl_obj_ptr_t *obj, const mp_obj_type_t *mp_type, lvgl_ptr_handle_t *handle);
+void lvgl_ptr_init_obj(lvgl_obj_ptr_t *obj, lvgl_ptr_handle_t *handle);
 
 lvgl_ptr_t lvgl_ptr_copy(lvgl_ptr_handle_t *handle);
 

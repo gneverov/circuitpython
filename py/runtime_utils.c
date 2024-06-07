@@ -27,7 +27,7 @@
 
 #include "py/runtime.h"
 
-STATIC mp_obj_t mp_call_function_protected_handler(nlr_buf_t *nlr) {
+static mp_obj_t mp_call_function_protected_handler(nlr_buf_t *nlr) {
     mp_obj_t exc = MP_OBJ_FROM_PTR(nlr->ret_val);
     #if MICROPY_FREERTOS
     if (mp_obj_exception_match(exc, &mp_type_KeyboardInterrupt) || mp_obj_exception_match(exc, &mp_type_SystemExit)) {

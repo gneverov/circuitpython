@@ -22,7 +22,7 @@
 #define SHUT_WR         1
 #define SHUT_RDWR       2
 
-STATIC mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 3, false);
     mp_int_t family = AF_INET;
     mp_int_t sock_type = SOCK_STREAM;
@@ -59,12 +59,12 @@ STATIC mp_obj_t socket_make_new(const mp_obj_type_t *type, size_t n_args, size_t
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC void socket_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+static void socket_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "<socket family=%d type=%d proto=%d>", AF_INET, self->func == &socket_udp_vtable ? SOCK_DGRAM : SOCK_STREAM, 0);
 }
 
-STATIC mp_uint_t socket_close(mp_obj_t self_in, int *errcode) {
+static mp_uint_t socket_close(mp_obj_t self_in, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);   
     LOCK_TCPIP_CORE();
     err_t err = self->func->lwip_close ? self->func->lwip_close(self) : ERR_VAL;
@@ -82,7 +82,7 @@ STATIC mp_uint_t socket_close(mp_obj_t self_in, int *errcode) {
     return 0;
 }
 
-STATIC mp_obj_t socket_del(mp_obj_t self_in) {
+static mp_obj_t socket_del(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     LOCK_TCPIP_CORE();
     if (self->func->lwip_abort) {
@@ -93,9 +93,9 @@ STATIC mp_obj_t socket_del(mp_obj_t self_in) {
     socket_deinit(self);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_del_obj, socket_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_del_obj, socket_del);
 
-STATIC mp_obj_t socket_getpeername(mp_obj_t self_in) {
+static mp_obj_t socket_getpeername(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     socket_acquire(self);
     int errcode = self->errcode;
@@ -110,9 +110,9 @@ STATIC mp_obj_t socket_getpeername(mp_obj_t self_in) {
     }
     return socket_sockaddr_format(&address);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_getpeername_obj, socket_getpeername);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_getpeername_obj, socket_getpeername);
 
-STATIC mp_obj_t socket_getsockname(mp_obj_t self_in) {
+static mp_obj_t socket_getsockname(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     socket_acquire(self);
     int errcode = self->errcode;
@@ -123,13 +123,13 @@ STATIC mp_obj_t socket_getsockname(mp_obj_t self_in) {
     }    
     return socket_sockaddr_format(&address);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_getsockname_obj, socket_getsockname);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_getsockname_obj, socket_getsockname);
 
-STATIC mp_obj_t socket_check_ret(mp_uint_t ret, int errcode) {
+static mp_obj_t socket_check_ret(mp_uint_t ret, int errcode) {
     return mp_stream_return(ret, errcode);
 }
 
-STATIC mp_obj_t socket_bind(mp_obj_t self_in, mp_obj_t address_in) {
+static mp_obj_t socket_bind(mp_obj_t self_in, mp_obj_t address_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     struct sockaddr address;
     sokcet_sockaddr_parse(address_in, &address);
@@ -139,9 +139,9 @@ STATIC mp_obj_t socket_bind(mp_obj_t self_in, mp_obj_t address_in) {
     socket_lwip_raise(err);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_bind_obj, socket_bind);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_bind_obj, socket_bind);
 
-STATIC mp_obj_t socket_listen(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_listen(size_t n_args, const mp_obj_t *args) {
     socket_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_int_t backlog = TCP_DEFAULT_LISTEN_BACKLOG;
     if (n_args > 1) {
@@ -157,9 +157,9 @@ STATIC mp_obj_t socket_listen(size_t n_args, const mp_obj_t *args) {
     self->listening = 1;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_listen_obj, 1, 2, socket_listen);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_listen_obj, 1, 2, socket_listen);
 
-STATIC mp_obj_t socket_accept(mp_obj_t self_in) {
+static mp_obj_t socket_accept(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     socket_obj_t *new_self;
@@ -176,9 +176,9 @@ STATIC mp_obj_t socket_accept(mp_obj_t self_in) {
     }
     return result;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_accept_obj, socket_accept);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_accept_obj, socket_accept);
 
-STATIC mp_uint_t socket_connected(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t socket_connected(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_uint_t ret = 0;
     socket_acquire(self);
@@ -194,7 +194,7 @@ STATIC mp_uint_t socket_connected(mp_obj_t self_in, void *buf, mp_uint_t size, i
     return ret;
 }
 
-STATIC mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t address_in) {
+static mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t address_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     struct sockaddr address;
     sokcet_sockaddr_parse(address_in, &address);
@@ -208,17 +208,17 @@ STATIC mp_obj_t socket_connect(mp_obj_t self_in, mp_obj_t address_in) {
     mp_uint_t ret = mp_poll_block(self_in, NULL, 0, &errcode, socket_connected, MP_STREAM_POLL_RD | MP_STREAM_POLL_WR, self->timeout, false);
     return socket_check_ret(ret, errcode);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_connect_obj, socket_connect);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_connect_obj, socket_connect);
 
-STATIC mp_obj_t socket_isconnected(mp_obj_t self_in) {
+static mp_obj_t socket_isconnected(mp_obj_t self_in) {
     int errcode;
     mp_uint_t ret = socket_connected(self_in, NULL, 0, &errcode);
     mp_obj_t result = socket_check_ret(ret, errcode);
     return (result == mp_const_none) ? mp_const_false : mp_const_true;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_isconnected_obj, socket_isconnected);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_isconnected_obj, socket_isconnected);
 
-STATIC mp_obj_t socket_recvfrom_interal(mp_obj_t self_in, mp_obj_t bufsize_in, struct sockaddr *address) {
+static mp_obj_t socket_recvfrom_interal(mp_obj_t self_in, mp_obj_t bufsize_in, struct sockaddr *address) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_int_t bufsize = mp_obj_get_int(bufsize_in);
     if (bufsize < 0) {
@@ -238,12 +238,12 @@ STATIC mp_obj_t socket_recvfrom_interal(mp_obj_t self_in, mp_obj_t bufsize_in, s
     return result;
 }
 
-STATIC mp_obj_t socket_recv(mp_obj_t self_in, mp_obj_t bufsize_in) {
+static mp_obj_t socket_recv(mp_obj_t self_in, mp_obj_t bufsize_in) {
     return socket_recvfrom_interal(self_in, bufsize_in, NULL);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_recv_obj, socket_recv);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_recv_obj, socket_recv);
 
-STATIC mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t bufsize_in) {
+static mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t bufsize_in) {
     struct sockaddr address;
     mp_obj_t result = socket_recvfrom_interal(self_in, bufsize_in, &address);
 
@@ -256,9 +256,9 @@ STATIC mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t bufsize_in) {
     }
     return result;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_recvfrom_obj, socket_recvfrom);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_recvfrom_obj, socket_recvfrom);
 
-STATIC mp_obj_t socket_recvfrom_into_internal(size_t n_args, const mp_obj_t *args, struct sockaddr *address) {
+static mp_obj_t socket_recvfrom_into_internal(size_t n_args, const mp_obj_t *args, struct sockaddr *address) {
     socket_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args[1], &bufinfo, MP_BUFFER_WRITE);
@@ -275,12 +275,12 @@ STATIC mp_obj_t socket_recvfrom_into_internal(size_t n_args, const mp_obj_t *arg
     return socket_check_ret(ret, errcode);
 }
 
-STATIC mp_obj_t socket_recv_into(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_recv_into(size_t n_args, const mp_obj_t *args) {
     return socket_recvfrom_into_internal(n_args, args, NULL);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_recv_into_obj, 2, 3, socket_recv_into);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_recv_into_obj, 2, 3, socket_recv_into);
 
-STATIC mp_obj_t socket_recvfrom_into(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_recvfrom_into(size_t n_args, const mp_obj_t *args) {
     struct sockaddr address;
     mp_obj_t result = socket_recvfrom_into_internal(n_args, args, &address);
 
@@ -293,14 +293,14 @@ STATIC mp_obj_t socket_recvfrom_into(size_t n_args, const mp_obj_t *args) {
     }
     return result;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_recvfrom_into_obj, 2, 3, socket_recvfrom_into);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_recvfrom_into_obj, 2, 3, socket_recvfrom_into);
 
-STATIC mp_uint_t socket_stream_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t socket_stream_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return self->func->socket_recvfrom(self, buf, size, NULL, errcode);
 }
 
-STATIC size_t socket_find_newline(socket_obj_t *self) {
+static size_t socket_find_newline(socket_obj_t *self) {
     if (!self->rx_data) {
         return -1u;
     }
@@ -316,7 +316,7 @@ STATIC size_t socket_find_newline(socket_obj_t *self) {
     return pos;
 }
 
-STATIC mp_obj_t socket_readline(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_readline(size_t n_args, const mp_obj_t *args) {
     socket_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     size_t size = -1u;
     if (n_args > 1) {
@@ -351,9 +351,9 @@ STATIC mp_obj_t socket_readline(size_t n_args, const mp_obj_t *args) {
     }
     return mp_obj_new_bytes_from_vstr(&vstr);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_readline_obj, 1, 2, socket_readline);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_readline_obj, 1, 2, socket_readline);
 
-STATIC mp_uint_t socket_sendto_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t socket_sendto_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     socket_sendto_args_t *args = buf;
     LOCK_TCPIP_CORE();
@@ -365,12 +365,12 @@ STATIC mp_uint_t socket_sendto_nonblock(mp_obj_t self_in, void *buf, mp_uint_t s
     return args->len;
 }
 
-STATIC mp_uint_t socket_sendto_block(mp_obj_t self_in, socket_sendto_args_t *args, int *errcode) {
+static mp_uint_t socket_sendto_block(mp_obj_t self_in, socket_sendto_args_t *args, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_poll_block(self_in, args, sizeof(socket_sendto_args_t), errcode, socket_sendto_nonblock, MP_STREAM_POLL_WR, self->timeout, false);
 }
 
-STATIC mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t bytes_in, mp_obj_t address_in) {
+static mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t bytes_in, mp_obj_t address_in) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(bytes_in, &bufinfo, MP_BUFFER_READ);
 
@@ -387,14 +387,14 @@ STATIC mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t bytes_in, mp_obj_t addr
     mp_uint_t ret = socket_sendto_block(self_in, &args, &errcode);
     return socket_check_ret(ret, errcode);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(socket_sendto_obj, socket_sendto);
+static MP_DEFINE_CONST_FUN_OBJ_3(socket_sendto_obj, socket_sendto);
 
-STATIC mp_obj_t socket_send(mp_obj_t self_in, mp_obj_t bytes_in) {
+static mp_obj_t socket_send(mp_obj_t self_in, mp_obj_t bytes_in) {
     return socket_sendto(self_in, bytes_in, MP_OBJ_NULL);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_send_obj, socket_send);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_send_obj, socket_send);
 
-STATIC mp_obj_t socket_sendall(mp_obj_t self_in, mp_obj_t bytes_in) {
+static mp_obj_t socket_sendall(mp_obj_t self_in, mp_obj_t bytes_in) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(bytes_in, &bufinfo, MP_BUFFER_READ);
     socket_sendto_args_t args;
@@ -413,9 +413,9 @@ STATIC mp_obj_t socket_sendall(mp_obj_t self_in, mp_obj_t bytes_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_sendall_obj, socket_sendall);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_sendall_obj, socket_sendall);
 
-STATIC mp_uint_t socket_stream_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t socket_stream_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     socket_sendto_args_t args;
     args.buf = buf;
     args.len = size;
@@ -423,7 +423,7 @@ STATIC mp_uint_t socket_stream_write(mp_obj_t self_in, const void *buf, mp_uint_
     return socket_sendto_block(self_in, &args, errcode);
 }
 
-STATIC mp_obj_t socket_shutdown(mp_obj_t self_in, mp_obj_t how_in) {
+static mp_obj_t socket_shutdown(mp_obj_t self_in, mp_obj_t how_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_uint_t how = mp_obj_get_int(how_in);
     bool shut_rx = (how == SHUT_RD) || (how == SHUT_RDWR);
@@ -439,9 +439,9 @@ STATIC mp_obj_t socket_shutdown(mp_obj_t self_in, mp_obj_t how_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_shutdown_obj, socket_shutdown);
+static MP_DEFINE_CONST_FUN_OBJ_2(socket_shutdown_obj, socket_shutdown);
 
-STATIC mp_uint_t socket_flush(mp_obj_t self_in, int *errcode) {
+static mp_uint_t socket_flush(mp_obj_t self_in, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     LOCK_TCPIP_CORE();
     err_t err = self->func->lwip_output ? self->func->lwip_output(self) : ERR_VAL;
@@ -452,7 +452,7 @@ STATIC mp_uint_t socket_flush(mp_obj_t self_in, int *errcode) {
     return 0;
 }
 
-STATIC mp_uint_t socket_timeout(mp_obj_t self_in, mp_int_t timeout, int *errcode) {
+static mp_uint_t socket_timeout(mp_obj_t self_in, mp_int_t timeout, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->user_closed) {
         *errcode = self->errcode;
@@ -462,17 +462,17 @@ STATIC mp_uint_t socket_timeout(mp_obj_t self_in, mp_int_t timeout, int *errcode
     return 0;
 }
 
-STATIC mp_obj_t socket_getsockopt(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_getsockopt(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_getsockopt_obj, 3, 3, socket_getsockopt);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_getsockopt_obj, 3, 3, socket_getsockopt);
 
-STATIC mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_setsockopt_obj, 3, 4, socket_setsockopt);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_setsockopt_obj, 3, 4, socket_setsockopt);
 
-STATIC mp_uint_t socket_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t socket_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     uint32_t ret;
@@ -499,13 +499,13 @@ STATIC mp_uint_t socket_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg
     return ret;
 }
 
-STATIC mp_obj_t socket_available(mp_obj_t self_in) {
+static mp_obj_t socket_available(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return MP_OBJ_NEW_SMALL_INT(self->rx_len);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_available_obj, socket_available);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_available_obj, socket_available);
 
-STATIC const mp_rom_map_elem_t socket_locals_dict_table[] = {
+static const mp_rom_map_elem_t socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&socket_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_bind),            MP_ROM_PTR(&socket_bind_obj) },
     { MP_ROM_QSTR(MP_QSTR_listen),          MP_ROM_PTR(&socket_listen_obj) },
@@ -538,9 +538,9 @@ STATIC const mp_rom_map_elem_t socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_isconnected),     MP_ROM_PTR(&socket_isconnected_obj) },
     { MP_ROM_QSTR(MP_QSTR_available),       MP_ROM_PTR(&socket_available_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(socket_locals_dict, socket_locals_dict_table);
+static MP_DEFINE_CONST_DICT(socket_locals_dict, socket_locals_dict_table);
 
-STATIC const mp_stream_p_t socket_stream_p = {
+static const mp_stream_p_t socket_stream_p = {
     .read = socket_stream_read,
     .write = socket_stream_write,
     .ioctl = socket_ioctl,
@@ -560,7 +560,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 
 // ###
 
-STATIC mp_obj_t socket_dns_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t socket_dns_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
     socket_obj_t *self = socket_new(type, &socket_dns_vtable);
     LOCK_TCPIP_CORE();
@@ -570,7 +570,7 @@ STATIC mp_obj_t socket_dns_make_new(const mp_obj_type_t *type, size_t n_args, si
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC mp_obj_t socket_dns_gethostbyname(mp_obj_t self_in, mp_obj_t name_in) {
+static mp_obj_t socket_dns_gethostbyname(mp_obj_t self_in, mp_obj_t name_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     socket_sendto_args_t args;
     const char* name = mp_obj_str_get_str(name_in);
@@ -583,9 +583,9 @@ STATIC mp_obj_t socket_dns_gethostbyname(mp_obj_t self_in, mp_obj_t name_in) {
     socket_lwip_raise(err);    
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(dns_socket_gethostbyname_obj, socket_dns_gethostbyname);
+static MP_DEFINE_CONST_FUN_OBJ_2(dns_socket_gethostbyname_obj, socket_dns_gethostbyname);
 
-STATIC mp_obj_t socket_dns_get(mp_obj_t self_in) {
+static mp_obj_t socket_dns_get(mp_obj_t self_in) {
     socket_obj_t *self = MP_OBJ_TO_PTR(self_in);
     struct sockaddr address;
     vstr_t buf;
@@ -606,18 +606,18 @@ STATIC mp_obj_t socket_dns_get(mp_obj_t self_in) {
     };
     return mp_obj_new_tuple(2, items);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(dns_socket_get_obj, socket_dns_get);
+static MP_DEFINE_CONST_FUN_OBJ_1(dns_socket_get_obj, socket_dns_get);
 
-STATIC const mp_rom_map_elem_t socket_dns_locals_dict_table[] = {
+static const mp_rom_map_elem_t socket_dns_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_gethostbyname),   MP_ROM_PTR(&dns_socket_gethostbyname_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_settimeout),      MP_ROM_PTR(&mp_stream_settimeout_obj) },
     { MP_ROM_QSTR(MP_QSTR_close),           MP_ROM_PTR(&mp_stream_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_get),             MP_ROM_PTR(&dns_socket_get_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(socket_dns_locals_dict, socket_dns_locals_dict_table);
+static MP_DEFINE_CONST_DICT(socket_dns_locals_dict, socket_dns_locals_dict_table);
 
-STATIC const mp_stream_p_t socket_dns_stream_p = {
+static const mp_stream_p_t socket_dns_stream_p = {
     .read = NULL,
     .write = NULL,
     .ioctl = socket_ioctl,
@@ -635,7 +635,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &socket_dns_locals_dict
     );
 
-STATIC mp_obj_t socket_gethostbyname(mp_obj_t name) {
+static mp_obj_t socket_gethostbyname(mp_obj_t name) {
     mp_obj_t dns_socket = socket_dns_make_new(&socket_dns_type, 0, 0, NULL);
     socket_dns_gethostbyname(dns_socket, name);
     mp_obj_t result = socket_dns_get(dns_socket);
@@ -656,9 +656,9 @@ STATIC mp_obj_t socket_gethostbyname(mp_obj_t name) {
     mp_obj_tuple_get(items[1], &len, &items);
     return items[0];
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_gethostbyname_obj, socket_gethostbyname);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_gethostbyname_obj, socket_gethostbyname);
 
-STATIC mp_obj_t socket_getaddrinfo(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_getaddrinfo(size_t n_args, const mp_obj_t *args) {
     // mp_arg_check_num(n_args, 0, 2, 6, false);
     mp_obj_t host = args[0];
     mp_obj_get_int(args[1]);
@@ -720,9 +720,9 @@ STATIC mp_obj_t socket_getaddrinfo(size_t n_args, const mp_obj_t *args) {
     mp_obj_t tuple = mp_obj_new_tuple(5, items);
     return mp_obj_new_list(1, &tuple);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_getaddrinfo_obj, 2, 6, socket_getaddrinfo);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_getaddrinfo_obj, 2, 6, socket_getaddrinfo);
 
-STATIC mp_obj_t socket_create_connection(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t socket_create_connection(size_t n_args, const mp_obj_t *args) {
     if (!mp_obj_is_type(args[0], &mp_type_tuple)) {
         mp_raise_TypeError(NULL);
     }
@@ -741,9 +741,9 @@ STATIC mp_obj_t socket_create_connection(size_t n_args, const mp_obj_t *args) {
     socket_connect(socket, tuple);
     return socket;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_create_connection_obj, 1, 3, socket_create_connection);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_create_connection_obj, 1, 3, socket_create_connection);
 
-STATIC mp_obj_t socket_create_server(mp_obj_t address_in) {
+static mp_obj_t socket_create_server(mp_obj_t address_in) {
     if (!mp_obj_is_type(address_in, &mp_type_tuple)) {
         mp_raise_TypeError(NULL);
     }
@@ -760,9 +760,9 @@ STATIC mp_obj_t socket_create_server(mp_obj_t address_in) {
     socket_listen(1, &socket);
     return socket;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_create_server_obj, socket_create_server);
+static MP_DEFINE_CONST_FUN_OBJ_1(socket_create_server_obj, socket_create_server);
 
-STATIC const mp_rom_map_elem_t socket_module_globals_table[] = {
+static const mp_rom_map_elem_t socket_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_socket) },
     { MP_ROM_QSTR(MP_QSTR_gethostbyname),   MP_ROM_PTR(&socket_gethostbyname_obj) },
     { MP_ROM_QSTR(MP_QSTR_getaddrinfo),     MP_ROM_PTR(&socket_getaddrinfo_obj) },
@@ -780,7 +780,7 @@ STATIC const mp_rom_map_elem_t socket_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_SOCK_STREAM),     MP_ROM_INT(SOCK_STREAM) },
     { MP_ROM_QSTR(MP_QSTR_SOCK_DGRAM),      MP_ROM_INT(SOCK_DGRAM) },
 };
-STATIC MP_DEFINE_CONST_DICT(socket_module_globals, socket_module_globals_table);
+static MP_DEFINE_CONST_DICT(socket_module_globals, socket_module_globals_table);
 
 const mp_obj_module_t socket_module = {
     .base = { &mp_type_module },

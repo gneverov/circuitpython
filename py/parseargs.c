@@ -7,7 +7,7 @@
 #include "py/runtime.h"
 
 
-STATIC const char *parse_arg(const mp_obj_t arg, const char *format, qstr name, va_list *vals) {
+static const char *parse_arg(const mp_obj_t arg, const char *format, qstr name, va_list *vals) {
     if (*format == 's') {
         format++;
         if (*format == '*') {

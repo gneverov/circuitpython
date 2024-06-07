@@ -16,7 +16,7 @@
 #include "py/poll.h"
 
 
-STATIC const qstr selector_key_attrs[] = { MP_QSTR_fileobj, MP_QSTR_events, MP_QSTR_data };
+static const qstr selector_key_attrs[] = { MP_QSTR_fileobj, MP_QSTR_events, MP_QSTR_data };
 
 typedef struct {
     mp_uint_t events;
@@ -31,7 +31,7 @@ typedef struct {
     select_event_t queue_storage[];
 } select_obj_selector_t;
 
-STATIC mp_obj_t select_selector_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t select_selector_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
     size_t queue_length = 16;
     if (n_args >= 1) {
@@ -45,7 +45,7 @@ STATIC mp_obj_t select_selector_make_new(const mp_obj_type_t *type, size_t n_arg
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC void select_selector_signal(mp_obj_t poll_obj, mp_obj_t stream_obj, mp_uint_t events, BaseType_t *pxHigherPriorityTaskWoken) {
+static void select_selector_signal(mp_obj_t poll_obj, mp_obj_t stream_obj, mp_uint_t events, BaseType_t *pxHigherPriorityTaskWoken) {
     select_obj_selector_t *self = MP_OBJ_TO_PTR(poll_obj);
     select_event_t event = { events, stream_obj };
     if (pxHigherPriorityTaskWoken) {
@@ -63,7 +63,7 @@ const mp_poll_p_t select_selector_poll_p = {
     .signal = select_selector_signal,
 };
 
-STATIC mp_obj_t select_selector_register(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t select_selector_register(size_t n_args, const mp_obj_t *args) {
     // mp_arg_check_num(n_args, 0, 2, 4, false);
     select_obj_selector_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_obj_t stream_obj = args[1];
@@ -98,7 +98,7 @@ STATIC mp_obj_t select_selector_register(size_t n_args, const mp_obj_t *args) {
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(select_selector_register_obj, 2, 4, select_selector_register);
 
-STATIC mp_obj_t select_selector_unregister(mp_obj_t self_in, mp_obj_t stream_obj) {
+static mp_obj_t select_selector_unregister(mp_obj_t self_in, mp_obj_t stream_obj) {
     select_obj_selector_t *self = MP_OBJ_TO_PTR(self_in);
 
     mp_map_elem_t *elem = mp_map_lookup(&self->map, mp_obj_id(stream_obj), MP_MAP_LOOKUP_REMOVE_IF_FOUND);
@@ -117,7 +117,7 @@ STATIC mp_obj_t select_selector_unregister(mp_obj_t self_in, mp_obj_t stream_obj
 MP_DEFINE_CONST_FUN_OBJ_2(select_selector_unregister_obj, select_selector_unregister);
 
 
-STATIC mp_obj_t select_selector_modify(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t select_selector_modify(size_t n_args, const mp_obj_t *args) {
     // mp_arg_check_num(n_args, 0, 2, 4, false);
     select_obj_selector_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_obj_t stream_obj = args[1];
@@ -149,7 +149,7 @@ STATIC mp_obj_t select_selector_modify(size_t n_args, const mp_obj_t *args) {
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(select_selector_modify_obj, 2, 4, select_selector_modify);
 
 
-STATIC mp_obj_t select_selector_select(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t select_selector_select(size_t n_args, const mp_obj_t *args) {
     // mp_arg_check_num(n_args, 0, 1, 2, false);
     select_obj_selector_t *self = MP_OBJ_TO_PTR(args[0]);
     TickType_t timeout = portMAX_DELAY;
@@ -190,7 +190,7 @@ STATIC mp_obj_t select_selector_select(size_t n_args, const mp_obj_t *args) {
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(select_selector_select_obj, 1, 2, select_selector_select);
 
-STATIC mp_obj_t select_selector_close(mp_obj_t self_in) {
+static mp_obj_t select_selector_close(mp_obj_t self_in) {
     select_obj_selector_t *self = MP_OBJ_TO_PTR(self_in);
 
     for (size_t i = 0; i < self->map.alloc; i++) {
@@ -217,7 +217,7 @@ STATIC mp_obj_t select_selector_close(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(select_selector_close_obj, select_selector_close);
 
-STATIC mp_obj_t select_selector_get_key(mp_obj_t self_in, mp_obj_t stream_obj) {
+static mp_obj_t select_selector_get_key(mp_obj_t self_in, mp_obj_t stream_obj) {
     select_obj_selector_t *self = MP_OBJ_TO_PTR(self_in);
     mp_map_elem_t *elem = mp_map_lookup(&self->map, mp_obj_id(stream_obj), MP_MAP_LOOKUP);
     if (elem == MP_OBJ_NULL) {
@@ -227,7 +227,7 @@ STATIC mp_obj_t select_selector_get_key(mp_obj_t self_in, mp_obj_t stream_obj) {
 }
 MP_DEFINE_CONST_FUN_OBJ_2(select_selector_get_key_obj, select_selector_get_key);
 
-STATIC mp_obj_t select_selector_get_map(mp_obj_t self_in) {
+static mp_obj_t select_selector_get_map(mp_obj_t self_in) {
     select_obj_selector_t *self = MP_OBJ_TO_PTR(self_in);
     mp_obj_t result = mp_obj_new_dict(self->map.used);
     for (int i = 0; i < self->map.alloc; i++) {
@@ -240,7 +240,7 @@ STATIC mp_obj_t select_selector_get_map(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(select_selector_get_map_obj, select_selector_get_map);
 
-STATIC const mp_rom_map_elem_t select_selector_locals_dict_table[] = {
+static const mp_rom_map_elem_t select_selector_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_register),        MP_ROM_PTR(&select_selector_register_obj) },
     { MP_ROM_QSTR(MP_QSTR_unregister),      MP_ROM_PTR(&select_selector_unregister_obj) },
     { MP_ROM_QSTR(MP_QSTR_modify),          MP_ROM_PTR(&select_selector_modify_obj) },
@@ -249,9 +249,9 @@ STATIC const mp_rom_map_elem_t select_selector_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_get_key),         MP_ROM_PTR(&select_selector_get_key_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_map),         MP_ROM_PTR(&select_selector_get_map_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(select_selector_locals_dict, select_selector_locals_dict_table);
+static MP_DEFINE_CONST_DICT(select_selector_locals_dict, select_selector_locals_dict_table);
 
-STATIC MP_DEFINE_CONST_OBJ_TYPE(
+static MP_DEFINE_CONST_OBJ_TYPE(
     select_type_selector,
     MP_QSTR_Selector,
     MP_TYPE_FLAG_NONE,
@@ -268,7 +268,7 @@ typedef struct {
     mp_stream_poll_t poll;
 } select_obj_event_t;
 
-STATIC mp_obj_t select_event_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t select_event_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
 
     select_obj_event_t *self = m_new_obj(select_obj_event_t);
@@ -282,13 +282,13 @@ STATIC mp_obj_t select_event_make_new(const mp_obj_type_t *type, size_t n_args, 
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC mp_uint_t event_close(mp_obj_t self_in, int *errcode) {
+static mp_uint_t event_close(mp_obj_t self_in, int *errcode) {
     select_obj_event_t *self = MP_OBJ_TO_PTR(self_in);
     mp_stream_poll_close(&self->poll);
     return 0;
 }
 
-STATIC mp_uint_t select_event_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t select_event_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     select_obj_event_t *self = MP_OBJ_TO_PTR(self_in);
     if (size < sizeof(uint64_t)) {
         *errcode = MP_EINVAL;
@@ -308,7 +308,7 @@ STATIC mp_uint_t select_event_read(mp_obj_t self_in, void *buf, mp_uint_t size, 
     return sizeof(uint64_t);
 }
 
-STATIC mp_uint_t select_event_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t select_event_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     select_obj_event_t *self = MP_OBJ_TO_PTR(self_in);
     if (size < sizeof(uint64_t)) {
         *errcode = MP_EINVAL;
@@ -328,7 +328,7 @@ STATIC mp_uint_t select_event_write(mp_obj_t self_in, const void *buf, mp_uint_t
     return sizeof(uint64_t);
 }
 
-STATIC mp_uint_t select_event_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t select_event_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     select_obj_event_t *self = MP_OBJ_TO_PTR(self_in);
 
     mp_uint_t events;
@@ -346,21 +346,21 @@ STATIC mp_uint_t select_event_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr
     }
 }
 
-STATIC const mp_rom_map_elem_t select_event_locals_dict_table[] = {
+static const mp_rom_map_elem_t select_event_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read),            MP_ROM_PTR(&mp_stream_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_write),           MP_ROM_PTR(&mp_stream_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_ioctl),           MP_ROM_PTR(&mp_stream_ioctl_obj) },
     { MP_ROM_QSTR(MP_QSTR_close),           MP_ROM_PTR(&mp_stream_close_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(select_event_locals_dict, select_event_locals_dict_table);
+static MP_DEFINE_CONST_DICT(select_event_locals_dict, select_event_locals_dict_table);
 
-STATIC const mp_stream_p_t select_event_stream_p = {
+static const mp_stream_p_t select_event_stream_p = {
     .read = select_event_read,
     .write = select_event_write,
     .ioctl = select_event_ioctl,
 };
 
-STATIC MP_DEFINE_CONST_OBJ_TYPE(
+static MP_DEFINE_CONST_OBJ_TYPE(
     select_type_event,
     MP_QSTR_Event,
     MP_TYPE_FLAG_NONE,
@@ -370,7 +370,7 @@ STATIC MP_DEFINE_CONST_OBJ_TYPE(
     );
 
 
-STATIC const mp_rom_map_elem_t select_module_globals_table[] = {
+static const mp_rom_map_elem_t select_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_select) },
     { MP_ROM_QSTR(MP_QSTR_Selector),        MP_ROM_PTR(&select_type_selector) },
     { MP_ROM_QSTR(MP_QSTR_Event),           MP_ROM_PTR(&select_type_event) },
@@ -382,7 +382,7 @@ STATIC const mp_rom_map_elem_t select_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_EVENT_WRITE),     MP_ROM_INT(MP_STREAM_POLL_WR) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(select_module_globals, select_module_globals_table);
+static MP_DEFINE_CONST_DICT(select_module_globals, select_module_globals_table);
 
 const mp_obj_module_t select_module = {
     .base = { &mp_type_module },

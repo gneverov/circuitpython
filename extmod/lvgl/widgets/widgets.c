@@ -27,7 +27,7 @@ static void lv_label_set_long_int(lv_obj_t *obj, int32_t value) {
     lv_label_set_long_mode(obj, value);
 }
 
-STATIC void lvgl_label_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_label_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
 
     if (attr == MP_QSTR_text) {
@@ -54,23 +54,23 @@ MP_DEFINE_CONST_OBJ_TYPE(
 MP_REGISTER_OBJECT(lvgl_type_label);
 
 
-STATIC void lv_slider_set_value_0(lv_obj_t * obj, int32_t value) {
+static void lv_slider_set_value_0(lv_obj_t * obj, int32_t value) {
     lv_slider_set_value(obj, value, LV_ANIM_OFF);
 }
 
-STATIC void lv_slider_set_left_value_0(lv_obj_t * obj, int32_t left_value) {
+static void lv_slider_set_left_value_0(lv_obj_t * obj, int32_t left_value) {
     lv_slider_set_left_value(obj, left_value, LV_ANIM_OFF);
 }
 
-STATIC void lv_slider_set_min_value(lv_obj_t * obj, int32_t min_value) {
+static void lv_slider_set_min_value(lv_obj_t * obj, int32_t min_value) {
     lv_slider_set_range(obj, min_value, lv_slider_get_max_value(obj));
 }
 
-STATIC void lv_slider_set_max_value(lv_obj_t * obj, int32_t max_value) {
+static void lv_slider_set_max_value(lv_obj_t * obj, int32_t max_value) {
     lv_slider_set_range(obj, lv_slider_get_min_value(obj), max_value);
 }
 
-STATIC void lvgl_slider_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_slider_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
 
     if (attr == MP_QSTR_value) {

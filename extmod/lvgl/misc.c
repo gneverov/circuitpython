@@ -55,7 +55,7 @@ void lvgl_point_precise_from_mp(mp_obj_t obj, lv_point_precise_t *point) {
 #endif
 }
 
-STATIC const qstr lvgl_area_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_x1), MP_ROM_QSTR_CONST(MP_QSTR_y1), MP_ROM_QSTR_CONST(MP_QSTR_x2), MP_ROM_QSTR_CONST(MP_QSTR_y2) };
+static const qstr lvgl_area_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_x1), MP_ROM_QSTR_CONST(MP_QSTR_y1), MP_ROM_QSTR_CONST(MP_QSTR_x2), MP_ROM_QSTR_CONST(MP_QSTR_y2) };
 MP_REGISTER_STRUCT(lvgl_area_attrs, qstr);
 
 mp_obj_t lvgl_area_to_mp(const lv_area_t *area) {
@@ -68,7 +68,7 @@ mp_obj_t lvgl_area_to_mp(const lv_area_t *area) {
     return mp_obj_new_attrtuple(lvgl_area_attrs, 4, items);
 }
 
-STATIC const qstr lvgl_point_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_x), MP_ROM_QSTR_CONST(MP_QSTR_y) };
+static const qstr lvgl_point_attrs[] = { MP_ROM_QSTR_CONST(MP_QSTR_x), MP_ROM_QSTR_CONST(MP_QSTR_y) };
 MP_REGISTER_STRUCT(lvgl_point_attrs, qstr);
 
 mp_obj_t lvgl_point_to_mp(const lv_point_t *point) {    

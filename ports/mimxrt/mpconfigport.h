@@ -79,6 +79,7 @@ uint32_t trng_random_u32(void);
 #define MICROPY_PY_RANDOM_SEED_INIT_FUNC    (trng_random_u32())
 #define MICROPY_PY_MACHINE                  (1)
 #define MICROPY_PY_MACHINE_INCLUDEFILE      "ports/mimxrt/modmachine.c"
+#define MICROPY_PY_MACHINE_RESET            (1)
 #define MICROPY_PY_MACHINE_BARE_METAL_FUNCS (1)
 #define MICROPY_PY_MACHINE_BOOTLOADER       (1)
 #define MICROPY_PY_MACHINE_DISABLE_IRQ_ENABLE_IRQ (1)
@@ -130,14 +131,9 @@ uint32_t trng_random_u32(void);
 #define MICROPY_PY_WEBSOCKET                (MICROPY_PY_LWIP)
 #define MICROPY_PY_WEBREPL                  (MICROPY_PY_LWIP)
 #define MICROPY_PY_LWIP_SOCK_RAW            (MICROPY_PY_LWIP)
-// #define MICROPY_PY_HASHLIB_MD5              (MICROPY_PY_SSL)
+#define MICROPY_PY_HASHLIB_MD5              (MICROPY_PY_SSL)
 #define MICROPY_PY_HASHLIB_SHA1             (MICROPY_PY_SSL)
-// #define MICROPY_PY_CRYPTOLIB                (MICROPY_PY_SSL)
-
-// Prevent the "LWIP task" from running.
-#define MICROPY_PY_LWIP_ENTER   MICROPY_PY_PENDSV_ENTER
-#define MICROPY_PY_LWIP_REENTER MICROPY_PY_PENDSV_REENTER
-#define MICROPY_PY_LWIP_EXIT    MICROPY_PY_PENDSV_EXIT
+#define MICROPY_PY_CRYPTOLIB                (MICROPY_PY_SSL)
 
 #ifndef MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 #define MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE (1)
@@ -150,6 +146,8 @@ uint32_t trng_random_u32(void);
 #ifndef MICROPY_PY_NETWORK_HOSTNAME_DEFAULT
 #define MICROPY_PY_NETWORK_HOSTNAME_DEFAULT "mpy-mimxrt"
 #endif
+
+#define MICROPY_HW_ENABLE_USBDEV            (1)
 
 // Hooks to add builtins
 

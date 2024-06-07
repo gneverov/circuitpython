@@ -63,7 +63,7 @@
         } \
 }
 
-STATIC mp_obj_t mp_os_check_ret(int ret) {
+static mp_obj_t mp_os_check_ret(int ret) {
     if (ret >= 0) {
         return mp_obj_new_int(ret);
     } else {
@@ -80,20 +80,20 @@ STATIC mp_obj_t mp_os_check_ret(int ret) {
 #define CONST_RELEASE const
 #endif
 
-STATIC const qstr mp_os_uname_info_fields[] = {
+static const qstr mp_os_uname_info_fields[] = {
     MP_QSTR_sysname,
     MP_QSTR_nodename,
     MP_QSTR_release,
     MP_QSTR_version,
     MP_QSTR_machine
 };
-STATIC const MP_DEFINE_STR_OBJ(mp_os_uname_info_sysname_obj, MICROPY_PY_SYS_PLATFORM);
-STATIC const MP_DEFINE_STR_OBJ(mp_os_uname_info_nodename_obj, MICROPY_PY_SYS_PLATFORM);
-STATIC CONST_RELEASE MP_DEFINE_STR_OBJ(mp_os_uname_info_release_obj, MICROPY_VERSION_STRING);
-STATIC const MP_DEFINE_STR_OBJ(mp_os_uname_info_version_obj, MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE MICROPY_BUILD_TYPE_PAREN);
-STATIC const MP_DEFINE_STR_OBJ(mp_os_uname_info_machine_obj, MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME);
+static const MP_DEFINE_STR_OBJ(mp_os_uname_info_sysname_obj, MICROPY_PY_SYS_PLATFORM);
+static const MP_DEFINE_STR_OBJ(mp_os_uname_info_nodename_obj, MICROPY_PY_SYS_PLATFORM);
+static CONST_RELEASE MP_DEFINE_STR_OBJ(mp_os_uname_info_release_obj, MICROPY_VERSION_STRING);
+static const MP_DEFINE_STR_OBJ(mp_os_uname_info_version_obj, MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE MICROPY_BUILD_TYPE_PAREN);
+static const MP_DEFINE_STR_OBJ(mp_os_uname_info_machine_obj, MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME);
 
-STATIC MP_DEFINE_ATTRTUPLE(
+static MP_DEFINE_ATTRTUPLE(
     mp_os_uname_info_obj,
     mp_os_uname_info_fields,
     5,
@@ -104,7 +104,7 @@ STATIC MP_DEFINE_ATTRTUPLE(
     MP_ROM_PTR(&mp_os_uname_info_machine_obj)
     );
 
-STATIC mp_obj_t mp_os_uname(void) {
+static mp_obj_t mp_os_uname(void) {
     #if MICROPY_PY_OS_UNAME_RELEASE_DYNAMIC
     const char *release = mp_os_uname_release();
     mp_os_uname_info_release_obj.len = strlen(release);
@@ -112,13 +112,13 @@ STATIC mp_obj_t mp_os_uname(void) {
     #endif
     return MP_OBJ_FROM_PTR(&mp_os_uname_info_obj);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_uname_obj, mp_os_uname);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_uname_obj, mp_os_uname);
 
 #endif
 
 // Process Parameters
 // ------------------
-STATIC mp_obj_t mp_os_environ(void) {
+static mp_obj_t mp_os_environ(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
     extern char **environ;
     char **env = environ;
@@ -133,9 +133,9 @@ STATIC mp_obj_t mp_os_environ(void) {
     }
     return dict;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_environ_obj, mp_os_environ);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_environ_obj, mp_os_environ);
 
-STATIC mp_obj_t mp_os_getenv(mp_obj_t key_in) {
+static mp_obj_t mp_os_getenv(mp_obj_t key_in) {
     const char *key = mp_obj_str_get_str(key_in);
     char *value = getenv(key);
     if (!value) {
@@ -144,24 +144,24 @@ STATIC mp_obj_t mp_os_getenv(mp_obj_t key_in) {
     size_t len = strlen(value);
     return mp_obj_new_str(value, len);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_getenv_obj, mp_os_getenv);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_getenv_obj, mp_os_getenv);
 
-STATIC mp_obj_t mp_os_getpid(void) {
+static mp_obj_t mp_os_getpid(void) {
     int pid = getpid();
     return mp_obj_new_int(pid);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_getpid_obj, mp_os_getpid);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_getpid_obj, mp_os_getpid);
 
-STATIC mp_obj_t mp_os_putenv(mp_obj_t key_in, mp_obj_t value_in) {
+static mp_obj_t mp_os_putenv(mp_obj_t key_in, mp_obj_t value_in) {
     const char *key = mp_obj_str_get_str(key_in);
     const char *value = mp_obj_str_get_str(value_in);
     int ret = setenv(key, value, 1);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_putenv_obj, mp_os_putenv);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_putenv_obj, mp_os_putenv);
 
-STATIC mp_obj_t mp_os_strerror(mp_obj_t code_in) {
+static mp_obj_t mp_os_strerror(mp_obj_t code_in) {
     mp_int_t code = mp_obj_get_int(code_in);
     char *s = strerror(code);
     if (!s) {
@@ -169,63 +169,63 @@ STATIC mp_obj_t mp_os_strerror(mp_obj_t code_in) {
     }
     return mp_obj_new_str(s, strlen(s));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_strerror_obj, mp_os_strerror);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_strerror_obj, mp_os_strerror);
 
-STATIC mp_obj_t mp_os_unsetenv(mp_obj_t key_in) {
+static mp_obj_t mp_os_unsetenv(mp_obj_t key_in) {
     const char *key = mp_obj_str_get_str(key_in);
     int ret = unsetenv(key);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_unsetenv_obj, mp_os_unsetenv);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_unsetenv_obj, mp_os_unsetenv);
 
 // File Descriptor Operations
 // --------------------------
-STATIC mp_obj_t mp_os_close(mp_obj_t fd_in) {
+static mp_obj_t mp_os_close(mp_obj_t fd_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     int ret;
     MP_OS_CALL(ret, close, fd);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_close_obj, mp_os_close);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_close_obj, mp_os_close);
 
-STATIC mp_obj_t mp_os_dup(mp_obj_t fd_in) {
+static mp_obj_t mp_os_dup(mp_obj_t fd_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     int ret;
     MP_OS_CALL(ret, dup, fd);
     return mp_os_check_ret(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dup_obj, mp_os_dup);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dup_obj, mp_os_dup);
 
-STATIC mp_obj_t mp_os_dup2(mp_obj_t fd1_in, mp_obj_t fd2_in) {
+static mp_obj_t mp_os_dup2(mp_obj_t fd1_in, mp_obj_t fd2_in) {
     mp_int_t fd1 = mp_obj_get_int(fd1_in);
     mp_int_t fd2 = mp_obj_get_int(fd2_in);
     int ret;
     MP_OS_CALL(ret, dup2, fd1, fd2);
     return mp_os_check_ret(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dup2_obj, mp_os_dup2);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dup2_obj, mp_os_dup2);
 
-STATIC mp_obj_t mp_os_fsync(mp_obj_t fd_in) {
+static mp_obj_t mp_os_fsync(mp_obj_t fd_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     int ret;
     MP_OS_CALL(ret, fsync, fd);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_fsync_obj, mp_os_fsync);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_fsync_obj, mp_os_fsync);
 
-STATIC mp_obj_t mp_os_isatty(mp_obj_t fd_in) {
+static mp_obj_t mp_os_isatty(mp_obj_t fd_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     int ret;
     MP_OS_CALL(ret, isatty, fd);
     mp_os_check_ret(ret);
     return mp_obj_new_bool(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_isatty_obj, mp_os_isatty);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_isatty_obj, mp_os_isatty);
 
-STATIC mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in) {
+static mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     mp_int_t pos = mp_obj_get_int(pos_in);
     mp_int_t whence = mp_obj_get_int(whence_in);
@@ -233,9 +233,9 @@ STATIC mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in)
     MP_OS_CALL(ret, lseek, fd, pos, whence);
     return mp_os_check_ret(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(mp_os_lseek_obj, mp_os_lseek);
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_os_lseek_obj, mp_os_lseek);
 
-STATIC mp_obj_t mp_os_open(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_os_open(size_t n_args, const mp_obj_t *args) {
     const char *path = mp_obj_str_get_str(args[0]);
     mp_int_t flags = mp_obj_get_int(args[1]);
     mp_int_t mode = n_args > 2 ? mp_obj_get_int(args[2]) : 0777;
@@ -243,9 +243,9 @@ STATIC mp_obj_t mp_os_open(size_t n_args, const mp_obj_t *args) {
     MP_OS_CALL(ret, open, path, flags, mode);
     return mp_os_check_ret(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_open_obj, 2, 3, mp_os_open);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_open_obj, 2, 3, mp_os_open);
 
-STATIC mp_obj_t mp_os_read(mp_obj_t fd_in, mp_obj_t n_in) {
+static mp_obj_t mp_os_read(mp_obj_t fd_in, mp_obj_t n_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     mp_int_t n = mp_obj_get_int(n_in);
     vstr_t buf;
@@ -256,9 +256,9 @@ STATIC mp_obj_t mp_os_read(mp_obj_t fd_in, mp_obj_t n_in) {
     vstr_add_len(&buf, ret);
     return mp_obj_new_bytes_from_vstr(&buf);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_read_obj, mp_os_read);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_read_obj, mp_os_read);
 
-STATIC mp_obj_t mp_os_write(mp_obj_t fd_in, mp_obj_t str_in) {
+static mp_obj_t mp_os_write(mp_obj_t fd_in, mp_obj_t str_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     size_t len;
     const char *str = mp_obj_str_get_data(str_in, &len);
@@ -266,31 +266,31 @@ STATIC mp_obj_t mp_os_write(mp_obj_t fd_in, mp_obj_t str_in) {
     MP_OS_CALL(ret, write, fd, str, len);
     return mp_os_check_ret(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_write_obj, mp_os_write);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_write_obj, mp_os_write);
 
 // Files and Directories
 // ---------------------
-STATIC mp_obj_t mp_os_chdir(mp_obj_t path_in) {
+static mp_obj_t mp_os_chdir(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     int ret;
     MP_OS_CALL(ret, chdir, path);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_chdir_obj, mp_os_chdir);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_chdir_obj, mp_os_chdir);
 
-STATIC mp_obj_t mp_os_getcwd(void) {
+static mp_obj_t mp_os_getcwd(void) {
     vstr_t buf;
     vstr_init(&buf, 256);
     const char *cwd = getcwd(vstr_str(&buf), 256);
     vstr_add_len(&buf, strnlen(cwd, 256));
     return mp_obj_new_str_from_vstr(&buf);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_getcwd_obj, mp_os_getcwd);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_getcwd_obj, mp_os_getcwd);
 
-STATIC mp_obj_t mp_os_scandir(size_t n_args, const mp_obj_t *args);
+static mp_obj_t mp_os_scandir(size_t n_args, const mp_obj_t *args);
 
-STATIC mp_obj_t mp_os_listdir(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_os_listdir(size_t n_args, const mp_obj_t *args) {
     mp_obj_t iter = mp_os_scandir(n_args, args);
     mp_obj_t list = mp_obj_new_list(0, NULL);
     mp_obj_t next = mp_iternext(iter);
@@ -303,18 +303,18 @@ STATIC mp_obj_t mp_os_listdir(size_t n_args, const mp_obj_t *args) {
     }
     return list;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_listdir_obj, 0, 1, mp_os_listdir);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_listdir_obj, 0, 1, mp_os_listdir);
 
-STATIC mp_obj_t mp_os_mkdir(mp_obj_t path_in) {
+static mp_obj_t mp_os_mkdir(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     int ret;
     MP_OS_CALL(ret, mkdir, path, 0777);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_mkdir_obj, mp_os_mkdir);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_mkdir_obj, mp_os_mkdir);
 
-STATIC mp_obj_t mp_os_rename(mp_obj_t src_in, mp_obj_t dst_in) {
+static mp_obj_t mp_os_rename(mp_obj_t src_in, mp_obj_t dst_in) {
     const char *src = mp_obj_str_get_str(src_in);
     const char *dst = mp_obj_str_get_str(dst_in);
     int ret;
@@ -322,16 +322,16 @@ STATIC mp_obj_t mp_os_rename(mp_obj_t src_in, mp_obj_t dst_in) {
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_rename_obj, mp_os_rename);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_rename_obj, mp_os_rename);
 
-STATIC mp_obj_t mp_os_rmdir(mp_obj_t path_in) {
+static mp_obj_t mp_os_rmdir(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     int ret;
     MP_OS_CALL(ret, rmdir, path);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_rmdir_obj, mp_os_rmdir);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_rmdir_obj, mp_os_rmdir);
 
 typedef struct {
     mp_obj_base_t base;
@@ -341,7 +341,7 @@ typedef struct {
     DIR *dirp;
 } mp_os_scandir_iter_t;
 
-STATIC mp_obj_t mp_os_scandir_iter_del(mp_obj_t self_in) {
+static mp_obj_t mp_os_scandir_iter_del(mp_obj_t self_in) {
     mp_os_scandir_iter_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->dirp) {
         int ret;
@@ -351,7 +351,7 @@ STATIC mp_obj_t mp_os_scandir_iter_del(mp_obj_t self_in) {
     return mp_const_none;
 }
 
-STATIC mp_obj_t mp_os_scandir_iter_next(mp_obj_t self_in) {
+static mp_obj_t mp_os_scandir_iter_next(mp_obj_t self_in) {
     mp_os_scandir_iter_t *self = MP_OBJ_TO_PTR(self_in);
     if (!self->dirp) {
         return MP_OBJ_STOP_ITERATION;
@@ -376,15 +376,14 @@ STATIC mp_obj_t mp_os_scandir_iter_next(mp_obj_t self_in) {
     }
 }
 
-STATIC mp_obj_t mp_os_scandir(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_os_scandir(size_t n_args, const mp_obj_t *args) {
     const char *path = ".";
     const mp_obj_type_t *type = &mp_type_str;
     if (n_args > 0) {
         path = mp_obj_str_get_str(args[0]);
         type = mp_obj_get_type(args[0]);
     }
-    mp_os_scandir_iter_t *iter = m_new_obj_with_finaliser(mp_os_scandir_iter_t);
-    iter->base.type = &mp_type_polymorph_iter_with_finaliser;
+    mp_os_scandir_iter_t *iter = mp_obj_malloc_with_finaliser(mp_os_scandir_iter_t, &mp_type_polymorph_iter_with_finaliser);
     iter->iternext = mp_os_scandir_iter_next;
     iter->finaliser = mp_os_scandir_iter_del;
     iter->type = type;
@@ -395,9 +394,9 @@ STATIC mp_obj_t mp_os_scandir(size_t n_args, const mp_obj_t *args) {
     }
     return MP_OBJ_FROM_PTR(iter);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_scandir_obj, 0, 1, mp_os_scandir);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_scandir_obj, 0, 1, mp_os_scandir);
 
-STATIC mp_obj_t mp_os_stat_result(const struct stat *sb) {
+static mp_obj_t mp_os_stat_result(const struct stat *sb) {
     static const qstr mp_os_stat_attrs[] = {
         MP_QSTR_st_mode,
         MP_QSTR_st_ino,
@@ -425,7 +424,7 @@ STATIC mp_obj_t mp_os_stat_result(const struct stat *sb) {
     return mp_obj_new_attrtuple(mp_os_stat_attrs, 10, items);
 }
 
-STATIC mp_obj_t mp_os_stat(mp_obj_t path_in) {
+static mp_obj_t mp_os_stat(mp_obj_t path_in) {
     int ret;
     struct stat sb;
     if (mp_obj_is_int(path_in)) {
@@ -438,9 +437,9 @@ STATIC mp_obj_t mp_os_stat(mp_obj_t path_in) {
     mp_os_check_ret(ret);
     return mp_os_stat_result(&sb);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_stat_obj, mp_os_stat);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_stat_obj, mp_os_stat);
 
-STATIC mp_obj_t mp_os_statvfs_result(const struct statvfs *sb) {
+static mp_obj_t mp_os_statvfs_result(const struct statvfs *sb) {
     static const qstr mp_os_statvfs_attrs[] = {
         MP_QSTR_f_bsize,
         MP_QSTR_f_frsize,
@@ -468,7 +467,7 @@ STATIC mp_obj_t mp_os_statvfs_result(const struct statvfs *sb) {
     return mp_obj_new_attrtuple(mp_os_statvfs_attrs, 10, items);
 }
 
-STATIC mp_obj_t mp_os_statvfs(mp_obj_t path_in) {
+static mp_obj_t mp_os_statvfs(mp_obj_t path_in) {
     int ret;
     struct statvfs sb;
     if (mp_obj_is_int(path_in)) {
@@ -481,9 +480,9 @@ STATIC mp_obj_t mp_os_statvfs(mp_obj_t path_in) {
     mp_os_check_ret(ret);
     return mp_os_statvfs_result(&sb);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_statvfs_obj, mp_os_statvfs);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_statvfs_obj, mp_os_statvfs);
 
-STATIC mp_obj_t mp_os_sync(void) {
+static mp_obj_t mp_os_sync(void) {
     MP_THREAD_GIL_EXIT();
     sync();
     MP_THREAD_GIL_ENTER();
@@ -491,7 +490,7 @@ STATIC mp_obj_t mp_os_sync(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_sync_obj, mp_os_sync);
 
-STATIC mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in) {
+static mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in) {
     int ret;
     if (mp_obj_is_int(path_in)) {
         mp_int_t fd = mp_obj_get_int(path_in);
@@ -505,32 +504,32 @@ STATIC mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in) {
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_truncate_obj, mp_os_truncate);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_truncate_obj, mp_os_truncate);
 
-STATIC mp_obj_t mp_os_unlink(mp_obj_t path_in) {
+static mp_obj_t mp_os_unlink(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     int ret;
     MP_OS_CALL(ret, unlink, path);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_unlink_obj, mp_os_unlink);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_unlink_obj, mp_os_unlink);
 
 // Process Management
 // ------------------
-STATIC mp_obj_t mp_os_abort(void) {
+static mp_obj_t mp_os_abort(void) {
     abort();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_abort_obj, mp_os_abort);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_abort_obj, mp_os_abort);
 
-STATIC mp_obj_t mp_os__exit(mp_obj_t n_in) {
+static mp_obj_t mp_os__exit(mp_obj_t n_in) {
     mp_int_t n = mp_obj_get_int(n_in);
     _exit(n);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os__exit_obj, mp_os__exit);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os__exit_obj, mp_os__exit);
 
-STATIC mp_obj_t mp_os_kill(mp_obj_t pid_in, mp_obj_t sig_in) {
+static mp_obj_t mp_os_kill(mp_obj_t pid_in, mp_obj_t sig_in) {
     mp_int_t pid = mp_obj_get_int(pid_in);
     mp_int_t sig = mp_obj_get_int(sig_in);
     int ret;
@@ -538,9 +537,9 @@ STATIC mp_obj_t mp_os_kill(mp_obj_t pid_in, mp_obj_t sig_in) {
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_kill_obj, mp_os_kill);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_kill_obj, mp_os_kill);
 
-STATIC mp_obj_t mp_os_times_result(clock_t elapsed, const struct tms *buf) {
+static mp_obj_t mp_os_times_result(clock_t elapsed, const struct tms *buf) {
     static const qstr mp_os_times_attrs[] = {
         MP_QSTR_user,
         MP_QSTR_system,
@@ -558,7 +557,7 @@ STATIC mp_obj_t mp_os_times_result(clock_t elapsed, const struct tms *buf) {
     return mp_obj_new_attrtuple(mp_os_times_attrs, 5, items);
 }
 
-STATIC mp_obj_t mp_os_times(void) {
+static mp_obj_t mp_os_times(void) {
     struct tms buf;
     clock_t elapsed = times(&buf);
     if (elapsed == -1) {
@@ -566,11 +565,11 @@ STATIC mp_obj_t mp_os_times(void) {
     }
     return mp_os_times_result(elapsed, &buf);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_os_times_obj, mp_os_times);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_times_obj, mp_os_times);
 
 // Random numbers
 // --------------
-STATIC mp_obj_t mp_os_urandom(mp_obj_t size_in) {
+static mp_obj_t mp_os_urandom(mp_obj_t size_in) {
     mp_int_t size = mp_obj_get_int(size_in);
     vstr_t buf;
     vstr_init(&buf, size);
@@ -580,11 +579,11 @@ STATIC mp_obj_t mp_os_urandom(mp_obj_t size_in) {
     vstr_add_len(&buf, ret);
     return mp_obj_new_bytes_from_vstr(&buf);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_urandom_obj, mp_os_urandom);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_urandom_obj, mp_os_urandom);
 
 // MicroPython extensions
 // ----------------------
-STATIC mp_obj_t mp_os_dlerror(void) {
+static mp_obj_t mp_os_dlerror(void) {
     void *error = dlerror();
     if (!error) {
         return mp_const_none;
@@ -598,7 +597,7 @@ STATIC mp_obj_t mp_os_dlerror(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dlerror_obj, mp_os_dlerror);
 
-STATIC mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
+static mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
     const char *file = mp_obj_str_get_str(file_in);
     const void *result = dlopen(file, 0);
     if (!result) {
@@ -608,7 +607,7 @@ STATIC mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlopen_obj, mp_os_dlopen);
 
-STATIC mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
+static mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
     void *handle = (void *)mp_obj_get_int(handle_in);
     const char *symbol = mp_obj_str_get_str(symbol_in);
 
@@ -628,7 +627,7 @@ STATIC mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dlsym_obj, mp_os_dlsym);
 
-STATIC mp_obj_t mp_os_dllist(void) {
+static mp_obj_t mp_os_dllist(void) {
     mp_obj_t list = mp_obj_new_list(0, NULL);
     const flash_heap_header_t *header = NULL;
     while (dl_iterate(&header)) {
@@ -655,7 +654,7 @@ STATIC mp_obj_t mp_os_dllist(void) {
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
 
 #ifndef NDEBUG
-STATIC mp_obj_t mp_os_dldebug(void) {
+static mp_obj_t mp_os_dldebug(void) {
     puts("Module               Flash base RAM base");
     const flash_heap_header_t *header = NULL;
     while (dl_iterate(&header)) {
@@ -682,7 +681,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dldebug_obj, mp_os_dldebug);
 #endif
 
 // From Python fcntl module
-STATIC mp_obj_t mp_os_ioctl(mp_obj_t fd_in, mp_obj_t request_in, mp_obj_t arg_in) {
+static mp_obj_t mp_os_ioctl(mp_obj_t fd_in, mp_obj_t request_in, mp_obj_t arg_in) {
     int fd = mp_obj_get_int(fd_in);
     unsigned long request = mp_obj_get_int(request_in);
     uintptr_t arg;
@@ -705,7 +704,7 @@ STATIC mp_obj_t mp_os_ioctl(mp_obj_t fd_in, mp_obj_t request_in, mp_obj_t arg_in
 }
 MP_DEFINE_CONST_FUN_OBJ_3(mp_os_ioctl_obj, mp_os_ioctl);
 
-STATIC mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {
+static mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {
     const char *source = mp_obj_str_get_str(source_in);
     const char *type = mp_obj_str_get_str(type_in);
     int ret;
@@ -713,9 +712,9 @@ STATIC mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_os_mkfs_obj, mp_os_mkfs);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_mkfs_obj, mp_os_mkfs);
 
-STATIC mp_obj_t mp_os_mount(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_os_mount(size_t n_args, const mp_obj_t *args) {
     const char *source = mp_obj_str_get_str(args[0]);
     const char *target = mp_obj_str_get_str(args[1]);
     const char *type = mp_obj_str_get_str(args[2]);
@@ -725,19 +724,19 @@ STATIC mp_obj_t mp_os_mount(size_t n_args, const mp_obj_t *args) {
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_mount_obj, 3, 4, mp_os_mount);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_mount_obj, 3, 4, mp_os_mount);
 
-STATIC mp_obj_t mp_os_umount(mp_obj_t path_in) {
+static mp_obj_t mp_os_umount(mp_obj_t path_in) {
     const char *path = mp_obj_str_get_str(path_in);
     int ret;
     MP_OS_CALL(ret, umount, path);
     mp_os_check_ret(ret);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_os_umount_obj, mp_os_umount);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_umount_obj, mp_os_umount);
 
 
-STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
+static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),   MP_ROM_QSTR(MP_QSTR_os) },
 
     // Process Parameters
@@ -824,7 +823,7 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_O_EXCL),     MP_ROM_INT(O_EXCL) },
     { MP_ROM_QSTR(MP_QSTR_O_TRUNC),    MP_ROM_INT(O_TRUNC) },
 };
-STATIC MP_DEFINE_CONST_DICT(os_module_globals, os_module_globals_table);
+static MP_DEFINE_CONST_DICT(os_module_globals, os_module_globals_table);
 
 const mp_obj_module_t mp_module_os = {
     .base = { &mp_type_module },
@@ -842,7 +841,7 @@ typedef struct {
 extern const mp_obj_type_t mp_type_io_fileio;
 extern const mp_obj_type_t mp_type_io_textio;
 
-STATIC mp_uint_t mp_io_check_ret(int ret, int *errcode) {
+static mp_uint_t mp_io_check_ret(int ret, int *errcode) {
     if (ret < 0) {
         *errcode = errno;
         return MP_STREAM_ERROR;
@@ -850,7 +849,7 @@ STATIC mp_uint_t mp_io_check_ret(int ret, int *errcode) {
     return ret;
 }
 
-STATIC mp_io_file_t *mp_io_file_get(mp_obj_t self_in) {
+static mp_io_file_t *mp_io_file_get(mp_obj_t self_in) {
     mp_io_file_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->fd == -1) {
         mp_raise_ValueError(MP_ERROR_TEXT("closed file"));
@@ -886,8 +885,7 @@ mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_a
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    mp_io_file_t *self = m_new_obj_with_finaliser(mp_io_file_t);
-    self->base.type = &mp_type_io_fileio;
+    mp_io_file_t *self = mp_obj_malloc_with_finaliser(mp_io_file_t, &mp_type_io_fileio);
     mp_obj_t fd = args[ARG_file].u_obj;
     if (!mp_obj_is_int(fd)) {
         const char *mode = mp_obj_str_get_str(args[ARG_mode].u_obj);
@@ -924,19 +922,19 @@ mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_a
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
 
-STATIC mp_obj_t mp_io_file_fileno(mp_obj_t self_in) {
+static mp_obj_t mp_io_file_fileno(mp_obj_t self_in) {
     mp_io_file_t *self = mp_io_file_get(self_in);
     return mp_obj_new_int(self->fd);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_io_file_fileno_obj, mp_io_file_fileno);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_io_file_fileno_obj, mp_io_file_fileno);
 
-STATIC mp_obj_t mp_io_file_isatty(mp_obj_t self_in) {
+static mp_obj_t mp_io_file_isatty(mp_obj_t self_in) {
     mp_io_file_t *self = mp_io_file_get(self_in);
     return mp_os_isatty(mp_obj_new_int(self->fd));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_io_file_isatty_obj, mp_io_file_isatty);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_io_file_isatty_obj, mp_io_file_isatty);
 
-STATIC mp_obj_t mp_io_file_truncate(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_io_file_truncate(size_t n_args, const mp_obj_t *args) {
     mp_io_file_t *self = mp_io_file_get(args[0]);
     mp_obj_t fd = mp_obj_new_int(self->fd);
     mp_obj_t size;
@@ -947,23 +945,23 @@ STATIC mp_obj_t mp_io_file_truncate(size_t n_args, const mp_obj_t *args) {
     }
     return mp_os_truncate(fd, size);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_io_file_truncate_obj, 1, 2, mp_io_file_truncate);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_io_file_truncate_obj, 1, 2, mp_io_file_truncate);
 
-STATIC mp_uint_t mp_io_file_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t mp_io_file_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     mp_io_file_t *self = mp_io_file_get(self_in);
     int ret;
     MP_OS_CALL(ret, read, self->fd, buf, size);
     return mp_io_check_ret(ret, errcode);
 }
 
-STATIC mp_uint_t mp_io_file_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t mp_io_file_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     mp_io_file_t *self = mp_io_file_get(self_in);
     int ret;
     MP_OS_CALL(ret, write, self->fd, buf, size);
     return mp_io_check_ret(ret, errcode);
 }
 
-STATIC mp_uint_t mp_io_file_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t mp_io_file_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     if (request == MP_STREAM_CLOSE) {
         mp_io_file_t *self = MP_OBJ_TO_PTR(self_in);
         if (self->fd >= 0) {
@@ -1000,7 +998,7 @@ STATIC mp_uint_t mp_io_file_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t
     }
 }
 
-STATIC const mp_rom_map_elem_t mp_io_file_locals_dict_table[] = {
+static const mp_rom_map_elem_t mp_io_file_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_fileno),     MP_ROM_PTR(&mp_io_file_fileno_obj) },
     { MP_ROM_QSTR(MP_QSTR_isatty),     MP_ROM_PTR(&mp_io_file_isatty_obj) },
     { MP_ROM_QSTR(MP_QSTR_truncate),   MP_ROM_PTR(&mp_io_file_truncate_obj) },
@@ -1018,9 +1016,9 @@ STATIC const mp_rom_map_elem_t mp_io_file_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___exit__),   MP_ROM_PTR(&mp_stream___exit___obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(mp_io_file_locals_dict, mp_io_file_locals_dict_table);
+static MP_DEFINE_CONST_DICT(mp_io_file_locals_dict, mp_io_file_locals_dict_table);
 
-STATIC const mp_stream_p_t mp_io_fileio_stream_p = {
+static const mp_stream_p_t mp_io_fileio_stream_p = {
     .read = mp_io_file_read,
     .write = mp_io_file_write,
     .ioctl = mp_io_file_ioctl,
@@ -1035,7 +1033,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_io_file_locals_dict
     );
 
-STATIC const mp_stream_p_t mp_io_textio_stream_p = {
+static const mp_stream_p_t mp_io_textio_stream_p = {
     .read = mp_io_file_read,
     .write = mp_io_file_write,
     .ioctl = mp_io_file_ioctl,

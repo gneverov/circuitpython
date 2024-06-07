@@ -17,7 +17,7 @@ static void uart_handler(pico_uart_t *uart, uint events) {
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-STATIC mp_obj_t uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_, MP_QSTR_baudrate, 0 };
     mp_hal_pin_obj_t rx_pin, tx_pin;
     mp_uint_t baudrate = 115200;
@@ -27,8 +27,7 @@ STATIC mp_obj_t uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
         mp_raise_ValueError(MP_ERROR_TEXT("invalid pins"));
     }
 
-    uart_obj_t *self = m_new_obj_with_finaliser(uart_obj_t);
-    self->base.type = type;
+    uart_obj_t *self = mp_obj_malloc_with_finaliser(uart_obj_t, type);
     self->timeout = portMAX_DELAY;
     mp_stream_poll_init(&self->poll);
 
@@ -41,7 +40,7 @@ STATIC mp_obj_t uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC mp_obj_t uart_del(mp_obj_t self_in) {
+static mp_obj_t uart_del(mp_obj_t self_in) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->uart_num != -1) {
         pico_uart_deinit(&self->uart);
@@ -49,16 +48,16 @@ STATIC mp_obj_t uart_del(mp_obj_t self_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(uart_del_obj, uart_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(uart_del_obj, uart_del);
 
-STATIC mp_uint_t uart_close(mp_obj_t self_in, int *errcode) {
+static mp_uint_t uart_close(mp_obj_t self_in, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_stream_poll_close(&self->poll);
     uart_del(self_in);
     return 0;
 }
 
-STATIC mp_uint_t uart_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t uart_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->uart_num == -1) {
         *errcode = MP_EBADF;
@@ -74,12 +73,12 @@ STATIC mp_uint_t uart_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *err
     return br;
 }
 
-STATIC mp_uint_t machine_uart_read_blocking(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t machine_uart_read_blocking(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_poll_block(self_in, buf, size, errcode, uart_read, MP_STREAM_POLL_RD, self->timeout, false);
 }
 
-STATIC mp_uint_t uart_write(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t uart_write(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->uart_num == -1) {
         *errcode = MP_EBADF;
@@ -94,12 +93,12 @@ STATIC mp_uint_t uart_write(mp_obj_t self_in, void *buf, mp_uint_t size, int *er
     return bw;
 }
 
-STATIC mp_uint_t machine_uart_write_blocking(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t machine_uart_write_blocking(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_poll_block(self_in, (void *)buf, size, errcode, uart_write, MP_STREAM_POLL_WR, self->timeout, true);
 }
 
-STATIC mp_uint_t uart_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t uart_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if ((self->uart_num == -1) && (request != MP_STREAM_CLOSE)) {
         *errcode = MP_EBADF;
@@ -124,7 +123,7 @@ STATIC mp_uint_t uart_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, 
     }
 }
 
-STATIC const mp_rom_map_elem_t uart_locals_dict_table[] = {
+static const mp_rom_map_elem_t uart_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),       MP_ROM_QSTR(MP_QSTR_CdcDevice) },
     { MP_ROM_QSTR(MP_QSTR___del__),        MP_ROM_PTR(&uart_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_close),          MP_ROM_PTR(&mp_stream_close_obj) },
@@ -134,9 +133,9 @@ STATIC const mp_rom_map_elem_t uart_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_settimeout),     MP_ROM_PTR(&mp_stream_settimeout_obj) },
     { MP_ROM_QSTR(MP_QSTR_flush),          MP_ROM_PTR(&mp_stream_flush_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(uart_locals_dict, uart_locals_dict_table);
+static MP_DEFINE_CONST_DICT(uart_locals_dict, uart_locals_dict_table);
 
-STATIC const mp_stream_p_t uart_stream_p = {
+static const mp_stream_p_t uart_stream_p = {
     .read = machine_uart_read_blocking,
     .write = machine_uart_write_blocking,
     .ioctl = uart_ioctl,

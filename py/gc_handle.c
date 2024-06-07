@@ -5,6 +5,7 @@
 
 #include "py/gc_handle.h"
 #include "py/gc.h"
+#include "py/mphal.h"
 
 #if MICROPY_FREERTOS
 

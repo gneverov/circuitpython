@@ -13,7 +13,7 @@ typedef struct lvgl_obj_layer {
     lv_layer_t *layer;
 } lvgl_obj_layer_t;
 
-void lvgl_layer_init(lvgl_obj_layer_t *self, const mp_obj_type_t *type);
+void lvgl_layer_init(lvgl_obj_layer_t *self);
 
 lv_layer_t *lvgl_layer_get(mp_obj_t obj_in);
 

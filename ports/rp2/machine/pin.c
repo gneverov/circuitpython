@@ -12,7 +12,7 @@ enum gpio_irq_pulse {
     GPIO_IRQ_PULSE_UP = 0x20u,
 };
 
-STATIC void pin_enable_interrupt(pin_obj_t *self) {
+static void pin_enable_interrupt(pin_obj_t *self) {
     uint32_t event_mask = self->event_mask & 0xf;
     if (self->event_mask & 0x30) {
         event_mask |= GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE;
@@ -20,11 +20,11 @@ STATIC void pin_enable_interrupt(pin_obj_t *self) {
     gpio_set_irq_enabled(self->pin, event_mask, true);
 }
 
-STATIC void pin_disable_interrupt(pin_obj_t *self) {
+static void pin_disable_interrupt(pin_obj_t *self) {
     gpio_set_irq_enabled(self->pin, 0xf, false);
 }
 
-STATIC void pin_irq_handler(uint gpio, uint32_t events, void *context) {
+static void pin_irq_handler(uint gpio, uint32_t events, void *context) {
     pin_obj_t *self = context;
     self->int_count++;
 
@@ -61,8 +61,7 @@ STATIC void pin_irq_handler(uint gpio, uint32_t events, void *context) {
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-void pin_init(pin_obj_t *self, const mp_obj_type_t *type) {
-    self->base.type = type;
+void pin_init(pin_obj_t *self) {
     self->pin = -1u;
     mp_stream_poll_init(&self->poll);
     self->timeout = portMAX_DELAY;
@@ -91,13 +90,13 @@ pin_obj_t *pin_get_raise(mp_obj_t self_in) {
     return self;
 }
 
-STATIC mp_obj_t pin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t pin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_pin, 0 };
     mp_hal_pin_obj_t pin;
     parse_args_and_kw(n_args, n_kw, args, "O&", kws, mp_hal_get_pin_obj, &pin);
 
-    pin_obj_t *self = m_new_obj_with_finaliser(pin_obj_t);
-    pin_init(self, type);
+    pin_obj_t *self = mp_obj_malloc_with_finaliser(pin_obj_t, type);
+    pin_init(self);
     self->pin = pin;
 
     gpio_init(pin);
@@ -116,14 +115,14 @@ mp_uint_t pin_close(mp_obj_t self_in, int *errcode) {
     return 0;
 }
 
-STATIC mp_obj_t pin_del(mp_obj_t self_in) {
+static mp_obj_t pin_del(mp_obj_t self_in) {
     pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
     pin_deinit(self);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(pin_del_obj, pin_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(pin_del_obj, pin_del);
 
-STATIC mp_obj_t pin_set_pulls(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t pin_set_pulls(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_pull_up, MP_QSTR_pull_down, 0 };
     mp_obj_t self_in;
     mp_int_t pull_up = 0, pull_down = 0;
@@ -133,9 +132,9 @@ STATIC mp_obj_t pin_set_pulls(size_t n_args, const mp_obj_t *args) {
     gpio_set_pulls(self->pin, pull_up, pull_down);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pin_set_pulls_obj, 1, 3, pin_set_pulls);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pin_set_pulls_obj, 1, 3, pin_set_pulls);
 
-STATIC mp_obj_t pin_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
+static mp_obj_t pin_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
     pin_obj_t *self = pin_get_raise(self_in);
     if (op == MP_UNARY_OP_INT_MAYBE) {
         return MP_OBJ_NEW_SMALL_INT(self->pin);
@@ -143,7 +142,7 @@ STATIC mp_obj_t pin_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
     return mp_const_none;
 }
 
-STATIC void pin_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void pin_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     switch (attr) {
         case MP_QSTR_value: {
             pin_obj_t *self = pin_get_raise(self_in);
@@ -169,7 +168,7 @@ STATIC void pin_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC mp_uint_t pin_wait_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t pin_wait_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint32_t event = *(uint32_t *)buf;
     if (!pin_inited(self)) {
@@ -202,7 +201,7 @@ STATIC mp_uint_t pin_wait_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, 
     return ret;
 }
 
-STATIC mp_obj_t pin_wait(mp_obj_t self_in, mp_obj_t event_in) {
+static mp_obj_t pin_wait(mp_obj_t self_in, mp_obj_t event_in) {
     pin_obj_t *self = pin_get_raise(self_in);
     uint32_t event = mp_obj_get_int(event_in);
     if (event & (event - 1)) {
@@ -213,9 +212,9 @@ STATIC mp_obj_t pin_wait(mp_obj_t self_in, mp_obj_t event_in) {
     mp_uint_t ret = mp_poll_block(self_in, &event, 0, &errcode, pin_wait_nonblock, MP_STREAM_POLL_RD, self->timeout, false);
     return mp_stream_return(ret, errcode);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(pin_wait_obj, pin_wait);
+static MP_DEFINE_CONST_FUN_OBJ_2(pin_wait_obj, pin_wait);
 
-STATIC mp_uint_t pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (!pin_inited(self) && (request != MP_STREAM_CLOSE)) {
         *errcode = MP_EBADF;
@@ -244,7 +243,7 @@ STATIC mp_uint_t pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, i
 #ifndef NDEBUG
 #include <stdio.h>
 
-STATIC mp_obj_t pin_debug(mp_obj_t self_in) {
+static mp_obj_t pin_debug(mp_obj_t self_in) {
     pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
     printf("pin %p\n", self);
     printf("  events:      0x%02lx\n", self->events);
@@ -255,10 +254,10 @@ STATIC mp_obj_t pin_debug(mp_obj_t self_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(pin_debug_obj, pin_debug);
+static MP_DEFINE_CONST_FUN_OBJ_1(pin_debug_obj, pin_debug);
 #endif
 
-STATIC const mp_rom_map_elem_t pin_locals_dict_table[] = {
+static const mp_rom_map_elem_t pin_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&pin_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_pulls),       MP_ROM_PTR(&pin_set_pulls_obj) },
 
@@ -279,9 +278,9 @@ STATIC const mp_rom_map_elem_t pin_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_debug),           MP_ROM_PTR(&pin_debug_obj) },
     #endif
 };
-STATIC MP_DEFINE_CONST_DICT(pin_locals_dict, pin_locals_dict_table);
+static MP_DEFINE_CONST_DICT(pin_locals_dict, pin_locals_dict_table);
 
-STATIC const mp_stream_p_t pin_stream_p = {
+static const mp_stream_p_t pin_stream_p = {
     .ioctl = pin_ioctl,
     .is_text = 0,
     .can_poll = 1,

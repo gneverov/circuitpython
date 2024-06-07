@@ -25,7 +25,7 @@ typedef struct _machine_i2c_obj_t {
     uint32_t timeout;
 } machine_i2c_obj_t;
 
-STATIC mp_obj_t lvgl_FT6206_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_FT6206_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 2, 2, false);
 
     if (!mp_obj_is_exact_type(args[0], &machine_i2c_type)) {

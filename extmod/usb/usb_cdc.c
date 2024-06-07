@@ -37,12 +37,11 @@ static void usb_cdc_cb(void* context, tud_cdc_cb_type_t cb_type, tud_cdc_cb_args
     mp_stream_poll_signal(&self->poll, events, NULL);
 }
 
-STATIC mp_obj_t usb_cdc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t usb_cdc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 1, false);
     mp_int_t usb_itf = mp_obj_get_int(args[0]);
 
-    usb_cdc_obj_t *self = m_new_obj_with_finaliser(usb_cdc_obj_t);
-    self->base.type = type;
+    usb_cdc_obj_t *self = mp_obj_malloc_with_finaliser(usb_cdc_obj_t, type);
     self->usb_itf = -1;
     self->timeout = portMAX_DELAY;
     mp_stream_poll_init(&self->poll);
@@ -55,7 +54,7 @@ STATIC mp_obj_t usb_cdc_make_new(const mp_obj_type_t *type, size_t n_args, size_
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC mp_obj_t usb_cdc_del(mp_obj_t self_in) {
+static mp_obj_t usb_cdc_del(mp_obj_t self_in) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     if (self->usb_itf != -1) {
         tud_cdc_clear_cb(self->usb_itf);
@@ -63,9 +62,9 @@ STATIC mp_obj_t usb_cdc_del(mp_obj_t self_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(usb_cdc_del_obj, usb_cdc_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(usb_cdc_del_obj, usb_cdc_del);
 
-STATIC void usb_cdc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void usb_cdc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     if ((attr == MP_QSTR_connected) && (dest[0] != MP_OBJ_SENTINEL)) {
         dest[0] = mp_obj_new_bool(tud_cdc_n_connected(self->usb_itf));
@@ -75,14 +74,14 @@ STATIC void usb_cdc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC mp_uint_t usb_cdc_close(mp_obj_t self_in, int *errcode) {
+static mp_uint_t usb_cdc_close(mp_obj_t self_in, int *errcode) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     mp_stream_poll_close(&self->poll);
     usb_cdc_del(self_in);
     return 0;
 }
 
-STATIC mp_uint_t usb_cdc_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t usb_cdc_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     if (self->usb_itf == -1) {
         *errcode = MP_EBADF;
@@ -98,12 +97,12 @@ STATIC mp_uint_t usb_cdc_read(mp_obj_t self_in, void *buf, mp_uint_t size, int *
     return br;
 }
 
-STATIC mp_uint_t usb_cdc_read_blocking(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t usb_cdc_read_blocking(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     usb_cdc_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_poll_block(self_in, buf, size, errcode, usb_cdc_read, MP_STREAM_POLL_RD, self->timeout, false);
 }
 
-STATIC mp_uint_t usb_cdc_write(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t usb_cdc_write(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     if (self->usb_itf == -1) {
         *errcode = MP_EBADF;
@@ -118,12 +117,12 @@ STATIC mp_uint_t usb_cdc_write(mp_obj_t self_in, void *buf, mp_uint_t size, int 
     return bw;
 }
 
-STATIC mp_uint_t usb_cdc_write_blocking(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t usb_cdc_write_blocking(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     usb_cdc_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_poll_block(self_in, (void*)buf, size, errcode, usb_cdc_write, MP_STREAM_POLL_WR, self->timeout, true);
 }
 
-STATIC mp_uint_t usb_cdc_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t usb_cdc_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     usb_cdc_obj_t* self = MP_OBJ_TO_PTR(self_in);
     if ((self->usb_itf == -1) && (request != MP_STREAM_CLOSE)) {
         *errcode = MP_EBADF;
@@ -149,7 +148,7 @@ STATIC mp_uint_t usb_cdc_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t ar
     }
 }
 
-STATIC const mp_rom_map_elem_t usb_cdc_locals_dict_table[] = {
+static const mp_rom_map_elem_t usb_cdc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),       MP_ROM_QSTR(MP_QSTR_CdcDevice) },
     { MP_ROM_QSTR(MP_QSTR___del__),        MP_ROM_PTR(&usb_cdc_del_obj) },    
     { MP_ROM_QSTR(MP_QSTR_close),          MP_ROM_PTR(&mp_stream_close_obj) },  
@@ -159,9 +158,9 @@ STATIC const mp_rom_map_elem_t usb_cdc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_settimeout),     MP_ROM_PTR(&mp_stream_settimeout_obj) },
     { MP_ROM_QSTR(MP_QSTR_flush),          MP_ROM_PTR(&mp_stream_flush_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(usb_cdc_locals_dict, usb_cdc_locals_dict_table);
+static MP_DEFINE_CONST_DICT(usb_cdc_locals_dict, usb_cdc_locals_dict_table);
 
-STATIC const mp_stream_p_t usb_cdc_stream_p = {
+static const mp_stream_p_t usb_cdc_stream_p = {
     .read = usb_cdc_read_blocking,
     .write = usb_cdc_write_blocking,
     .ioctl = usb_cdc_ioctl,

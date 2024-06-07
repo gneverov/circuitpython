@@ -7,7 +7,7 @@
 #include "./error.h"
 
 
-STATIC struct tcp_pcb *socket_tcp_lwip_free(socket_obj_t *socket) {
+static struct tcp_pcb *socket_tcp_lwip_free(socket_obj_t *socket) {
     struct tcp_pcb *pcb = socket->pcb.tcp;
     socket->pcb.tcp = NULL;
     if (pcb != NULL && (pcb->state != LISTEN)) {
@@ -20,7 +20,7 @@ STATIC struct tcp_pcb *socket_tcp_lwip_free(socket_obj_t *socket) {
     return pcb;
 }
 
-STATIC void socket_tcp_lwip_err(void *arg, err_t err) {
+static void socket_tcp_lwip_err(void *arg, err_t err) {
     // printf("tcp_err: err=%i\n", (int)err);
     socket_obj_t *socket = arg;
     socket->pcb.tcp = NULL;
@@ -30,11 +30,11 @@ STATIC void socket_tcp_lwip_err(void *arg, err_t err) {
     socket_release(socket);
 }
 
-STATIC err_t socket_tcp_lwip_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
+static err_t socket_tcp_lwip_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
 
-STATIC err_t socket_tcp_lwip_sent(void *arg, struct tcp_pcb *pcb, u16_t len);
+static err_t socket_tcp_lwip_sent(void *arg, struct tcp_pcb *pcb, u16_t len);
 
-STATIC err_t socket_tcp_lwip_new(socket_obj_t *socket) {
+static err_t socket_tcp_lwip_new(socket_obj_t *socket) {
     if (socket->pcb.tcp) {
         return ERR_VAL;
     }
@@ -52,7 +52,7 @@ STATIC err_t socket_tcp_lwip_new(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_close(socket_obj_t *socket) {
+static err_t socket_tcp_lwip_close(socket_obj_t *socket) {
     err_t err = ERR_OK;
     if (socket->pcb.tcp) {
         struct tcp_pcb *pcb = socket_tcp_lwip_free(socket);
@@ -61,7 +61,7 @@ STATIC err_t socket_tcp_lwip_close(socket_obj_t *socket) {
     return err;
 }
 
-STATIC err_t socket_tcp_lwip_abort(socket_obj_t *socket) {
+static err_t socket_tcp_lwip_abort(socket_obj_t *socket) {
     if (socket->pcb.tcp) {
         struct tcp_pcb *pcb = socket_tcp_lwip_free(socket);
         if (socket->listening) {
@@ -74,7 +74,7 @@ STATIC err_t socket_tcp_lwip_abort(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_bind(socket_obj_t *socket, const struct sockaddr *address) {
+static err_t socket_tcp_lwip_bind(socket_obj_t *socket, const struct sockaddr *address) {
     err_t err = tcp_bind(socket->pcb.tcp, &address->addr, address->port);
     if (err == ERR_OK) {
         socket_acquire(socket);
@@ -92,7 +92,7 @@ struct socket_tcp_accept_result {
     struct sockaddr remote;
 };
 
-STATIC void socket_tcp_lwip_err_unaccepted(void *arg, err_t err) {
+static void socket_tcp_lwip_err_unaccepted(void *arg, err_t err) {
     // printf("tcp_err_unaccepted: err=%i\n", (int)err);
     struct pbuf *accept_arg = arg;
     struct socket_tcp_accept_result *accept_result = accept_arg->payload;
@@ -100,7 +100,7 @@ STATIC void socket_tcp_lwip_err_unaccepted(void *arg, err_t err) {
     accept_result->new_pcb = NULL;
 }
 
-STATIC err_t socket_tcp_lwip_accept(void *arg, struct tcp_pcb *new_pcb, err_t err) {
+static err_t socket_tcp_lwip_accept(void *arg, struct tcp_pcb *new_pcb, err_t err) {
     // printf("tcp_accept: local=%s:%hu", ipaddr_ntoa(&new_pcb->local_ip), new_pcb->local_port);
     // printf(", remote=%s:%hu, err=%i\n", ipaddr_ntoa(&new_pcb->remote_ip), new_pcb->remote_port, (int)err);
     socket_obj_t *socket = arg;
@@ -142,7 +142,7 @@ STATIC err_t socket_tcp_lwip_accept(void *arg, struct tcp_pcb *new_pcb, err_t er
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_listen(socket_obj_t *socket, u8_t backlog) {
+static err_t socket_tcp_lwip_listen(socket_obj_t *socket, u8_t backlog) {
     err_t err = ERR_OK;
     struct tcp_pcb *new_pcb = tcp_listen_with_backlog_and_err(socket->pcb.tcp, backlog, &err);
     if (new_pcb) {
@@ -152,7 +152,7 @@ STATIC err_t socket_tcp_lwip_listen(socket_obj_t *socket, u8_t backlog) {
     return err;
 }
 
-STATIC err_t socket_tcp_lwip_connected(void *arg, struct tcp_pcb *pcb, err_t err) {
+static err_t socket_tcp_lwip_connected(void *arg, struct tcp_pcb *pcb, err_t err) {
     // err is always ERR_OK, failure returned through tcp_err
     // printf("tcp_connected: local=%s:%hu", ipaddr_ntoa(&pcb->local_ip), pcb->local_port);
     // printf(", remote=%s:%hu, err=%i\n", ipaddr_ntoa(&pcb->remote_ip), pcb->remote_port, (int)err);
@@ -168,18 +168,18 @@ STATIC err_t socket_tcp_lwip_connected(void *arg, struct tcp_pcb *pcb, err_t err
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_connect(socket_obj_t *socket, const struct sockaddr *address) {
+static err_t socket_tcp_lwip_connect(socket_obj_t *socket, const struct sockaddr *address) {
     return tcp_connect(socket->pcb.tcp, &address->addr, address->port, socket_tcp_lwip_connected);
 }
 
-STATIC err_t socket_tcp_lwip_recved(socket_obj_t *socket, u16_t len) {
+static err_t socket_tcp_lwip_recved(socket_obj_t *socket, u16_t len) {
     if (socket->pcb.tcp) {
         tcp_recved(socket->pcb.tcp, len);
     }
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
+static err_t socket_tcp_lwip_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
     // printf("tcp_recv: local=%s:%hu", ipaddr_ntoa(&pcb->local_ip), pcb->local_port);
     // printf(", remote=%s:%hu, len=%i, err=%i\n", ipaddr_ntoa(&pcb->remote_ip), pcb->remote_port, p ? (int)p->tot_len : -1, (int)err);
     socket_obj_t *socket = arg;
@@ -197,7 +197,7 @@ STATIC err_t socket_tcp_lwip_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
+static err_t socket_tcp_lwip_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
     // printf("tcp_sent: local=%s:%hu", ipaddr_ntoa(&pcb->local_ip), pcb->local_port);
     // printf(", remote=%s:%hu, len=%hu\n", ipaddr_ntoa(&pcb->remote_ip), pcb->remote_port, len);
     socket_obj_t *socket = arg;
@@ -209,7 +209,7 @@ STATIC err_t socket_tcp_lwip_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
     return ERR_OK;
 }
 
-STATIC err_t socket_tcp_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
+static err_t socket_tcp_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
     u16_t len = LWIP_MIN(args->len, tcp_sndbuf(socket->pcb.tcp));
     if (args->address != NULL) {
         return ERR_VAL;
@@ -222,19 +222,19 @@ STATIC err_t socket_tcp_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *
     return err;
 }
 
-STATIC err_t socket_tcp_lwip_shutdown(socket_obj_t *socket, int shut_rx, int shut_tx) {
+static err_t socket_tcp_lwip_shutdown(socket_obj_t *socket, int shut_rx, int shut_tx) {
     err_t err = tcp_shutdown(socket->pcb.tcp, shut_rx, shut_tx);
     return err;
 }
 
-STATIC err_t socket_tcp_lwip_output(socket_obj_t *socket) {
+static err_t socket_tcp_lwip_output(socket_obj_t *socket) {
     if (!socket->pcb.tcp) {
         return ERR_ARG;
     }
     return tcp_output(socket->pcb.tcp);
 }
 
-STATIC err_t socket_tcp_lwip_new_accept(socket_obj_t *socket, struct pbuf *accept_arg, socket_obj_t *new_socket) {
+static err_t socket_tcp_lwip_new_accept(socket_obj_t *socket, struct pbuf *accept_arg, socket_obj_t *new_socket) {
     struct socket_tcp_accept_result *accept_result = accept_arg->payload;
     struct tcp_pcb *new_pcb = accept_result->new_pcb;
     if (new_socket) {

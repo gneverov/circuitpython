@@ -14,7 +14,7 @@
 #include "py/runtime.h"
 
 
-STATIC mp_obj_t signal_ctx = mp_const_none;
+static mp_obj_t signal_ctx = mp_const_none;
 
 mp_obj_t signal_default_int_handler(mp_obj_t signum_in) {
     mp_sched_keyboard_interrupt();
@@ -22,7 +22,7 @@ mp_obj_t signal_default_int_handler(mp_obj_t signum_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(signal_default_int_handler_obj, signal_default_int_handler);
 
-STATIC void signal_handler(int signum) {
+static void signal_handler(int signum) {
     if (MP_OBJ_TO_PTR(signal_ctx) == &signal_default_int_handler_obj) {
         if (mp_interrupt_char != -1) {
             mp_sched_keyboard_interrupt();
@@ -36,7 +36,7 @@ STATIC void signal_handler(int signum) {
     signal(signum, signal_handler);
 }
 
-STATIC mp_obj_t signal_signal(mp_obj_t signum_in, mp_obj_t handler_in) {
+static mp_obj_t signal_signal(mp_obj_t signum_in, mp_obj_t handler_in) {
     mp_int_t signum = mp_obj_get_int(signum_in);
     if (signum != SIGINT) {
         mp_raise_ValueError(NULL);
@@ -73,18 +73,18 @@ STATIC mp_obj_t signal_signal(mp_obj_t signum_in, mp_obj_t handler_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(signal_signal_obj, signal_signal);
+static MP_DEFINE_CONST_FUN_OBJ_2(signal_signal_obj, signal_signal);
 
-STATIC mp_obj_t signal_getsignal(mp_obj_t signum_in) {
+static mp_obj_t signal_getsignal(mp_obj_t signum_in) {
     mp_int_t signum = mp_obj_get_int(signum_in);
     if (signum != SIGINT) {
         mp_raise_ValueError(NULL);
     }
     return signal_ctx;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(signal_getsignal_obj, signal_getsignal);
+static MP_DEFINE_CONST_FUN_OBJ_1(signal_getsignal_obj, signal_getsignal);
 
-STATIC const mp_rom_map_elem_t signal_module_globals_table[] = {
+static const mp_rom_map_elem_t signal_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_signal) },
     { MP_ROM_QSTR(MP_QSTR_getsignal),       MP_ROM_PTR(&signal_getsignal_obj) },
     { MP_ROM_QSTR(MP_QSTR_signal),          MP_ROM_PTR(&signal_signal_obj) },
@@ -93,7 +93,7 @@ STATIC const mp_rom_map_elem_t signal_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_SIG_IGN),         MP_ROM_INT(SIG_IGN) },
     { MP_ROM_QSTR(MP_QSTR_SIGINT),          MP_ROM_INT(SIGINT) },
 };
-STATIC MP_DEFINE_CONST_DICT(signal_module_globals, signal_module_globals_table);
+static MP_DEFINE_CONST_DICT(signal_module_globals, signal_module_globals_table);
 
 const mp_obj_module_t mp_module_signal = {
     .base = { &mp_type_module },

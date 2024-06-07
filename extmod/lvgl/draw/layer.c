@@ -18,8 +18,7 @@ lv_layer_t *lvgl_layer_get(mp_obj_t obj_in) {
     return obj->layer;
 }
 
-void lvgl_layer_init(lvgl_obj_layer_t *self, const mp_obj_type_t *type) {
-    self->base.type = type;
+void lvgl_layer_init(lvgl_obj_layer_t *self) {
     self->layer = NULL;
 }
 

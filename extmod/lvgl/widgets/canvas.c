@@ -10,7 +10,7 @@
 
 extern const mp_obj_type_t lvgl_type_canvas_layer;
 
-STATIC mp_obj_t lvgl_canvas_layer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args);
+static mp_obj_t lvgl_canvas_layer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args);
 
 __attribute__ ((visibility("hidden")))
 void lvgl_canvas_event_delete(lv_obj_t *obj) {
@@ -20,11 +20,11 @@ void lvgl_canvas_event_delete(lv_obj_t *obj) {
     lvgl_ptr_delete(&handle->base);
 }
 
-STATIC void lvgl_canvas_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_canvas_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_super_attr(self_in, &lvgl_type_canvas, attr, dest);
 }
 
-STATIC mp_obj_t lvgl_canvas_set_buffer(mp_obj_t self_in, mp_obj_t buffer_in) {
+static mp_obj_t lvgl_canvas_set_buffer(mp_obj_t self_in, mp_obj_t buffer_in) {
     lvgl_obj_handle_t *obj_handle = lvgl_obj_from_mp(self_in, NULL);
     lvgl_draw_buf_handle_t *new_handle = lvgl_ptr_from_mp(&lvgl_draw_buf_type, buffer_in);
 
@@ -42,9 +42,9 @@ STATIC mp_obj_t lvgl_canvas_set_buffer(mp_obj_t self_in, mp_obj_t buffer_in) {
 
     return mp_const_none;    
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(lvgl_canvas_set_buffer_obj, lvgl_canvas_set_buffer);
+static MP_DEFINE_CONST_FUN_OBJ_2(lvgl_canvas_set_buffer_obj, lvgl_canvas_set_buffer);
 
-STATIC mp_obj_t lvgl_canvas_get_buffer(mp_obj_t self_in) {
+static mp_obj_t lvgl_canvas_get_buffer(mp_obj_t self_in) {
     lvgl_obj_handle_t *obj_handle = lvgl_obj_from_mp(self_in, NULL);
 
     lvgl_lock();
@@ -53,14 +53,14 @@ STATIC mp_obj_t lvgl_canvas_get_buffer(mp_obj_t self_in) {
     lvgl_draw_buf_handle_t *buf_handle = lvgl_draw_buf_from_lv(draw_buf);
     return lvgl_unlock_ptr(&buf_handle->base);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_get_buffer_obj, lvgl_canvas_get_buffer);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_get_buffer_obj, lvgl_canvas_get_buffer);
 
-STATIC mp_obj_t lvgl_canvas_layer(mp_obj_t self_in) {
+static mp_obj_t lvgl_canvas_layer(mp_obj_t self_in) {
     return lvgl_canvas_layer_make_new(&lvgl_type_canvas_layer, 1, 0, &self_in);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_layer_obj, lvgl_canvas_layer);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_layer_obj, lvgl_canvas_layer);
 
-STATIC mp_obj_t lvgl_canvas_set_px(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t lvgl_canvas_set_px(size_t n_args, const mp_obj_t *args) {
     mp_obj_t self_in = args[0];
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
     int32_t x = mp_obj_get_int(args[1]);
@@ -76,11 +76,11 @@ STATIC mp_obj_t lvgl_canvas_set_px(size_t n_args, const mp_obj_t *args) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_set_px_obj, 4, 5, lvgl_canvas_set_px);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_set_px_obj, 4, 5, lvgl_canvas_set_px);
 
 // void lv_canvas_set_palette(lv_obj_t * obj, uint8_t id, lv_color32_t c)
 
-STATIC mp_obj_t lvgl_canvas_fill_bg(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t lvgl_canvas_fill_bg(size_t n_args, const mp_obj_t *args) {
     mp_obj_t self_in = args[0];
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
     lv_color_t color = lv_color_hex(mp_obj_get_int(args[1]));
@@ -94,9 +94,9 @@ STATIC mp_obj_t lvgl_canvas_fill_bg(size_t n_args, const mp_obj_t *args) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_fill_bg_obj, 2, 3, lvgl_canvas_fill_bg);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_fill_bg_obj, 2, 3, lvgl_canvas_fill_bg);
 
-STATIC mp_obj_t lvgl_canvas_get_px(mp_obj_t self_in, mp_obj_t x_in, mp_obj_t y_in) {
+static mp_obj_t lvgl_canvas_get_px(mp_obj_t self_in, mp_obj_t x_in, mp_obj_t y_in) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
     int32_t x = mp_obj_get_int(x_in);
     int32_t y = mp_obj_get_int(y_in);
@@ -106,9 +106,9 @@ STATIC mp_obj_t lvgl_canvas_get_px(mp_obj_t self_in, mp_obj_t x_in, mp_obj_t y_i
     lvgl_unlock();
     return mp_obj_new_int(*(mp_int_t *)&color);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(lvgl_canvas_get_px_obj, lvgl_canvas_get_px);
+static MP_DEFINE_CONST_FUN_OBJ_3(lvgl_canvas_get_px_obj, lvgl_canvas_get_px);
 
-STATIC const mp_rom_map_elem_t lvgl_canvas_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_canvas_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_buffer),      MP_ROM_PTR(&lvgl_canvas_set_buffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_buffer),      MP_ROM_PTR(&lvgl_canvas_get_buffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_layer),           MP_ROM_PTR(&lvgl_canvas_layer_obj) },
@@ -116,7 +116,7 @@ STATIC const mp_rom_map_elem_t lvgl_canvas_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_fill_bg),         MP_ROM_PTR(&lvgl_canvas_fill_bg_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_px),          MP_ROM_PTR(&lvgl_canvas_get_px_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_canvas_locals_dict, lvgl_canvas_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_canvas_locals_dict, lvgl_canvas_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_canvas,
@@ -132,15 +132,15 @@ MP_DEFINE_CONST_OBJ_TYPE(
 MP_REGISTER_OBJECT(lvgl_type_canvas);
 
 
-STATIC mp_obj_t lvgl_canvas_layer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_canvas_layer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 1, false);
-    lvgl_obj_canvas_layer_t *self = m_new_obj_with_finaliser(lvgl_obj_canvas_layer_t);
-    lvgl_layer_init(&self->base, type);
+    lvgl_obj_canvas_layer_t *self = mp_obj_malloc_with_finaliser(lvgl_obj_canvas_layer_t, type);
+    lvgl_layer_init(&self->base);
     self->canvas = args[0];
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC mp_obj_t lvgl_canvas_layer_enter(mp_obj_t self_in) {
+static mp_obj_t lvgl_canvas_layer_enter(mp_obj_t self_in) {
     lvgl_obj_canvas_layer_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->base.layer) {
         mp_raise_ValueError(NULL);
@@ -153,9 +153,9 @@ STATIC mp_obj_t lvgl_canvas_layer_enter(mp_obj_t self_in) {
     lvgl_unlock();
     return self_in;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_layer_enter_obj, lvgl_canvas_layer_enter);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_canvas_layer_enter_obj, lvgl_canvas_layer_enter);
 
-STATIC mp_obj_t lvgl_canvas_layer_exit(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t lvgl_canvas_layer_exit(size_t n_args, const mp_obj_t *args) {
     lvgl_obj_canvas_layer_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->base.layer) {
         mp_raise_ValueError(NULL);
@@ -168,13 +168,13 @@ STATIC mp_obj_t lvgl_canvas_layer_exit(size_t n_args, const mp_obj_t *args) {
     self->base.layer = NULL;
     return mp_const_none;    
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_layer_exit_obj, 1, 4, lvgl_canvas_layer_exit);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lvgl_canvas_layer_exit_obj, 1, 4, lvgl_canvas_layer_exit);
 
-STATIC const mp_rom_map_elem_t lvgl_canvas_layer_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_canvas_layer_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___enter__),       MP_ROM_PTR(&lvgl_canvas_layer_enter_obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__),        MP_ROM_PTR(&lvgl_canvas_layer_exit_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_canvas_layer_locals_dict, lvgl_canvas_layer_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_canvas_layer_locals_dict, lvgl_canvas_layer_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_canvas_layer,

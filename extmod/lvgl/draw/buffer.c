@@ -9,7 +9,7 @@
 #include "py/runtime.h"
 
 
-STATIC mp_obj_t lvgl_draw_buf_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_draw_buf_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 3, 4, false);
     uint32_t w = mp_obj_get_int(args[0]);
     uint32_t h = mp_obj_get_int(args[1]);
@@ -35,7 +35,7 @@ STATIC mp_obj_t lvgl_draw_buf_make_new(const mp_obj_type_t *type, size_t n_args,
     return lvgl_ptr_to_mp(&handle->base);
 }
 
-STATIC mp_int_t lvgl_draw_buf_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
+static mp_int_t lvgl_draw_buf_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
     lvgl_draw_buf_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lv_draw_buf_t *draw_buf = lvgl_draw_buf_to_lv(handle);
     if (!draw_buf) {
@@ -49,10 +49,10 @@ STATIC mp_int_t lvgl_draw_buf_get_buffer(mp_obj_t self_in, mp_buffer_info_t *buf
     return 0;
 }
 
-STATIC const mp_rom_map_elem_t lvgl_draw_buf_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_draw_buf_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),      MP_ROM_PTR(&lvgl_ptr_del_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_draw_buf_locals_dict_table_obj, lvgl_draw_buf_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_draw_buf_locals_dict_table_obj, lvgl_draw_buf_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_draw_buf,

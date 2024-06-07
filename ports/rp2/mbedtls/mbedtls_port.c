@@ -27,7 +27,7 @@
 
 #if MICROPY_SSL_MBEDTLS
 
-#include "mbedtls_config.h"
+#include "mbedtls_config_port.h"
 
 #include "hardware/rtc.h"
 #include "shared/timeutils/timeutils.h"
@@ -41,5 +41,4 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     }
     return 0;
 }
-
 #endif

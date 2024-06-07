@@ -18,7 +18,7 @@
 #include MICROPY_PY_TIME_INCLUDEFILE
 #endif
 
-STATIC mp_obj_t mp_time_tm_to_obj(const struct tm *tm) {
+static mp_obj_t mp_time_tm_to_obj(const struct tm *tm) {
     static const qstr mp_time_tm_attrs[] = {
         MP_QSTR_tm_year,
         MP_QSTR_tm_mon,
@@ -44,7 +44,7 @@ STATIC mp_obj_t mp_time_tm_to_obj(const struct tm *tm) {
     return mp_obj_new_attrtuple(mp_time_tm_attrs, 9, items);
 }
 
-STATIC void mp_time_obj_to_tm(mp_obj_t obj, struct tm *tm) {
+static void mp_time_obj_to_tm(mp_obj_t obj, struct tm *tm) {
     size_t len;
     mp_obj_t *items;
     mp_obj_tuple_get(obj, &len, &items);
@@ -62,7 +62,7 @@ STATIC void mp_time_obj_to_tm(mp_obj_t obj, struct tm *tm) {
     tm->tm_isdst = mp_obj_get_int(items[8]);
 }
 
-STATIC void mp_time_obj_to_time(mp_obj_t obj, time_t *t) {
+static void mp_time_obj_to_time(mp_obj_t obj, time_t *t) {
     if (mp_obj_is_small_int(obj)) {
         *t = MP_OBJ_SMALL_INT_VALUE(obj);
     } else if (mp_obj_is_exact_type(obj, &mp_type_int)) {
@@ -72,7 +72,7 @@ STATIC void mp_time_obj_to_time(mp_obj_t obj, time_t *t) {
     }
 }
 
-STATIC mp_obj_t mp_time_asctime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_asctime(size_t n_args, const mp_obj_t *args) {
     struct tm tm;
     if (n_args == 0) {
         time_t t = time(NULL);
@@ -83,9 +83,9 @@ STATIC mp_obj_t mp_time_asctime(size_t n_args, const mp_obj_t *args) {
     char *str = asctime(&tm);
     return mp_obj_new_str_copy(&mp_type_str, (byte *)str, strlen(str) - 1);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_asctime_obj, 0, 1, mp_time_asctime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_asctime_obj, 0, 1, mp_time_asctime);
 
-STATIC mp_obj_t mp_time_ctime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_ctime(size_t n_args, const mp_obj_t *args) {
     time_t t;
     if ((n_args == 0) || (args[0] == mp_const_none)) {
         time(&t);
@@ -95,9 +95,9 @@ STATIC mp_obj_t mp_time_ctime(size_t n_args, const mp_obj_t *args) {
     char *str = ctime(&t);
     return mp_obj_new_str_copy(&mp_type_str, (byte *)str, strlen(str) - 1);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_ctime_obj, 0, 1, mp_time_ctime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_ctime_obj, 0, 1, mp_time_ctime);
 
-STATIC mp_obj_t mp_time_gmtime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_gmtime(size_t n_args, const mp_obj_t *args) {
     time_t t;
     if ((n_args == 0) || (args[0] == mp_const_none)) {
         time(&t);
@@ -110,9 +110,9 @@ STATIC mp_obj_t mp_time_gmtime(size_t n_args, const mp_obj_t *args) {
     }
     return mp_time_tm_to_obj(tm);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_gmtime_obj, 0, 1, mp_time_gmtime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_gmtime_obj, 0, 1, mp_time_gmtime);
 
-STATIC mp_obj_t mp_time_localtime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_localtime(size_t n_args, const mp_obj_t *args) {
     time_t t;
     if ((n_args == 0) || (args[0] == mp_const_none)) {
         time(&t);
@@ -125,9 +125,9 @@ STATIC mp_obj_t mp_time_localtime(size_t n_args, const mp_obj_t *args) {
     }
     return mp_time_tm_to_obj(tm);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_localtime_obj, 0, 1, mp_time_localtime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_localtime_obj, 0, 1, mp_time_localtime);
 
-STATIC mp_obj_t mp_time_mktime(mp_obj_t obj) {
+static mp_obj_t mp_time_mktime(mp_obj_t obj) {
     struct tm tm;
     mp_time_obj_to_tm(obj, &tm);
     time_t t = mktime(&tm);
@@ -136,21 +136,21 @@ STATIC mp_obj_t mp_time_mktime(mp_obj_t obj) {
     }
     return mp_obj_new_int_from_ll(t);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_time_mktime_obj, mp_time_mktime);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_time_mktime_obj, mp_time_mktime);
 
-STATIC mp_obj_t mp_time_monotonic(void) {
+static mp_obj_t mp_time_monotonic(void) {
     mp_uint_t ticks = mp_hal_ticks_us();
     return mp_obj_new_float(ticks * 1e-6);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_time_monotonic_obj, mp_time_monotonic);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_monotonic_obj, mp_time_monotonic);
 
-STATIC mp_obj_t mp_time_monotonic_ns(void) {
+static mp_obj_t mp_time_monotonic_ns(void) {
     mp_uint_t ticks = mp_hal_ticks_us();
     return mp_obj_new_int(ticks * 1000);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_time_monotonic_ns_obj, mp_time_monotonic_ns);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_monotonic_ns_obj, mp_time_monotonic_ns);
 
-STATIC mp_obj_t mp_time_sleep(mp_obj_t secs_in) {
+static mp_obj_t mp_time_sleep(mp_obj_t secs_in) {
     mp_float_t secs = mp_obj_get_float(secs_in);
     struct timespec t = { .tv_sec = secs, .tv_nsec = 1e9 * secs};
     for (;;) {
@@ -165,9 +165,9 @@ STATIC mp_obj_t mp_time_sleep(mp_obj_t secs_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_time_sleep_obj, mp_time_sleep);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_time_sleep_obj, mp_time_sleep);
 
-STATIC mp_obj_t mp_time_strftime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_strftime(size_t n_args, const mp_obj_t *args) {
     const char *format = mp_obj_str_get_str(args[0]);
     struct tm tm;
     if (n_args == 1) {
@@ -185,9 +185,9 @@ STATIC mp_obj_t mp_time_strftime(size_t n_args, const mp_obj_t *args) {
     vstr_add_len(&vstr, len);
     return mp_obj_new_str_from_vstr(&vstr);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_strftime_obj, 1, 2, mp_time_strftime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_strftime_obj, 1, 2, mp_time_strftime);
 
-STATIC mp_obj_t mp_time_strptime(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_time_strptime(size_t n_args, const mp_obj_t *args) {
     const char *str = mp_obj_str_get_str(args[0]);
     const char *format = "%a %b %d %H:%M:%S %Y";
     if (n_args != 1) {
@@ -200,28 +200,28 @@ STATIC mp_obj_t mp_time_strptime(size_t n_args, const mp_obj_t *args) {
     }
     return mp_time_tm_to_obj(&tm);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_strptime_obj, 1, 2, mp_time_strptime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_strptime_obj, 1, 2, mp_time_strptime);
 
-STATIC mp_obj_t mp_time_time(void) {
+static mp_obj_t mp_time_time(void) {
     time_t t = time(NULL);
     return mp_obj_new_float(t);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_obj, mp_time_time);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_obj, mp_time_time);
 
-STATIC mp_obj_t mp_time_time_ns(void) {
+static mp_obj_t mp_time_time_ns(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return mp_obj_new_int_from_ll((tv.tv_sec * 1000000 + tv.tv_usec) * 1000);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_ns_obj, mp_time_time_ns);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_ns_obj, mp_time_time_ns);
 
-STATIC mp_obj_t mp_time_tzset(void) {
+static mp_obj_t mp_time_tzset(void) {
     tzset();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_time_tzset_obj, mp_time_tzset);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_tzset_obj, mp_time_tzset);
 
-STATIC mp_obj_t mp_time_getattr(mp_obj_t attr) {
+static mp_obj_t mp_time_getattr(mp_obj_t attr) {
     switch (MP_OBJ_QSTR_VALUE(attr)) {
         case MP_QSTR_daylight:
             return MP_OBJ_NEW_SMALL_INT(_daylight);
@@ -238,9 +238,9 @@ STATIC mp_obj_t mp_time_getattr(mp_obj_t attr) {
             return MP_OBJ_NULL;
     }
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_time_getattr_obj, mp_time_getattr);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_time_getattr_obj, mp_time_getattr);
 
-STATIC const mp_rom_map_elem_t mp_module_time_globals_table[] = {
+static const mp_rom_map_elem_t mp_module_time_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_time) },
     { MP_ROM_QSTR(MP_QSTR___getattr__),     MP_ROM_PTR(&mp_time_getattr_obj) },
 
@@ -262,7 +262,7 @@ STATIC const mp_rom_map_elem_t mp_module_time_globals_table[] = {
     MICROPY_PY_TIME_EXTRA_GLOBALS
     #endif
 };
-STATIC MP_DEFINE_CONST_DICT(mp_module_time_globals, mp_module_time_globals_table);
+static MP_DEFINE_CONST_DICT(mp_module_time_globals, mp_module_time_globals_table);
 
 const mp_obj_module_t mp_module_time = {
     .base = { &mp_type_module },

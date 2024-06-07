@@ -35,7 +35,7 @@ static void lvgl_anim_run_event(void *arg) {
     mp_call_function_2(func, anim, MP_OBJ_NEW_SMALL_INT(event->value));
 }
 
-STATIC void lvgl_anim_custom_exec_cb(lv_anim_t *anim, int32_t value) {
+static void lvgl_anim_custom_exec_cb(lv_anim_t *anim, int32_t value) {
     lvgl_anim_handle_t *handle = lvgl_anim_get_handle(anim);
     if (!handle) {
         return;
@@ -65,7 +65,7 @@ STATIC void lvgl_anim_custom_exec_cb(lv_anim_t *anim, int32_t value) {
     lvgl_queue_send(queue, &event->elem);
 }
 
-STATIC void lvgl_anim_deleted_cb(lv_anim_t *anim) {
+static void lvgl_anim_deleted_cb(lv_anim_t *anim) {
     lvgl_anim_handle_t *handle = lvgl_anim_get_handle(anim);
     if (!handle) {
         return;
@@ -73,7 +73,7 @@ STATIC void lvgl_anim_deleted_cb(lv_anim_t *anim) {
     lvgl_ptr_delete(&handle->base);
 }
 
-STATIC mp_obj_t lvgl_anim_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_anim_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, true);
     lvgl_anim_handle_t *other = MP_OBJ_NULL;
     if (n_args > 0) {
@@ -102,7 +102,7 @@ STATIC mp_obj_t lvgl_anim_make_new(const mp_obj_type_t *type, size_t n_args, siz
     return self_out;
 }
 
-STATIC void lvgl_anim_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_anim_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_anim_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
 
     if (attr == MP_QSTR_var) {
@@ -124,7 +124,7 @@ STATIC void lvgl_anim_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC mp_obj_t lvgl_anim_start(mp_obj_t self_in) {
+static mp_obj_t lvgl_anim_start(mp_obj_t self_in) {
     lvgl_anim_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_obj_t *var = lvgl_lock_obj(handle->var);
@@ -134,9 +134,9 @@ STATIC mp_obj_t lvgl_anim_start(mp_obj_t self_in) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_anim_start_obj, lvgl_anim_start);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_anim_start_obj, lvgl_anim_start);
 
-STATIC mp_obj_t lvgl_anim_delete(mp_obj_t self_in) {
+static mp_obj_t lvgl_anim_delete(mp_obj_t self_in) {
     lvgl_anim_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_obj_t *var = lvgl_lock_obj(handle->var);
@@ -144,14 +144,14 @@ STATIC mp_obj_t lvgl_anim_delete(mp_obj_t self_in) {
     lvgl_unlock();
     return mp_obj_new_bool(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_anim_delete_obj, lvgl_anim_delete);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_anim_delete_obj, lvgl_anim_delete);
 
-STATIC const mp_rom_map_elem_t lvgl_anim_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_anim_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_start),           MP_ROM_PTR(&lvgl_anim_start_obj) },
     { MP_ROM_QSTR(MP_QSTR_delete),          MP_ROM_PTR(&lvgl_anim_delete_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_anim_locals_dict, lvgl_anim_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_anim_locals_dict, lvgl_anim_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_anim,
@@ -163,7 +163,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     );
 MP_REGISTER_OBJECT(lvgl_type_anim);
 
-STATIC const lvgl_type_attr_t lvgl_anim_attrs[] = {
+static const lvgl_type_attr_t lvgl_anim_attrs[] = {
     { MP_ROM_QSTR_CONST(MP_QSTR_path_cb), offsetof(lv_anim_t, path_cb), LV_TYPE_ANIM_PATH },
     { MP_ROM_QSTR_CONST(MP_QSTR_start_value), offsetof(lv_anim_t, start_value), LV_TYPE_INT32 },
     // { MP_ROM_QSTR_CONST(MP_QSTR_current_value), offsetof(lv_anim_t, current_value), LV_TYPE_INT32 },
@@ -195,7 +195,7 @@ const lvgl_ptr_type_t lvgl_anim_type = {
 
 typedef lvgl_obj_static_ptr_t lvgl_obj_anim_path_t;
 
-STATIC const lvgl_obj_anim_path_t lvgl_anim_paths[] = {
+static const lvgl_obj_anim_path_t lvgl_anim_paths[] = {
     { { &lvgl_type_anim_path }, lv_anim_path_linear },
     { { &lvgl_type_anim_path }, lv_anim_path_ease_in },
     { { &lvgl_type_anim_path }, lv_anim_path_ease_out },
@@ -206,7 +206,7 @@ STATIC const lvgl_obj_anim_path_t lvgl_anim_paths[] = {
     // { { &lvgl_type_anim_path }, lv_anim_path_custom_bezier3 },
 };
 
-STATIC mp_obj_t lvgl_anim_path_call(mp_obj_t self_in, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t lvgl_anim_path_call(mp_obj_t self_in, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 2, 2, false);
     lvgl_obj_anim_path_t *self = MP_OBJ_TO_PTR(args[0]);
     lv_anim_path_cb_t anim_path = self->lv_ptr;
@@ -215,7 +215,7 @@ STATIC mp_obj_t lvgl_anim_path_call(mp_obj_t self_in, size_t n_args, size_t n_kw
     return mp_obj_new_int(value);
 }
 
-STATIC const mp_rom_map_elem_t lvgl_anim_path_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_anim_path_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LINEAR),          MP_ROM_PTR(&lvgl_anim_paths[0]) },
     { MP_ROM_QSTR(MP_QSTR_EASE_IN),         MP_ROM_PTR(&lvgl_anim_paths[1]) },
     { MP_ROM_QSTR(MP_QSTR_EASE_OUT),        MP_ROM_PTR(&lvgl_anim_paths[2]) },
@@ -225,7 +225,7 @@ STATIC const mp_rom_map_elem_t lvgl_anim_path_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_STEP),            MP_ROM_PTR(&lvgl_anim_paths[6]) },
     { MP_ROM_QSTR(MP_QSTR_CUSTOM_BEZIER3),  MP_ROM_PTR(&lvgl_anim_paths[7]) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_anim_path_locals_dict, lvgl_anim_path_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_anim_path_locals_dict, lvgl_anim_path_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_anim_path,

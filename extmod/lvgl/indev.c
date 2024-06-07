@@ -61,7 +61,7 @@ static void lvgl_indev_event_delete(lv_event_t *e) {
     }
 }
 
-STATIC mp_obj_t lvgl_indev_delete(mp_obj_t self_in) {
+static mp_obj_t lvgl_indev_delete(mp_obj_t self_in) {
     lvgl_indev_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_indev_t *indev = lvgl_lock_indev(handle);
@@ -69,9 +69,9 @@ STATIC mp_obj_t lvgl_indev_delete(mp_obj_t self_in) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_delete_obj, lvgl_indev_delete);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_delete_obj, lvgl_indev_delete);
 
-STATIC mp_obj_t lvgl_indev_get_vect(mp_obj_t self_in) {
+static mp_obj_t lvgl_indev_get_vect(mp_obj_t self_in) {
     lvgl_indev_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_indev_t *indev = lvgl_lock_indev(handle);
@@ -82,14 +82,14 @@ STATIC mp_obj_t lvgl_indev_get_vect(mp_obj_t self_in) {
     mp_obj_t items[] = { mp_obj_new_int(point.x), mp_obj_new_int(point.y) };
     return mp_obj_new_tuple(2, items);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_get_vect_obj, lvgl_indev_get_vect);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_get_vect_obj, lvgl_indev_get_vect);
 
-STATIC const mp_rom_map_elem_t lvgl_indev_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_indev_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_delete),          MP_ROM_PTR(&lvgl_indev_delete_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_vect),        MP_ROM_PTR(&lvgl_indev_get_vect_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_indev_locals_dict, lvgl_indev_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_indev_locals_dict, lvgl_indev_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_indev,

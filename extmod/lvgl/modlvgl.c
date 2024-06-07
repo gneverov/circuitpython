@@ -125,7 +125,7 @@ mp_obj_t lvgl_init(void) {
 
     return mp_obj_new_bool(result);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_init_obj, lvgl_init);
+static MP_DEFINE_CONST_FUN_OBJ_0(lvgl_init_obj, lvgl_init);
 
 mp_obj_t lvgl_deinit(void) {
     lvgl_lock();
@@ -142,9 +142,9 @@ mp_obj_t lvgl_deinit(void) {
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_deinit_obj, lvgl_deinit);
+static MP_DEFINE_CONST_FUN_OBJ_0(lvgl_deinit_obj, lvgl_deinit);
 
-STATIC mp_obj_t lvgl_run_forever(void) {
+static mp_obj_t lvgl_run_forever(void) {
     lvgl_lock();
     mp_obj_t obj = lvgl_unlock_ptr(&lvgl_queue_default->base);
 
@@ -174,9 +174,9 @@ STATIC mp_obj_t lvgl_run_forever(void) {
     while (ret > 0);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_run_forever_obj, lvgl_run_forever);
+static MP_DEFINE_CONST_FUN_OBJ_0(lvgl_run_forever_obj, lvgl_run_forever);
 
-STATIC mp_obj_t lvgl_getattr(mp_obj_t attr) {
+static mp_obj_t lvgl_getattr(mp_obj_t attr) {
     if (MP_OBJ_QSTR_VALUE(attr) == MP_QSTR_display) {
         return lvgl_display_get_default();
     }
@@ -193,7 +193,7 @@ STATIC mp_obj_t lvgl_getattr(mp_obj_t attr) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(lvgl_getattr_obj, lvgl_getattr);
 
-STATIC mp_obj_t lvgl_load_screen(mp_obj_t obj_in) {
+static mp_obj_t lvgl_load_screen(mp_obj_t obj_in) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp_checked(obj_in);
     lvgl_lock();
     lv_obj_t *scr = lvgl_lock_obj(handle);
@@ -201,52 +201,52 @@ STATIC mp_obj_t lvgl_load_screen(mp_obj_t obj_in) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_load_screen_obj, lvgl_load_screen);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_load_screen_obj, lvgl_load_screen);
 
-STATIC mp_obj_t lvgl_color_make(mp_obj_t red_in, mp_obj_t green_in, mp_obj_t blue_in) {
+static mp_obj_t lvgl_color_make(mp_obj_t red_in, mp_obj_t green_in, mp_obj_t blue_in) {
     mp_int_t r = mp_obj_get_int(red_in);
     mp_int_t g = mp_obj_get_int(green_in);
     mp_int_t b = mp_obj_get_int(blue_in);
     lv_color_t c = lv_color_make(r, g, b);
     return mp_obj_new_int(lv_color_to_int(c));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(lvgl_color_make_obj, lvgl_color_make);
+static MP_DEFINE_CONST_FUN_OBJ_3(lvgl_color_make_obj, lvgl_color_make);
 
-STATIC mp_obj_t lvgl_color_lighten(mp_obj_t c_in, mp_obj_t lvl_in) {
+static mp_obj_t lvgl_color_lighten(mp_obj_t c_in, mp_obj_t lvl_in) {
     lv_color_t c = lv_color_hex(mp_obj_get_int(c_in));
     lv_opa_t lvl = mp_obj_get_int(lvl_in);
     c = lv_color_lighten(c, lvl);
     return mp_obj_new_int(lv_color_to_int(c));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_lighten_obj, lvgl_color_lighten);
+static MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_lighten_obj, lvgl_color_lighten);
 
-STATIC mp_obj_t lvgl_color_darken(mp_obj_t c_in, mp_obj_t lvl_in) {
+static mp_obj_t lvgl_color_darken(mp_obj_t c_in, mp_obj_t lvl_in) {
     lv_color_t c = lv_color_hex(mp_obj_get_int(c_in));
     lv_opa_t lvl = mp_obj_get_int(lvl_in);
     c = lv_color_darken(c, lvl);
     return mp_obj_new_int(lv_color_to_int(c));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_darken_obj, lvgl_color_darken);
+static MP_DEFINE_CONST_FUN_OBJ_2(lvgl_color_darken_obj, lvgl_color_darken);
 
-STATIC mp_obj_t lvgl_color_black(void) {
+static mp_obj_t lvgl_color_black(void) {
     lv_color_t c = lv_color_black();
     return mp_obj_new_int(lv_color_to_int(c));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_black_obj, lvgl_color_black);
+static MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_black_obj, lvgl_color_black);
 
-STATIC mp_obj_t lvgl_color_white(void) {
+static mp_obj_t lvgl_color_white(void) {
     lv_color_t c = lv_color_white();
     return mp_obj_new_int(lv_color_to_int(c));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_white_obj, lvgl_color_white);
+static MP_DEFINE_CONST_FUN_OBJ_0(lvgl_color_white_obj, lvgl_color_white);
 
-STATIC mp_obj_t lvgl_pct(mp_obj_t value_in) {
+static mp_obj_t lvgl_pct(mp_obj_t value_in) {
     int32_t value = mp_obj_get_int(value_in);
     return mp_obj_new_int(lv_pct(value));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_pct_obj, lvgl_pct);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_pct_obj, lvgl_pct);
 
-STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
+static const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_lvgl) },
     { MP_ROM_QSTR(MP_QSTR_draw),            MP_ROM_PTR(&lvgl_module_draw) },
     { MP_ROM_QSTR(MP_QSTR___getattr__),     MP_ROM_PTR(&lvgl_getattr_obj) },
@@ -604,7 +604,7 @@ STATIC const mp_rom_map_elem_t lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_COLOR_FORMAT_NATIVE_WITH_ALPHA), MP_ROM_INT(LV_COLOR_FORMAT_NATIVE_WITH_ALPHA) },
 
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_module_globals, lvgl_module_globals_table);
+static MP_DEFINE_CONST_DICT(lvgl_module_globals, lvgl_module_globals_table);
 
 const mp_obj_module_t lvgl_module = {
     .base = { &mp_type_module },

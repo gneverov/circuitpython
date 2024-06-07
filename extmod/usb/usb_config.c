@@ -25,9 +25,9 @@ typedef struct {
     size_t string_idx;
 } usb_config_obj_t;
 
-STATIC const tusb_desc_string_t usb_string_0 = { 4, TUSB_DESC_STRING, { 0x0409 } };
+static const tusb_desc_string_t usb_string_0 = { 4, TUSB_DESC_STRING, { 0x0409 } };
 
-STATIC uint8_t usb_config_str(usb_config_obj_t *self, mp_obj_t py_str, const char *c_str) {
+static uint8_t usb_config_str(usb_config_obj_t *self, mp_obj_t py_str, const char *c_str) {
     if ((py_str != MP_OBJ_NULL) && (py_str != mp_const_none)) {
         c_str = mp_obj_str_get_str(py_str);
     }
@@ -54,7 +54,7 @@ STATIC uint8_t usb_config_str(usb_config_obj_t *self, mp_obj_t py_str, const cha
     return idx;
 }
 
-STATIC mp_obj_t usb_config_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t usb_config_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
     usb_config_obj_t *self = m_new_obj(usb_config_obj_t);
     memset(self, 0, sizeof(usb_config_obj_t));
@@ -63,16 +63,16 @@ STATIC mp_obj_t usb_config_make_new(const mp_obj_type_t *type, size_t n_args, si
 }
 
 #if CFG_TUH_ENABLED
-STATIC mp_obj_t usb_config_host(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_host(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     // self->tusb_config.host = true;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_host_obj, 1, usb_config_host);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_host_obj, 1, usb_config_host);
 #endif
 
 #if CFG_TUD_ENABLED
-STATIC mp_obj_t usb_config_device(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_device(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     self->tusb_config.device = NULL;
@@ -125,9 +125,9 @@ STATIC mp_obj_t usb_config_device(size_t n_args, const mp_obj_t *args, mp_map_t 
     self->tusb_config.device = desc;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_device_obj, 1, usb_config_device);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_device_obj, 1, usb_config_device);
 
-STATIC mp_obj_t usb_config_configuration(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_configuration(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device) {
         mp_raise_ValueError(NULL);
@@ -171,15 +171,15 @@ STATIC mp_obj_t usb_config_configuration(size_t n_args, const mp_obj_t *args, mp
 
     return MP_OBJ_NEW_SMALL_INT(idx);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_configuration_obj, 1, usb_config_configuration);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_configuration_obj, 1, usb_config_configuration);
 
-STATIC tusb_desc_configuration_t **usb_config_cfg_get(usb_config_obj_t *self) {
+static tusb_desc_configuration_t **usb_config_cfg_get(usb_config_obj_t *self) {
     assert(self->tusb_config.device);
     assert(self->cfg_idx < self->tusb_config.device->bNumConfigurations);
     return &self->tusb_config.configs[self->cfg_idx];
 }
 
-STATIC tusb_desc_configuration_t *usb_config_cfg_append(usb_config_obj_t *self, uint8_t *buf, size_t len) {
+static tusb_desc_configuration_t *usb_config_cfg_append(usb_config_obj_t *self, uint8_t *buf, size_t len) {
     tusb_desc_configuration_t *desc = *usb_config_cfg_get(self);
     assert(desc->wTotalLength + len <= 0xffff);
     desc = m_realloc(desc, (desc->wTotalLength + len + 255) & ~255);
@@ -191,7 +191,7 @@ STATIC tusb_desc_configuration_t *usb_config_cfg_append(usb_config_obj_t *self, 
 }
 
 #if CFG_TUD_CDC
-STATIC mp_obj_t usb_config_cdc(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_cdc(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -214,11 +214,11 @@ STATIC mp_obj_t usb_config_cdc(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_cdc_obj, 1, usb_config_cdc);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_cdc_obj, 1, usb_config_cdc);
 #endif
 
 #if CFG_TUD_MSC
-STATIC mp_obj_t usb_config_msc(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_msc(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -241,11 +241,11 @@ STATIC mp_obj_t usb_config_msc(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_msc_obj, 1, usb_config_msc);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_msc_obj, 1, usb_config_msc);
 #endif
 
 #if CFG_TUD_AUDIO && CFG_TUD_AUDIO_ENABLE_EP_OUT
-STATIC mp_obj_t usb_config_audio_speaker(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_audio_speaker(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -268,11 +268,11 @@ STATIC mp_obj_t usb_config_audio_speaker(size_t n_args, const mp_obj_t *args, mp
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_audio_speaker_obj, 1, usb_config_audio_speaker);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_audio_speaker_obj, 1, usb_config_audio_speaker);
 #endif
 
 #if CFG_TUD_AUDIO && CFG_TUD_AUDIO_ENABLE_EP_IN
-STATIC mp_obj_t usb_config_audio_mic(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_audio_mic(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -295,11 +295,11 @@ STATIC mp_obj_t usb_config_audio_mic(size_t n_args, const mp_obj_t *args, mp_map
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_audio_mic_obj, 1, usb_config_audio_mic);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_audio_mic_obj, 1, usb_config_audio_mic);
 #endif
 
 #if CFG_TUD_ECM_RNDIS
-STATIC mp_obj_t usb_config_net_ecm(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_net_ecm(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -324,9 +324,9 @@ STATIC mp_obj_t usb_config_net_ecm(size_t n_args, const mp_obj_t *args, mp_map_t
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_ecm_obj, 2, usb_config_net_ecm);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_ecm_obj, 2, usb_config_net_ecm);
 
-STATIC mp_obj_t usb_config_net_rndis(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_net_rndis(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -349,11 +349,11 @@ STATIC mp_obj_t usb_config_net_rndis(size_t n_args, const mp_obj_t *args, mp_map
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_rndis_obj, 1, usb_config_net_rndis);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_rndis_obj, 1, usb_config_net_rndis);
 #endif
 
 #if CFG_TUD_NCM
-STATIC mp_obj_t usb_config_net_ncm(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
+static mp_obj_t usb_config_net_ncm(size_t n_args, const mp_obj_t *args, mp_map_t *kws) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (!self->tusb_config.device || (self->cfg_idx >= self->tusb_config.device->bNumConfigurations)) {
         mp_raise_ValueError(NULL);
@@ -378,17 +378,17 @@ STATIC mp_obj_t usb_config_net_ncm(size_t n_args, const mp_obj_t *args, mp_map_t
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_ncm_obj, 2, usb_config_net_ncm);
+static MP_DEFINE_CONST_FUN_OBJ_KW(usb_config_net_ncm_obj, 2, usb_config_net_ncm);
 #endif
 #endif
 
-STATIC void usb_config_print_bytes(const mp_print_t *print, uint8_t *bytes, size_t len) {
+static void usb_config_print_bytes(const mp_print_t *print, uint8_t *bytes, size_t len) {
     for (size_t i = 0; i < len; i++) {
         mp_printf(print, "0x%02x, ", (int)bytes[i]);
     }
 }
 
-STATIC void usb_config_print_tusb_config(const mp_print_t *print, const tusb_config_t *tusb_config) {
+static void usb_config_print_tusb_config(const mp_print_t *print, const tusb_config_t *tusb_config) {
     mp_printf(print, "uint8_t device[] = { ");
     usb_config_print_bytes(print, (uint8_t *)tusb_config->device, sizeof(tusb_desc_device_t));
     mp_printf(print, "};\n");
@@ -417,7 +417,7 @@ STATIC void usb_config_print_tusb_config(const mp_print_t *print, const tusb_con
     mp_printf(print, "};\n");    
 }
 
-STATIC void usb_config_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+static void usb_config_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     if (kind == PRINT_REPR) {
@@ -433,29 +433,29 @@ STATIC void usb_config_print(const mp_print_t *print, mp_obj_t self_in, mp_print
     usb_config_print_tusb_config(print, &self->tusb_config);
 }
 
-STATIC mp_obj_t usb_config_exists(void) {
+static mp_obj_t usb_config_exists(void) {
     tusb_config_t config;
     tusb_config_load(&config);
     return mp_obj_new_bool(!!config.device);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(usb_config_exists_fun, usb_config_exists);
-STATIC MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_exists_obj, MP_ROM_PTR(&usb_config_exists_fun));
+static MP_DEFINE_CONST_FUN_OBJ_0(usb_config_exists_fun, usb_config_exists);
+static MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_exists_obj, MP_ROM_PTR(&usb_config_exists_fun));
 
-STATIC mp_obj_t usb_config_delete(void) {
+static mp_obj_t usb_config_delete(void) {
     tusb_config_delete();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(usb_config_delete_fun, usb_config_delete);
-STATIC MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_delete_obj, MP_ROM_PTR(&usb_config_delete_fun));
+static MP_DEFINE_CONST_FUN_OBJ_0(usb_config_delete_fun, usb_config_delete);
+static MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_delete_obj, MP_ROM_PTR(&usb_config_delete_fun));
 
-STATIC mp_obj_t usb_config_save(mp_obj_t self_in) {
+static mp_obj_t usb_config_save(mp_obj_t self_in) {
     usb_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
     tusb_config_save(&self->tusb_config);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(usb_config_save_obj, usb_config_save);
+static MP_DEFINE_CONST_FUN_OBJ_1(usb_config_save_obj, usb_config_save);
 
-// STATIC mp_obj_t usb_config_load(void) {
+// static mp_obj_t usb_config_load(void) {
 //     mp_obj_t self_in = usb_config_make_new(&type, 0, 0, NULL);
 //     usb_config_obj_t *self = MP_OBJ_TO_PTR(self_in);
 //     tusb_config_t *config = &self->tusb_config;
@@ -463,10 +463,10 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(usb_config_save_obj, usb_config_save);
 //     // TODO copy pointers from flash to RAM
 //     return self_in;
 // }
-// STATIC MP_DEFINE_CONST_FUN_OBJ_0(usb_config_load_fun, usb_config_load);
-// STATIC MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_load_obj, usb_config_load_fun);
+// static MP_DEFINE_CONST_FUN_OBJ_0(usb_config_load_fun, usb_config_load);
+// static MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_load_obj, usb_config_load_fun);
 
-STATIC const mp_rom_map_elem_t usb_config_locals_dict_table[] = {
+static const mp_rom_map_elem_t usb_config_locals_dict_table[] = {
 #if CFG_TUH_ENABLED    
     { MP_ROM_QSTR(MP_QSTR_host),          MP_ROM_PTR(&usb_config_host_obj) },
 #endif
@@ -498,7 +498,7 @@ STATIC const mp_rom_map_elem_t usb_config_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_save),            MP_ROM_PTR(&usb_config_save_obj) },
     // { MP_ROM_QSTR(MP_QSTR_load),            MP_ROM_PTR(&usb_config_load_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(usb_config_locals_dict, usb_config_locals_dict_table);
+static MP_DEFINE_CONST_DICT(usb_config_locals_dict, usb_config_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     usb_config_type,

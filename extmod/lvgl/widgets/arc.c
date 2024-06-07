@@ -6,7 +6,7 @@
 #include "../super.h"
 
 
-STATIC void lvgl_arc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_arc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
 
     if (attr == MP_QSTR_start_angle) {
@@ -32,7 +32,7 @@ STATIC void lvgl_arc_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC mp_obj_t lvgl_arc_rotate_obj_to_angle(mp_obj_t self_in, mp_obj_t obj_in, mp_obj_t r_offset_in) {
+static mp_obj_t lvgl_arc_rotate_obj_to_angle(mp_obj_t self_in, mp_obj_t obj_in, mp_obj_t r_offset_in) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
     lvgl_obj_handle_t *obj_handle = lvgl_obj_from_mp_checked(obj_in);
     int32_t r_offset = mp_obj_get_int(r_offset_in);
@@ -44,13 +44,13 @@ STATIC mp_obj_t lvgl_arc_rotate_obj_to_angle(mp_obj_t self_in, mp_obj_t obj_in, 
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(lvgl_arc_rotate_obj_to_angle_obj, lvgl_arc_rotate_obj_to_angle);
+static MP_DEFINE_CONST_FUN_OBJ_3(lvgl_arc_rotate_obj_to_angle_obj, lvgl_arc_rotate_obj_to_angle);
 
-STATIC const mp_rom_map_elem_t lvgl_arc_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_arc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rotate_obj_to_angle),     MP_ROM_PTR(&lvgl_arc_rotate_obj_to_angle_obj) },
 
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_arc_locals_dict, lvgl_arc_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_arc_locals_dict, lvgl_arc_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_arc,

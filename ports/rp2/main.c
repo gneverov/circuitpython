@@ -254,7 +254,7 @@ void mp_tuh_task(void *params) {
 }
 #endif
 
-STATIC void set_default_time(void) {
+static void set_default_time(void) {
     tzset();
     struct tm tm = {
         .tm_year = 124,
@@ -268,7 +268,7 @@ STATIC void set_default_time(void) {
     settimeofday(&tv, NULL);
 }
 
-STATIC int mount_root_fs(void) {
+static int mount_root_fs(void) {
     char *root = getenv("ROOT");
     if (!root) {
         return 0;

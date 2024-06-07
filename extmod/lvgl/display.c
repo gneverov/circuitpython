@@ -161,7 +161,7 @@ void lvgl_display_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
+static mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
     lvgl_display_handle_t *handle = lvgl_ptr_from_mp(NULL, self_in);
     lvgl_lock();
     lv_display_t *disp = lvgl_lock_display(handle);
@@ -169,13 +169,13 @@ STATIC mp_obj_t lvgl_display_delete(mp_obj_t self_in) {
     lvgl_unlock();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(lvgl_display_delete_obj, lvgl_display_delete);
+static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_display_delete_obj, lvgl_display_delete);
 
-STATIC const mp_rom_map_elem_t lvgl_display_locals_dict_table[] = {
+static const mp_rom_map_elem_t lvgl_display_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&lvgl_ptr_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_delete),          MP_ROM_PTR(&lvgl_display_delete_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(lvgl_display_locals_dict, lvgl_display_locals_dict_table);
+static MP_DEFINE_CONST_DICT(lvgl_display_locals_dict, lvgl_display_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     lvgl_type_display,

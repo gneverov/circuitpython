@@ -105,7 +105,7 @@ typedef struct _machine_spi_obj_t {
     uint32_t baudrate;
 } machine_spi_obj_t;
 
-STATIC machine_spi_obj_t machine_spi_obj[] = {
+static machine_spi_obj_t machine_spi_obj[] = {
     {
         {&machine_spi_type}, 0,
         DEFAULT_SPI_POLARITY, DEFAULT_SPI_PHASE, DEFAULT_SPI_BITS, DEFAULT_SPI_FIRSTBIT,
@@ -120,7 +120,7 @@ STATIC machine_spi_obj_t machine_spi_obj[] = {
     },
 };
 
-STATIC void machine_spi_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+static void machine_spi_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     machine_spi_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "SPI(%u, baudrate=%u, polarity=%u, phase=%u, bits=%u, sck=%u, mosi=%u, miso=%u)",
         self->spi_id, self->baudrate, self->polarity, self->phase, self->bits,
@@ -201,7 +201,7 @@ mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     return MP_OBJ_FROM_PTR(self);
 }
 
-STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_baudrate, ARG_polarity, ARG_phase, ARG_bits, ARG_firstbit };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_baudrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = -1} },
@@ -239,7 +239,7 @@ STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
     }
 }
 
-STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
+static void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
     machine_spi_obj_t *self = (machine_spi_obj_t *)self_in;
     pico_spi_ll_t *spi = &pico_spis_ll[self->spi_id];
     pico_spi_take(spi, portMAX_DELAY);
@@ -304,7 +304,7 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
     pico_spi_give(spi);
 }
 
-STATIC const mp_machine_spi_p_t machine_spi_p = {
+static const mp_machine_spi_p_t machine_spi_p = {
     .init = machine_spi_init,
     .transfer = machine_spi_transfer,
 };

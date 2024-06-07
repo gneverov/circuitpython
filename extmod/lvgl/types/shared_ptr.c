@@ -48,8 +48,7 @@ lvgl_ptr_t lvgl_ptr_from_mp(const lvgl_ptr_type_t *type, mp_obj_t obj_in) {
     return obj->handle;
 }
 
-void lvgl_ptr_init_obj(lvgl_obj_ptr_t *obj, const mp_obj_type_t *mp_type, lvgl_ptr_handle_t *handle) {
-    obj->base.type = mp_type;
+void lvgl_ptr_init_obj(lvgl_obj_ptr_t *obj, lvgl_ptr_handle_t *handle) {
     obj->handle = lvgl_ptr_copy(handle);
 }
 
@@ -62,8 +61,8 @@ mp_obj_t lvgl_ptr_to_mp(lvgl_ptr_handle_t *handle) {
             handle->mp_obj = handle->type->new_mp(handle);
         }
         else {
-            lvgl_obj_ptr_t *obj = m_new_obj_with_finaliser(lvgl_obj_ptr_t);
-            lvgl_ptr_init_obj(obj, handle->type->mp_type, handle);
+            lvgl_obj_ptr_t *obj = mp_obj_malloc_with_finaliser(lvgl_obj_ptr_t, handle->type->mp_type);
+            lvgl_ptr_init_obj(obj, handle);
             handle->mp_obj = MP_OBJ_FROM_PTR(obj);
         }
     }

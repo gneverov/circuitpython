@@ -24,7 +24,7 @@ mp_uint_t mp_poll_ctl(mp_obj_t poll_obj, enum mp_poll_ctl_op op, mp_obj_t stream
 
 // ###
 
-STATIC void mp_poll_signal(mp_obj_t poll_obj, mp_obj_t stream_obj, mp_uint_t events, BaseType_t *pxHigherPriorityTaskWoken) {
+static void mp_poll_signal(mp_obj_t poll_obj, mp_obj_t stream_obj, mp_uint_t events, BaseType_t *pxHigherPriorityTaskWoken) {
     mp_obj_poll_t *self = MP_OBJ_FROM_PTR(poll_obj);
     assert(self->stream_obj == stream_obj);
     if (pxHigherPriorityTaskWoken) {
@@ -34,7 +34,7 @@ STATIC void mp_poll_signal(mp_obj_t poll_obj, mp_obj_t stream_obj, mp_uint_t eve
     }
 }
 
-STATIC const mp_poll_p_t mp_poll_p = {
+static const mp_poll_p_t mp_poll_p = {
     .signal = mp_poll_signal,
 };
 
@@ -45,7 +45,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     protocol, &mp_poll_p
     );
 
-STATIC void mp_poll_nlr_callback(void *ctx) {
+static void mp_poll_nlr_callback(void *ctx) {
     mp_obj_poll_t *self = ctx - offsetof(mp_obj_poll_t, nlr_callback);
     if (self->stream_obj) {
         int errcode;

@@ -13,7 +13,7 @@
 #include "py/runtime.h"
 
 
-STATIC mp_obj_t usb_speed(void) {
+static mp_obj_t usb_speed(void) {
     mp_float_t values[] = { 12.0e6f, 1.5e6f, 480.0e6f };
     tud_lock();
     int index = tud_speed_get();
@@ -22,7 +22,7 @@ STATIC mp_obj_t usb_speed(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_speed_obj, usb_speed);
 
-STATIC mp_obj_t usb_connected(void) {
+static mp_obj_t usb_connected(void) {
     tud_lock();
     bool connected = tud_connected();
     tud_unlock();
@@ -30,7 +30,7 @@ STATIC mp_obj_t usb_connected(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_connected_obj, usb_connected);
 
-STATIC mp_obj_t usb_mounted(void) {
+static mp_obj_t usb_mounted(void) {
     tud_lock();
     bool mounted = tud_mounted();
     tud_unlock();
@@ -38,7 +38,7 @@ STATIC mp_obj_t usb_mounted(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_mounted_obj, usb_mounted);
 
-STATIC mp_obj_t usb_suspended(void) {
+static mp_obj_t usb_suspended(void) {
     tud_lock();
     bool suspended = tud_suspended();
     tud_unlock();
@@ -46,7 +46,7 @@ STATIC mp_obj_t usb_suspended(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_suspended_obj, usb_suspended);
 
-STATIC mp_obj_t usb_connect(void) {
+static mp_obj_t usb_connect(void) {
     tud_lock();
     bool ok = tud_connect();
     tud_unlock();
@@ -57,7 +57,7 @@ STATIC mp_obj_t usb_connect(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_connect_obj, usb_connect);
 
-STATIC mp_obj_t usb_disconnect(void) {
+static mp_obj_t usb_disconnect(void) {
     tud_lock();
     dcd_event_bus_signal(0, DCD_EVENT_UNPLUGGED, false);
     bool ok = tud_disconnect();
@@ -69,7 +69,7 @@ STATIC mp_obj_t usb_disconnect(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(usb_disconnect_obj, usb_disconnect);
 
-STATIC const mp_rom_map_elem_t usb_module_globals_table[] = {
+static const mp_rom_map_elem_t usb_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_usb) },
     { MP_ROM_QSTR(MP_QSTR_speed),           MP_ROM_PTR(&usb_speed_obj) },    
     { MP_ROM_QSTR(MP_QSTR_connected),       MP_ROM_PTR(&usb_connected_obj) },
@@ -88,7 +88,7 @@ STATIC const mp_rom_map_elem_t usb_module_globals_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_UsbConfig),       MP_ROM_PTR(&usb_config_type) },
 };
-STATIC MP_DEFINE_CONST_DICT(usb_module_globals, usb_module_globals_table);
+static MP_DEFINE_CONST_DICT(usb_module_globals, usb_module_globals_table);
 
 const mp_obj_module_t usb_module = {
     .base = { &mp_type_module },

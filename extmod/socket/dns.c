@@ -13,7 +13,7 @@ struct socket_dns_result {
     u16_t hostname_len;
 };
 
-STATIC err_t socket_dns_lwip_new(socket_obj_t *socket) {  
+static err_t socket_dns_lwip_new(socket_obj_t *socket) {  
     if (socket->pcb.dns) {
         return ERR_VAL;
     }
@@ -28,7 +28,7 @@ STATIC err_t socket_dns_lwip_new(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC err_t socket_dns_lwip_abort(socket_obj_t *socket) {
+static err_t socket_dns_lwip_abort(socket_obj_t *socket) {
     struct pbuf *pcb = socket->pcb.dns;
     if (pcb) {
         *(socket_obj_t **)pcb->payload = NULL;
@@ -38,7 +38,7 @@ STATIC err_t socket_dns_lwip_abort(socket_obj_t *socket) {
     return ERR_OK;
 }
 
-STATIC void socket_dns_lwip_found(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+static void socket_dns_lwip_found(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
     // printf("dns_found: name=%s, found=%s\n", name, ipaddr ? ipaddr_ntoa(ipaddr) : "");
     struct pbuf *pcb = callback_arg;
     socket_obj_t *socket = *(socket_obj_t **)pcb->payload;
@@ -73,7 +73,7 @@ _finally:
     socket_release(socket);
 }
 
-STATIC err_t socket_dns_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
+static err_t socket_dns_lwip_sendto(socket_obj_t *socket, socket_sendto_args_t *args) {
     const char* hostname = args->buf;
 
     if (args->address != NULL) {

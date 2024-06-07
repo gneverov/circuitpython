@@ -14,7 +14,7 @@ void lvgl_line_event_delete(lv_obj_t *obj) {
     lv_free((void *)line->point_array);
 }
 
-STATIC void lvgl_line_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+static void lvgl_line_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     lvgl_obj_handle_t *handle = lvgl_obj_from_mp(self_in, NULL);
 
     if (attr == MP_QSTR_points) {

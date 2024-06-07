@@ -21,8 +21,7 @@
 #include "py/stream.h"
 
 
-STATIC void audio_out_pwm_init(audio_out_pwm_obj_t *self, const mp_obj_type_t *type) {
-    self->base.type = type;
+static void audio_out_pwm_init(audio_out_pwm_obj_t *self) {
     self->a_pin = -1u;
     self->b_pin = -1u;
     self->pwm_slice = -1u;
@@ -33,7 +32,7 @@ STATIC void audio_out_pwm_init(audio_out_pwm_obj_t *self, const mp_obj_type_t *t
     self->fragment[3] = 0;
 }
 
-STATIC void audio_out_pwm_deinit(audio_out_pwm_obj_t *self) {
+static void audio_out_pwm_deinit(audio_out_pwm_obj_t *self) {
     pico_fifo_deinit(&self->fifo);
 
     if (self->pwm_slice != -1u) {
@@ -45,15 +44,15 @@ STATIC void audio_out_pwm_deinit(audio_out_pwm_obj_t *self) {
     }
 }
 
-STATIC bool audio_out_pwm_inited(audio_out_pwm_obj_t *self) {
+static bool audio_out_pwm_inited(audio_out_pwm_obj_t *self) {
     return self->pwm_slice != -1u;
 }
 
-STATIC audio_out_pwm_obj_t *audio_out_pwm_get(mp_obj_t self_in) {
+static audio_out_pwm_obj_t *audio_out_pwm_get(mp_obj_t self_in) {
     return MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, MP_OBJ_FROM_PTR(&audio_out_pwm_type)));
 }
 
-STATIC audio_out_pwm_obj_t *audio_out_pwm_get_raise(mp_obj_t self_in) {
+static audio_out_pwm_obj_t *audio_out_pwm_get_raise(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     if (!audio_out_pwm_inited(self)) {
         mp_raise_OSError(MP_EBADF);
@@ -61,7 +60,7 @@ STATIC audio_out_pwm_obj_t *audio_out_pwm_get_raise(mp_obj_t self_in) {
     return self;
 }
 
-STATIC void audio_out_pwm_irq_handler(pico_fifo_t *fifo, bool stalled) {
+static void audio_out_pwm_irq_handler(pico_fifo_t *fifo, bool stalled) {
     audio_out_pwm_obj_t *self = (audio_out_pwm_obj_t *)((uint8_t *)fifo - offsetof(audio_out_pwm_obj_t, fifo));
     self->int_count++;
 
@@ -75,7 +74,7 @@ STATIC void audio_out_pwm_irq_handler(pico_fifo_t *fifo, bool stalled) {
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-STATIC mp_obj_t audio_out_pwm_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t audio_out_pwm_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_, MP_QSTR_num_channels, MP_QSTR_sample_rate, MP_QSTR_bytes_per_sample, MP_QSTR_fifo_size, MP_QSTR_threshold, MP_QSTR_pwm_bits, MP_QSTR_phase_correct, 0 };
     mp_hal_pin_obj_t a_pin, b_pin;
     mp_int_t num_channels, sample_rate, bytes_per_sample;
@@ -93,8 +92,8 @@ STATIC mp_obj_t audio_out_pwm_make_new(const mp_obj_type_t *type, size_t n_args,
     }
 
     int errcode = 0;
-    audio_out_pwm_obj_t *self = m_new_obj_with_finaliser(audio_out_pwm_obj_t);
-    audio_out_pwm_init(self, type);
+    audio_out_pwm_obj_t *self = mp_obj_malloc_with_finaliser(audio_out_pwm_obj_t, type);
+    audio_out_pwm_init(self);
     self->a_pin = a_pin;
     self->b_pin = b_pin;
     self->pwm_slice = pwm_slice;
@@ -150,14 +149,14 @@ mp_uint_t audio_out_pwm_close(mp_obj_t self_in, int *errcode) {
     return 0;
 }
 
-STATIC mp_obj_t audio_out_pwm_del(mp_obj_t self_in) {
+static mp_obj_t audio_out_pwm_del(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     audio_out_pwm_deinit(self);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_del_obj, audio_out_pwm_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_del_obj, audio_out_pwm_del);
 
-STATIC size_t audio_out_pwm_transcode(audio_out_pwm_obj_t *self, uint16_t *out_buffer, size_t out_size, const uint8_t *in_buffer, size_t in_size) {
+static size_t audio_out_pwm_transcode(audio_out_pwm_obj_t *self, uint16_t *out_buffer, size_t out_size, const uint8_t *in_buffer, size_t in_size) {
     const size_t out_bytes_per_sample = sizeof(uint16_t);
     const size_t in_bytes_per_sample = self->num_channels * self->bytes_per_sample;
     size_t n_samples = MIN(out_size / out_bytes_per_sample, in_size / in_bytes_per_sample);
@@ -186,7 +185,7 @@ STATIC size_t audio_out_pwm_transcode(audio_out_pwm_obj_t *self, uint16_t *out_b
     return n_samples;
 }
 
-STATIC mp_uint_t audio_out_pwm_write_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t audio_out_pwm_write_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     if (!audio_out_pwm_inited(self)) {
         *errcode = MP_EBADF;
@@ -230,12 +229,12 @@ STATIC mp_uint_t audio_out_pwm_write_nonblock(mp_obj_t self_in, void *buf, mp_ui
     return ret;
 }
 
-STATIC mp_uint_t audio_out_pwm_write_block(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t audio_out_pwm_write_block(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     return mp_poll_block(self_in, (void *)buf, size, errcode, audio_out_pwm_write_nonblock, MP_STREAM_POLL_WR, self->timeout, true);
 }
 
-STATIC mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args[1], &bufinfo, MP_BUFFER_READ);
     size_t len = bufinfo.len;
@@ -246,9 +245,9 @@ STATIC mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
     mp_uint_t ret = audio_out_pwm_write_block(args[0], bufinfo.buf, len, &errcode);
     return mp_stream_return(ret, errcode);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audio_out_pwm_write_obj, 2, 3, audio_out_pwm_write);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audio_out_pwm_write_obj, 2, 3, audio_out_pwm_write);
 
-STATIC mp_uint_t audio_out_pwm_empty(mp_obj_t self_in, void *buf, mp_uint_t len, int *errcode) {
+static mp_uint_t audio_out_pwm_empty(mp_obj_t self_in, void *buf, mp_uint_t len, int *errcode) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     if (!audio_out_pwm_inited(self)) {
         *errcode = MP_EBADF;
@@ -261,16 +260,16 @@ STATIC mp_uint_t audio_out_pwm_empty(mp_obj_t self_in, void *buf, mp_uint_t len,
     return 0;
 }
 
-STATIC mp_obj_t audio_out_pwm_drain(mp_obj_t self_in) {
+static mp_obj_t audio_out_pwm_drain(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
     pico_fifo_flush(&self->fifo);
     int errcode;
     mp_uint_t ret = mp_poll_block(self_in, NULL, 0, &errcode, audio_out_pwm_empty, MP_STREAM_POLL_WR, self->timeout, true);
     return mp_stream_return(ret, errcode);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_drain_obj, audio_out_pwm_drain);
+static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_drain_obj, audio_out_pwm_drain);
 
-STATIC mp_uint_t audio_out_pwm_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t audio_out_pwm_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     if (!audio_out_pwm_inited(self) && (request != MP_STREAM_CLOSE)) {
         *errcode = MP_EBADF;
@@ -300,26 +299,26 @@ STATIC mp_uint_t audio_out_pwm_ioctl(mp_obj_t self_in, mp_uint_t request, uintpt
     return ret;
 }
 
-STATIC mp_obj_t audio_out_pwm_start(mp_obj_t self_in) {
+static mp_obj_t audio_out_pwm_start(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
     pico_fifo_flush(&self->fifo);
     pico_fifo_set_enabled(&self->fifo, true);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_start_obj, audio_out_pwm_start);
+static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_start_obj, audio_out_pwm_start);
 
-STATIC mp_obj_t audio_out_pwm_stop(mp_obj_t self_in) {
+static mp_obj_t audio_out_pwm_stop(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
     pico_fifo_set_enabled(&self->fifo, false);
     pwm_set_both_levels(self->pwm_slice, self->top / 2, self->top / 2);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_stop_obj, audio_out_pwm_stop);
+static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_stop_obj, audio_out_pwm_stop);
 
 #ifndef NDEBUG
 #include <stdio.h>
 
-STATIC mp_obj_t audio_out_pwm_debug(mp_obj_t self_in) {
+static mp_obj_t audio_out_pwm_debug(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
     printf("audio_out_pwm %p\n", self);
     printf("  freq:        %lu\n", clock_get_hz(clk_sys));
@@ -335,10 +334,10 @@ STATIC mp_obj_t audio_out_pwm_debug(mp_obj_t self_in) {
     pico_fifo_debug(&self->fifo);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_debug_obj, audio_out_pwm_debug);
+static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_debug_obj, audio_out_pwm_debug);
 #endif
 
-STATIC const mp_rom_map_elem_t audio_out_pwm_locals_dict_table[] = {
+static const mp_rom_map_elem_t audio_out_pwm_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&audio_out_pwm_del_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&audio_out_pwm_write_obj) },
@@ -355,9 +354,9 @@ STATIC const mp_rom_map_elem_t audio_out_pwm_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_debug), MP_ROM_PTR(&audio_out_pwm_debug_obj) },
     #endif
 };
-STATIC MP_DEFINE_CONST_DICT(audio_out_pwm_locals_dict, audio_out_pwm_locals_dict_table);
+static MP_DEFINE_CONST_DICT(audio_out_pwm_locals_dict, audio_out_pwm_locals_dict_table);
 
-STATIC const mp_stream_p_t audio_out_pwm_stream_p = {
+static const mp_stream_p_t audio_out_pwm_stream_p = {
     .write = audio_out_pwm_write_block,
     .ioctl = audio_out_pwm_ioctl,
     .is_text = 0,

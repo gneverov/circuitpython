@@ -49,7 +49,7 @@ struct mp_thread_entry_shim {
     void *arg;
 };
 
-STATIC bool mp_thread_iterate(thread_t **pthread, mp_state_thread_t **pstate) {
+static bool mp_thread_iterate(thread_t **pthread, mp_state_thread_t **pstate) {
     while (thread_iterate(pthread)) {
         thread_t *thread = *pthread;
         *pstate = pvTaskGetThreadLocalStoragePointer(thread->handle, TLS_INDEX_APP);
@@ -62,7 +62,7 @@ STATIC bool mp_thread_iterate(thread_t **pthread, mp_state_thread_t **pstate) {
     return false;
 }
 
-STATIC void mp_thread_entry(void *pvParameters) {
+static void mp_thread_entry(void *pvParameters) {
     struct mp_thread_entry_shim *pshim = pvParameters;
     struct mp_thread_entry_shim shim = *pshim;
     free(pshim);
