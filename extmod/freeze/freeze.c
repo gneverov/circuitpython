@@ -22,7 +22,7 @@
 #include "py/smallint.h"
 
 
-static uint8_t ram_data[1024] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
+static uint8_t ram_data[2048] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
 static size_t freeze_last_ram_size;
 static int freeze_mode;
 static const flash_heap_header_t *freeze_checkpoint;
@@ -184,7 +184,7 @@ static flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t al
         mp_raise_OSError(MP_ENOSPC);
     }
     else {
-        self->ram_end = MAX(self->ram_end, (uint8_t *)fptr);
+        self->ram_end = MAX(self->ram_end, (uint8_t *)fptr + size);
     } 
     return fptr;
 }
