@@ -30,7 +30,6 @@ static TaskHandle_t lvgl_task;
 static int lvgl_exit;
 
 void lvgl_lock(void) {
-    assert(!lvgl_is_locked());
     xSemaphoreTake(lvgl_mutex, portMAX_DELAY);
 }
 

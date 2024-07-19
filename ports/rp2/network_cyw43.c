@@ -59,10 +59,10 @@ typedef struct _network_cyw43_obj_t {
 } network_cyw43_obj_t;
 
 extern const mp_obj_type_t mp_network_cyw43_type;
-STATIC const network_cyw43_obj_t network_cyw43_wl_sta = { { &mp_network_cyw43_type }, &cyw43_state, CYW43_ITF_STA };
-STATIC const network_cyw43_obj_t network_cyw43_wl_ap = { { &mp_network_cyw43_type }, &cyw43_state, CYW43_ITF_AP };
+static const network_cyw43_obj_t network_cyw43_wl_sta = { { &mp_network_cyw43_type }, &cyw43_state, CYW43_ITF_STA };
+static const network_cyw43_obj_t network_cyw43_wl_ap = { { &mp_network_cyw43_type }, &cyw43_state, CYW43_ITF_AP };
 
-STATIC void network_cyw43_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+static void network_cyw43_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     struct netif *netif = &self->cyw->netif[self->itf];
     int status = cyw43_tcpip_link_status(self->cyw, self->itf);
@@ -90,7 +90,7 @@ STATIC void network_cyw43_print(const mp_print_t *print, mp_obj_t self_in, mp_pr
         );
 }
 
-STATIC mp_obj_t network_cyw43_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t network_cyw43_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
     if (n_args == 0 || mp_obj_get_int(args[0]) == CYW43_ITF_STA) {
         return MP_OBJ_FROM_PTR(&network_cyw43_wl_sta);
@@ -99,7 +99,7 @@ STATIC mp_obj_t network_cyw43_make_new(const mp_obj_type_t *type, size_t n_args,
     }
 }
 
-STATIC mp_obj_t network_cyw43_send_ethernet(mp_obj_t self_in, mp_obj_t buf_in) {
+static mp_obj_t network_cyw43_send_ethernet(mp_obj_t self_in, mp_obj_t buf_in) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_buffer_info_t buf;
     mp_get_buffer_raise(buf_in, &buf, MP_BUFFER_READ);
@@ -109,28 +109,28 @@ STATIC mp_obj_t network_cyw43_send_ethernet(mp_obj_t self_in, mp_obj_t buf_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(network_cyw43_send_ethernet_obj, network_cyw43_send_ethernet);
+static MP_DEFINE_CONST_FUN_OBJ_2(network_cyw43_send_ethernet_obj, network_cyw43_send_ethernet);
 
-STATIC mp_obj_t network_cyw43_ioctl(mp_obj_t self_in, mp_obj_t cmd_in, mp_obj_t buf_in) {
+static mp_obj_t network_cyw43_ioctl(mp_obj_t self_in, mp_obj_t cmd_in, mp_obj_t buf_in) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_buffer_info_t buf;
     mp_get_buffer_raise(buf_in, &buf, MP_BUFFER_READ | MP_BUFFER_WRITE);
     cyw43_ioctl(self->cyw, mp_obj_get_int(cmd_in), buf.len, buf.buf, self->itf);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(network_cyw43_ioctl_obj, network_cyw43_ioctl);
+static MP_DEFINE_CONST_FUN_OBJ_3(network_cyw43_ioctl_obj, network_cyw43_ioctl);
 
 /*******************************************************************************/
 // network API
 
-STATIC mp_obj_t network_cyw43_deinit(mp_obj_t self_in) {
+static mp_obj_t network_cyw43_deinit(mp_obj_t self_in) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     cyw43_deinit(self->cyw);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_deinit_obj, network_cyw43_deinit);
+static MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_deinit_obj, network_cyw43_deinit);
 
-STATIC uint32_t network_cyw43_country(void) {
+static uint32_t network_cyw43_country(void) {
     const char *country = getenv("COUNTRY");
     if (!country || strlen(country) < 2) {
         return CYW43_COUNTRY_WORLDWIDE;
@@ -138,7 +138,7 @@ STATIC uint32_t network_cyw43_country(void) {
     return CYW43_COUNTRY(country[0], country[1], 0);
 }
 
-STATIC mp_obj_t network_cyw43_active(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t network_cyw43_active(size_t n_args, const mp_obj_t *args) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (n_args == 1) {
         return mp_obj_new_bool(cyw43_tcpip_link_status(self->cyw, self->itf));
@@ -148,7 +148,7 @@ STATIC mp_obj_t network_cyw43_active(size_t n_args, const mp_obj_t *args) {
         return mp_const_none;
     }
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_active_obj, 1, 2, network_cyw43_active);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_active_obj, 1, 2, network_cyw43_active);
 
 typedef struct {
     cyw43_t *cyw;
@@ -159,7 +159,7 @@ typedef struct {
     StaticSemaphore_t mutex_buffer;
 } network_cyw43_scan_t;
 
-STATIC int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
+static int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
     struct pbuf *result = pbuf_alloc(PBUF_RAW, sizeof(*res), PBUF_RAM);
     if (!result) {
         return 1;
@@ -204,7 +204,7 @@ void network_cyw43_scan_timer(TimerHandle_t xTimer) {
     }
 }
 
-STATIC void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
+static void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
     xSemaphoreTake(pcb->mutex, portMAX_DELAY);
     pcb->task = NULL;
     if (pcb->results) {
@@ -214,7 +214,7 @@ STATIC void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
     xSemaphoreGive(pcb->mutex);
 }
 
-STATIC void network_cyw43_scan_init(network_cyw43_scan_t *pcb, cyw43_t *cyw, cyw43_wifi_scan_options_t *opts) {
+static void network_cyw43_scan_init(network_cyw43_scan_t *pcb, cyw43_t *cyw, cyw43_wifi_scan_options_t *opts) {
     pcb->cyw = cyw;
     pcb->task = xTaskGetCurrentTaskHandle();
     pcb->results = NULL;
@@ -223,7 +223,7 @@ STATIC void network_cyw43_scan_init(network_cyw43_scan_t *pcb, cyw43_t *cyw, cyw
     xTaskNotifyStateClear(NULL);
 }
 
-STATIC struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_t timeout) {
+static struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_t timeout) {
     xSemaphoreTake(pcb->mutex, portMAX_DELAY);
     TimeOut_t xTimeOut;
     vTaskSetTimeOutState(&xTimeOut);
@@ -247,7 +247,7 @@ STATIC struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_
     return results;
 }
 
-STATIC void network_cyw43_scan_process(mp_obj_t list, const cyw43_ev_scan_result_t *res) {
+static void network_cyw43_scan_process(mp_obj_t list, const cyw43_ev_scan_result_t *res) {
     // Search for existing BSSID to remove duplicates
     bool found = false;
     size_t len;
@@ -280,7 +280,7 @@ STATIC void network_cyw43_scan_process(mp_obj_t list, const cyw43_ev_scan_result
     }
 }
 
-STATIC mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_passive, ARG_ssid, ARG_essid, ARG_bssid };
     const mp_arg_t allowed_args[] = {
         { MP_QSTR_passive, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = false} },
@@ -361,9 +361,9 @@ STATIC mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_m
     }
     return list;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_scan_obj, 1, network_cyw43_scan);
+static MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_scan_obj, 1, network_cyw43_scan);
 
-STATIC mp_obj_t network_cyw43_connect(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t network_cyw43_connect(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_ssid, ARG_key, ARG_auth, ARG_security, ARG_bssid, ARG_channel };
     const mp_arg_t allowed_args[] = {
         { MP_QSTR_ssid, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
@@ -427,30 +427,30 @@ STATIC mp_obj_t network_cyw43_connect(size_t n_args, const mp_obj_t *pos_args, m
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_connect_obj, 1, network_cyw43_connect);
+static MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_connect_obj, 1, network_cyw43_connect);
 
-STATIC mp_obj_t network_cyw43_disconnect(mp_obj_t self_in) {
+static mp_obj_t network_cyw43_disconnect(mp_obj_t self_in) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     cyw43_wifi_leave(self->cyw, self->itf);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_disconnect_obj, network_cyw43_disconnect);
+static MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_disconnect_obj, network_cyw43_disconnect);
 
-STATIC mp_obj_t network_cyw43_isconnected(mp_obj_t self_in) {
+static mp_obj_t network_cyw43_isconnected(mp_obj_t self_in) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_obj_new_bool(cyw43_tcpip_link_status(self->cyw, self->itf) == 3);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_isconnected_obj, network_cyw43_isconnected);
+static MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_isconnected_obj, network_cyw43_isconnected);
 
 #if !MICROPY_FREERTOS
-STATIC mp_obj_t network_cyw43_ifconfig(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t network_cyw43_ifconfig(size_t n_args, const mp_obj_t *args) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     return mod_network_nic_ifconfig(&self->cyw->netif[self->itf], n_args - 1, args + 1);
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_ifconfig_obj, 1, 2, network_cyw43_ifconfig);
 #endif
 
-STATIC mp_obj_t network_cyw43_status(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t network_cyw43_status(size_t n_args, const mp_obj_t *args) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     (void)self;
 
@@ -488,7 +488,7 @@ STATIC mp_obj_t network_cyw43_status(size_t n_args, const mp_obj_t *args) {
 
     mp_raise_ValueError(MP_ERROR_TEXT("unknown status param"));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_status_obj, 1, 2, network_cyw43_status);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_status_obj, 1, 2, network_cyw43_status);
 
 static inline uint32_t nw_get_le32(const uint8_t *buf) {
     return buf[0] | buf[1] << 8 | buf[2] << 16 | buf[3] << 24;
@@ -501,7 +501,7 @@ static inline void nw_put_le32(uint8_t *buf, uint32_t x) {
     buf[3] = x >> 24;
 }
 
-STATIC mp_obj_t network_cyw43_config(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
+static mp_obj_t network_cyw43_config(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
     network_cyw43_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     if (kwargs->used == 0) {
@@ -606,12 +606,12 @@ STATIC mp_obj_t network_cyw43_config(size_t n_args, const mp_obj_t *args, mp_map
         return mp_const_none;
     }
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_config_obj, 1, network_cyw43_config);
+static MP_DEFINE_CONST_FUN_OBJ_KW(network_cyw43_config_obj, 1, network_cyw43_config);
 
 /*******************************************************************************/
 // class bindings
 
-STATIC const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
+static const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_send_ethernet), MP_ROM_PTR(&network_cyw43_send_ethernet_obj) },
     { MP_ROM_QSTR(MP_QSTR_ioctl), MP_ROM_PTR(&network_cyw43_ioctl_obj) },
 
@@ -629,7 +629,7 @@ STATIC const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PM_PERFORMANCE), MP_ROM_INT(PM_PERFORMANCE) },
     { MP_ROM_QSTR(MP_QSTR_PM_POWERSAVE), MP_ROM_INT(PM_POWERSAVE) },
 };
-STATIC MP_DEFINE_CONST_DICT(network_cyw43_locals_dict, network_cyw43_locals_dict_table);
+static MP_DEFINE_CONST_DICT(network_cyw43_locals_dict, network_cyw43_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_network_cyw43_type,

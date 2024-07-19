@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <sys/unistd.h>
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
 
@@ -34,7 +34,6 @@ static bool vfs_is_locked(void) {
 #endif
 
 static void vfs_lock(void) {
-    assert((xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) || !vfs_is_locked());
     xSemaphoreTake(vfs_mutex, portMAX_DELAY);
 }
 

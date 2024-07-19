@@ -18,5 +18,6 @@ endif()
 target_include_directories(tinyusb_helper INTERFACE include)
 
 target_link_libraries(tinyusb_helper INTERFACE
-    # tinyusb
+    tinyusb_common
+    tinyusb_device
 )

@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <malloc.h>
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 
 
 // Global mutex for thread operations
@@ -25,7 +25,6 @@ static inline bool thread_check_locked(void) {
 #endif
 
 static inline void thread_lock(void) {
-    assert(!thread_check_locked());
     xSemaphoreTake(thread_mutex, portMAX_DELAY);
 }
 
@@ -37,7 +36,6 @@ static inline void thread_unlock(void) {
 // Thread creation
 static void thread_entry(void *pvParameters) {
     thread_t *thread = pvParameters;
-    thread->ptr = _REENT;
     vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS, thread);
     vTaskSetThreadLocalStoragePointer(NULL, TLS_INDEX_APP, NULL);
 
@@ -62,7 +60,6 @@ static void thread_entry(void *pvParameters) {
         pthread = &thread->next;
     }
 
-    thread->ptr = NULL;
     if (thread->joiner) {
         xSemaphoreGive(thread->joiner);
     }
@@ -82,7 +79,6 @@ static thread_t *thread_alloc(TaskFunction_t pxTaskCode, void *pvParameters) {
         thread->state = 0;
         thread->entry = pxTaskCode;
         thread->param = pvParameters;
-        thread->ptr = NULL;
         thread->joiner = NULL;
     }
     return thread;
@@ -144,6 +140,9 @@ thread_t *thread_createStatic(TaskFunction_t pxTaskCode, const char *pcName, con
 
 int thread_enable_interrupt(void) {
     thread_t *thread = thread_current();
+    if (!thread) {
+        return 0;
+    }
     thread_lock();
     if (thread->state & TASK_INTERRUPT_SET) {
         thread->state &= ~TASK_INTERRUPT_SET;
@@ -158,6 +157,9 @@ int thread_enable_interrupt(void) {
 
 void thread_disable_interrupt(void) {
     thread_t *thread = thread_current();
+    if (!thread) {
+        return;
+    }
     // Because thread interrupts are enabled, waiting for the thread mutex may be aborted.
     // Ignore aborts and keep retrying to acquire mutex.
     while (!xSemaphoreTake(thread_mutex, portMAX_DELAY)) {
@@ -203,9 +205,7 @@ void thread_interrupt(thread_t *thread) {
 // }
 
 thread_t *thread_current(void) {
-    thread_t *thread = pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS);
-    assert(thread);
-    return thread;
+    return pvTaskGetThreadLocalStoragePointer(NULL, TLS_INDEX_SYS);
 }
 
 // void thread_attach(thread_t *thread) {

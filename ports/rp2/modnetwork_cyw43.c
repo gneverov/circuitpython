@@ -31,8 +31,15 @@
 
 extern const mp_obj_type_t mp_network_cyw43_type;
 
-STATIC const mp_rom_map_elem_t network_cyw43_module_globals_table[] = {
+static mp_obj_t network_cyw43_init(void) {
+    cyw43_driver_init();
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(network_cyw43_init_obj, network_cyw43_init);
+
+static const mp_rom_map_elem_t network_cyw43_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),        MP_ROM_QSTR(MP_QSTR_cyw43) },
+    { MP_ROM_QSTR(MP_QSTR___init__),        MP_ROM_PTR(&network_cyw43_init_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_WLAN),            MP_ROM_PTR(&mp_network_cyw43_type) }, \
     { MP_ROM_QSTR(MP_QSTR_STAT_IDLE),       MP_ROM_INT(CYW43_LINK_DOWN) }, \
@@ -42,7 +49,7 @@ STATIC const mp_rom_map_elem_t network_cyw43_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_STAT_CONNECT_FAIL), MP_ROM_INT(CYW43_LINK_FAIL) }, \
     { MP_ROM_QSTR(MP_QSTR_STAT_GOT_IP),     MP_ROM_INT(CYW43_LINK_UP) },
 };
-STATIC MP_DEFINE_CONST_DICT(network_cyw43_module_globals, network_cyw43_module_globals_table);
+static MP_DEFINE_CONST_DICT(network_cyw43_module_globals, network_cyw43_module_globals_table);
 
 const mp_obj_module_t network_cyw43_module = {
     .base = { &mp_type_module },
@@ -54,6 +61,5 @@ MP_REGISTER_OBJECT(network_cyw43_module);
 
 __attribute__((used, visibility("default")))
 mp_obj_t mp_extmod_init(void) {
-    cyw43_driver_init();
     return MP_OBJ_FROM_PTR(&network_cyw43_module);
 }

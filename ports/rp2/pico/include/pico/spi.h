@@ -15,7 +15,8 @@
 typedef struct pico_spi_ll {
     spi_inst_t *inst;
     SemaphoreHandle_t mutex;
-    volatile BaseType_t in_isr;
+    TaskHandle_t mutex_holder;
+    BaseType_t in_isr;
     StaticSemaphore_t buffer;
 } pico_spi_ll_t;
 

@@ -3,6 +3,8 @@
 
 #include "hardware/irq.h"
 
+#include "freertos/interrupts.h"
+
 #include "pico/dma.h"
 
 
@@ -18,7 +20,9 @@ static void pico_dma_irq_handler(void) {
     }
 }
 
+__attribute__((constructor))
 void pico_dma_init(void) {
+    assert(check_interrupt_core_affinity());
     irq_add_shared_handler(DMA_IRQ_1, pico_dma_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
     irq_set_enabled(DMA_IRQ_1, true);
 }

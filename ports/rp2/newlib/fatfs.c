@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -404,7 +405,11 @@ static off_t fatfs_lseek(void *ctx, off_t pos, int whence) {
             assert(whence == SEEK_SET);
             break;
     }
-    return fatfs_result(f_lseek(&file->fp, pos));
+    int result = fatfs_result(f_lseek(&file->fp, pos));
+    if (result >= 0) {
+        result = pos;
+    }
+    return result;
 }
 
 static int fatfs_read(void *ctx, void *buf, size_t cnt) {

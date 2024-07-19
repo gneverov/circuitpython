@@ -15,8 +15,8 @@
 #include "dhara/map.h"
 #include "dhara/nand.h"
 
+#include "newlib/flash.h"
 #include "newlib/ioctl.h"
-#include "newlib/newlib.h"
 #include "newlib/vfs.h"
 
 #define DHARA_SECTOR_SIZE 512
@@ -222,17 +222,17 @@ void dhara_nand_mark_bad(const struct dhara_nand *n, dhara_block_t b) {
 
 int dhara_nand_erase(const struct dhara_nand *n, dhara_block_t b, dhara_error_t *err) {
     const uint32_t flash_offs = __flash_storage_start - (uint8_t *)XIP_BASE;
-    taskENTER_CRITICAL();
+    flash_lockout_start();
     flash_range_erase(flash_offs + b * FLASH_SECTOR_SIZE, FLASH_SECTOR_SIZE);
-    taskEXIT_CRITICAL();
+    flash_lockout_end();
     return 0;
 }
 
 int dhara_nand_prog(const struct dhara_nand *n, dhara_page_t p, const uint8_t *data, dhara_error_t *err) {
     const uint32_t flash_offs = __flash_storage_start - (uint8_t *)XIP_BASE;
-    taskENTER_CRITICAL();
+    flash_lockout_start();
     flash_range_program(flash_offs + p * DHARA_SECTOR_SIZE, data, DHARA_SECTOR_SIZE);
-    taskEXIT_CRITICAL();
+    flash_lockout_end();
     return 0;
 }
 
@@ -247,16 +247,18 @@ int dhara_nand_is_free(const struct dhara_nand *n, dhara_page_t p) {
 }
 
 int dhara_nand_read(const struct dhara_nand *n, dhara_page_t p, size_t offset, size_t length, uint8_t *data, dhara_error_t *err) {
+    vTaskSuspendAll();
     memcpy(data, __flash_storage_start + p * DHARA_SECTOR_SIZE + offset, length);
+    xTaskResumeAll();
     return 0;
 }
 
 int dhara_nand_copy(const struct dhara_nand *n, dhara_page_t src, dhara_page_t dst, dhara_error_t *err) {
     uint8_t data[DHARA_SECTOR_SIZE];
     const uint32_t flash_offs = __flash_storage_start - (uint8_t *)XIP_BASE;
-    taskENTER_CRITICAL();
+    flash_lockout_start();
     memcpy(data, __flash_storage_start + src * DHARA_SECTOR_SIZE, DHARA_SECTOR_SIZE);
     flash_range_program(flash_offs + dst * DHARA_SECTOR_SIZE, data, DHARA_SECTOR_SIZE);
-    taskEXIT_CRITICAL();
+    flash_lockout_end();
     return 0;
 }

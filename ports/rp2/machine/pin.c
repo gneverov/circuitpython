@@ -17,11 +17,11 @@ static void pin_enable_interrupt(pin_obj_t *self) {
     if (self->event_mask & 0x30) {
         event_mask |= GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE;
     }
-    gpio_set_irq_enabled(self->pin, event_mask, true);
+    pico_gpio_set_irq_enabled(self->pin, event_mask, true);
 }
 
 static void pin_disable_interrupt(pin_obj_t *self) {
-    gpio_set_irq_enabled(self->pin, 0xf, false);
+    pico_gpio_set_irq_enabled(self->pin, 0xf, false);
 }
 
 static void pin_irq_handler(uint gpio, uint32_t events, void *context) {
@@ -50,6 +50,9 @@ static void pin_irq_handler(uint gpio, uint32_t events, void *context) {
     if (self->event_mask & (GPIO_IRQ_PULSE_DOWN | GPIO_IRQ_PULSE_UP)) {
         events &= ~(GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE);
     }
+    if (!events) {
+        return;
+    }
     self->events |= events;
     self->event_mask &= ~events;
 
@@ -72,7 +75,6 @@ void pin_init(pin_obj_t *self) {
 
 void pin_deinit(pin_obj_t *self) {
     if (self->pin != -1) {
-        pico_gpio_clear_irq(self->pin);
         gpio_deinit(self->pin);
         self->pin = -1;
     }
@@ -100,8 +102,6 @@ static mp_obj_t pin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     self->pin = pin;
 
     gpio_init(pin);
-
-    pico_gpio_set_irq(self->pin, pin_irq_handler, self);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -182,18 +182,14 @@ static mp_uint_t pin_wait_nonblock(mp_obj_t self_in, void *buf, mp_uint_t size, 
         self->events &= ~event;
         if (event & GPIO_IRQ_PULSE_DOWN) {
             ret = self->pulse_down;
-        }
-        if (event & GPIO_IRQ_PULSE_UP) {
-            ret = self->pulse_up;
-        }
-    } else {
-        self->event_mask |= event;
-        if (event & GPIO_IRQ_PULSE_DOWN) {
             self->pulse_down = 0;
         }
         if (event & GPIO_IRQ_PULSE_UP) {
+            ret = self->pulse_up;
             self->pulse_up = 0;
         }
+    } else {
+        self->event_mask |= event;
         *errcode = MP_EAGAIN;
         ret = MP_STREAM_ERROR;
     }
@@ -208,8 +204,15 @@ static mp_obj_t pin_wait(mp_obj_t self_in, mp_obj_t event_in) {
         mp_raise_ValueError(NULL);
     }
 
+    if (!pico_gpio_add_handler(self->pin, pin_irq_handler, self)) {
+        return mp_stream_return(-1, MP_EBUSY);
+    }
+
     int errcode;
     mp_uint_t ret = mp_poll_block(self_in, &event, 0, &errcode, pin_wait_nonblock, MP_STREAM_POLL_RD, self->timeout, false);
+
+    pico_gpio_remove_handler(self->pin);
+
     return mp_stream_return(ret, errcode);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(pin_wait_obj, pin_wait);

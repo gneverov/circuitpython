@@ -1,21 +1,19 @@
 cmake_minimum_required(VERSION 3.13)
 
-add_library(freertos_config INTERFACE)
+add_subdirectory(${MICROPY_DIR}/lib/freertos/portable/ThirdParty/GCC/RP2040 lib/freertos)
 
-target_include_directories(freertos_config INTERFACE config)
+add_library(freertos INTERFACE)
 
-
-add_library(freertos_helper INTERFACE)
-
-target_sources(freertos_helper INTERFACE
-    task_helper.c
+target_sources(freertos INTERFACE
     heap_malloc.c
+    interrupts.c
     port_hooks.c
 )
 
-target_include_directories(freertos_helper INTERFACE include)
+target_include_directories(freertos INTERFACE
+    include
+)
 
-target_link_libraries(freertos_helper INTERFACE
-    FreeRTOS-Kernel 
-    freertos_config
+target_link_libraries(freertos INTERFACE
+    FreeRTOS-Kernel
 )

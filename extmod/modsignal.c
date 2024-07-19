@@ -6,7 +6,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 
 #include "./modsignal.h"
 #include "shared/runtime/interrupt_char.h"
@@ -26,6 +26,7 @@ static void signal_handler(int signum) {
     if (MP_OBJ_TO_PTR(signal_ctx) == &signal_default_int_handler_obj) {
         if (mp_interrupt_char != -1) {
             mp_sched_keyboard_interrupt();
+            mp_task_interrupt();
         }
     }
     #if MICROPY_ENABLE_SCHEDULER

@@ -23,33 +23,44 @@ void pico_spi_init_init(void) {
 }
 
 BaseType_t pico_spi_take(pico_spi_ll_t *spi, TickType_t xBlockTime) {
+    TimeOut_t timeout;
+    vTaskSetTimeOutState(&timeout);
     if (xSemaphoreTake(spi->mutex, xBlockTime) == pdFALSE) {
         return pdFALSE;
     }
+
+    xTaskNotifyStateClear(NULL);
     for (;;) {
-        taskDISABLE_INTERRUPTS();
+        BaseType_t timed_out = xTaskCheckForTimeOut(&timeout, &xBlockTime);
+        taskENTER_CRITICAL();
         BaseType_t in_isr = spi->in_isr;
-        taskENABLE_INTERRUPTS();
+        spi->mutex_holder = in_isr && !timed_out ? xTaskGetCurrentTaskHandle() : NULL;
+        taskEXIT_CRITICAL();
         if (!in_isr) {
-            break;
+            return pdTRUE;
         }
-        if (!ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
+        if (timed_out) {
             return pdFALSE;
         }
+        ulTaskNotifyTake(pdTRUE, xBlockTime);
     }
-    return pdTRUE;
 }
 
 BaseType_t pico_spi_take_to_isr(pico_spi_ll_t *spi) {
     assert(xQueueGetMutexHolder(spi->mutex) == xTaskGetCurrentTaskHandle());
+    assert(spi->mutex_holder == NULL);
+    taskENTER_CRITICAL();
     spi->in_isr = 1;
+    taskEXIT_CRITICAL();
     return xSemaphoreGive(spi->mutex);
 }
 
 void pico_spi_give_from_isr(pico_spi_ll_t *spi, BaseType_t *pxHigherPriorityTaskWoken) {
     assert(spi->in_isr);
+    UBaseType_t state = taskENTER_CRITICAL_FROM_ISR();
     spi->in_isr = 0;
-    TaskHandle_t task = xQueueGetMutexHolder(spi->mutex);
+    TaskHandle_t task = spi->mutex_holder;
+    taskEXIT_CRITICAL_FROM_ISR(state);
     if (task) {
         vTaskNotifyGiveFromISR(task, pxHigherPriorityTaskWoken);
     }

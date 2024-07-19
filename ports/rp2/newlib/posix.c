@@ -4,16 +4,16 @@
 #include <dirent.h>
 #include <errno.h>
 #include <malloc.h>
-#include <reent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 #include "newlib/time.h"
 #include "newlib/vfs.h"
 
@@ -130,6 +130,10 @@ char *getcwd(char *buf, size_t size) {
     return buf;
 }
 
+int getentropy(void *buffer, size_t length) {
+    return getrandom(buffer, length, 0) >= length ? 0 : -1;
+}
+
 int gethostname(char *name, size_t namelen) {
     const char *hostname = getenv("HOSTNAME");
     if (!hostname || !namelen) {
@@ -156,10 +160,6 @@ int ioctl(int fd, unsigned long request, ...) {
     }
     vfs_release_file(file);
     return ret;
-}
-
-int mkdir(const char *path, mode_t mode) {
-    return _mkdir_r(_impure_ptr, path, mode);
 }
 
 int nanosleep(const struct timespec *rqtp, struct timespec *rmtp) {

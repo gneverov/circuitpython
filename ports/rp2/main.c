@@ -34,9 +34,10 @@
 #include <sys/unistd.h>
 
 #include "FreeRTOS.h"
+#include "freertos/interrupts.h"
 #include "task.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 #if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
 #endif
@@ -184,8 +185,11 @@ StaticTask_t mp_taskdef;
 #define DEFAULT_TTY "/dev/ttyUSB0"
 #define DEFAULT_GC_HEAP (96 << 10)
 #define MIN_GC_HEAP (8 << 10)
+#define DEFAULT_MP_STACK (8 << 10)
+#define MIN_MP_STACK (4 << 10)
 
 void mp_task(void *params) {
+    size_t mp_stack_size = (uintptr_t)params;
     const char *gc_heap_str = getenv("GC_HEAP");
     size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;
     gc_heap_size = MAX(gc_heap_size, MIN_GC_HEAP);
@@ -215,7 +219,10 @@ void mp_task(void *params) {
         }
     }
 
-    mp_main((uint8_t *)&__MpStackBottom, (uint8_t *)&__MpStackTop, gc_heap, gc_heap + gc_heap_size);
+    TaskStatus_t task_status;
+    vTaskGetInfo(NULL, &task_status, pdFALSE, eRunning);
+    uint8_t *mp_stack = (uint8_t *)task_status.pxStackBase;
+    mp_main(mp_stack, mp_stack + mp_stack_size, gc_heap, gc_heap + gc_heap_size);
 
     free(gc_heap);
 }
@@ -226,7 +233,9 @@ void mp_task_interrupt(void) {
 
 #if CFG_TUD_ENABLED
 void mp_tud_task(void *params) {
+    UBaseType_t save = set_interrupt_core_affinity();
     tud_init(TUD_OPT_RHPORT);
+    clear_interrupt_core_affinity(save);
     tud_disconnect();
 
     #if MICROPY_PY_LWIP && (CFG_TUD_ECM_RNDIS || CFG_TUD_NCM)
@@ -245,7 +254,9 @@ void mp_tud_task(void *params) {
 
 #if CFG_TUH_ENABLED
 void mp_tuh_task(void *params) {
+    UBaseType_t save = set_interrupt_core_affinity();
     tuh_init(TUH_OPT_RHPORT);
+    clear_interrupt_core_affinity(save);
 
     while (1) {
         tuh_task();
@@ -302,10 +313,6 @@ int main(int argc, char **argv) {
     env_init();
     set_default_time();
 
-    pico_dma_init();
-    pico_gpio_init();
-    pico_pio_init();
-
     mount(NULL, "/dev", "devfs", 0, NULL);
 
     mount_root_fs();
@@ -322,7 +329,10 @@ int main(int argc, char **argv) {
     xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
 
-    mp_thread = thread_createStatic(mp_task, "mp", (&__MpStackTop - &__MpStackBottom) / sizeof(StackType_t), NULL, 1, (StackType_t *)&__MpStackBottom, &mp_taskdef);
+    const char *mp_stack_str = getenv("MP_STACK");
+    size_t mp_stack_size = mp_stack_str ? atoi(mp_stack_str) : DEFAULT_MP_STACK;
+    mp_stack_size = MAX(mp_stack_size, MIN_MP_STACK);
+    mp_thread = thread_create(mp_task, "mp", mp_stack_size / sizeof(StackType_t), (void *)mp_stack_size, 1);
     vTaskStartScheduler();
     return 0;
 }

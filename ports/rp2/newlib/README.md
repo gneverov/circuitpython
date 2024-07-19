@@ -1,7 +1,7 @@
 # Morelib
-Morelib seeks to add more POSIX-like functions to the standard newlib-nano library for microcontrollers.
+Morelib seeks to add more POSIX-like functions to newlib-based libc libraries for microcontrollers, such as newlib-nano and picolibc.
 
-In addition to newlib-nano, morelib depends on FreeRTOS and the Raspberry Pi Pico SDK.
+In addition to picolibc or newlib-nano, morelib depends on FreeRTOS and the Raspberry Pi Pico SDK.
 
 The following functions with 🟢 status are implemented.
 
@@ -10,14 +10,14 @@ The following functions with 🟢 status are implemented.
 | - | - | - |
 | `close` | 🟢 | |
 | `execve` | 🔴 | No multiple processes. |
-| `_exit` | 🟢 | Implemented by Pico SDK. |
+| `_exit` | 🟢 | |
 | [`fcntl`](https://man7.org/linux/man-pages/man3/fcntl.3p.html) | 🔴 | `DUP` can be done with `dup` function.<br>`GETFD`/`GETFL` not interesting enough.<br>File locks not supported.|
 | `fork` | 🔴 | No multiple processes. |
 | `fstat` | 🟢 | |
 | `getpid` | 🟢 | Returns FreeRTOS task number. |
 | `gettimeofday` | 🟢 | Implemented by Pico SDK. |
 | `isatty` | 🟢 | |
-| `kill` | 🟡 | Can be used to send signals to other FreeRTOS tasks, if the other task cooperates. |
+| `kill` | 🟢 | No multiple processes, so equivalent to `raise`. |
 | `link` | 🔴 | Embedded filesystems are unlikely to support links. |
 | `lseek` | 🟢 | |
 | `mkdir` | 🟢 | |

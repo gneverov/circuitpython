@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 
 #include "py/poll.h"
 #include "py/stream.h"

@@ -106,8 +106,6 @@ int vfs_replace(int fd, struct vfs_file *file);
 
 int vfs_close(int fd);
 
-struct vfs_file *vfs_fd(struct _reent *ptr, int fd);
-
 void vfs_getcwd(char *buf, size_t size);
 
 void vfs_setcwd(char *value);

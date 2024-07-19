@@ -1,3 +1,4 @@
+import gc
 import lvgl
 import micropython
 import machine
@@ -98,6 +99,7 @@ def run_module(mod):
         else:
             input()
     clear_screen()
+    gc.collect()
     micropython.malloc_stats()
 
 

@@ -8,7 +8,7 @@
 #include <signal.h>
 
 #include "FreeRTOS.h"
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 #include "event_groups.h"
 
 #include "newlib/devfs.h"
@@ -104,7 +104,7 @@ static const struct vfs_file_vtable terminal_usb_vtable = {
 };
 
 void *terminal_usb_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
-    uint8_t usb_itf = minor(dev);
+    uint8_t usb_itf = dev & 0xff;
     terminal_usb_t *self = malloc(sizeof(terminal_usb_t));
     if (!self) {
         errno = ENOMEM;

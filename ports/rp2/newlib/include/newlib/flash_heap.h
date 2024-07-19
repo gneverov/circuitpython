@@ -49,11 +49,11 @@ void flash_heap_free(flash_heap_t *file);
 
 int flash_heap_close(flash_heap_t *file);
 
-inline flash_ptr_t flash_heap_tell(const flash_heap_t *file) {
+static inline flash_ptr_t flash_heap_tell(const flash_heap_t *file) {
     return file->flash_pos;
 }
 
-inline const flash_heap_header_t *flash_heap_get_header(const flash_heap_t *file) {
+static inline const flash_heap_header_t *flash_heap_get_header(const flash_heap_t *file) {
     return (flash_heap_header_t *)file->flash_start;
 }
 

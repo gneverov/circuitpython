@@ -8,10 +8,12 @@
 #include <stdio.h>
 
 #include "hardware/flash.h"
+#include "pico/flash.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "newlib/flash.h"
 #include "newlib/ioctl.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
@@ -102,7 +104,9 @@ static off_t flash_lseek(void *ctx, off_t pos, int whence) {
 static int flash_read(void *ctx, void *buf, size_t size) {
     struct flash_file *file = ctx;
     size = MIN(size, __flash_storage_end - file->ptr);
+    vTaskSuspendAll();
     memcpy(buf, file->ptr, size);
+    xTaskResumeAll();
     file->ptr += (size + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1);
     return size;
 }
@@ -122,10 +126,10 @@ static int flash_write(void *ctx, const void *buf, size_t size) {
     size_t sector_size = (size + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1);
     size_t page_size = (size + FLASH_PAGE_SIZE - 1) & ~(FLASH_PAGE_SIZE - 1);
 
-    taskENTER_CRITICAL();
+    flash_lockout_start();
     flash_range_erase(flash_offs, sector_size);
     flash_range_program(flash_offs, buf, page_size);
-    taskEXIT_CRITICAL();
+    flash_lockout_end();
 
     file->ptr += sector_size;
     return size;
@@ -145,4 +149,18 @@ void *flash_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
     file->ptr = __flash_storage_start;
     file->flags = flags;
     return file;
+}
+
+void flash_lockout_start(void) {
+    flash_safety_helper_t *f = get_flash_safety_helper();
+    if (!f->enter_safe_zone_timeout_ms(INT32_MAX)) {
+        assert(0);
+    }
+}
+
+void flash_lockout_end(void) {
+    flash_safety_helper_t *f = get_flash_safety_helper();
+    if (!f->exit_safe_zone_timeout_ms(INT32_MAX)) {
+        assert(0);
+    }
 }

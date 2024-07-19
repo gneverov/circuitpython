@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <memory.h>
-#include "newlib/random.h"
+#include <sys/random.h>
 #include "pico/rand.h"
 
 

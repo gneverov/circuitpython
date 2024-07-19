@@ -1,5 +1,5 @@
-#ifndef MICROPY_INCLUDED_RP2_LWIP_LWIPOPTS_H
-#define MICROPY_INCLUDED_RP2_LWIP_LWIPOPTS_H
+#ifndef LWIPOPTS_H
+#define LWIPOPTS_H
 
 #include <stdint.h>
 
@@ -62,4 +62,4 @@ void sys_lock_tcpip_core(void);
 void sys_unlock_tcpip_core(void);
 #define UNLOCK_TCPIP_CORE()        sys_unlock_tcpip_core()
 
-#endif // MICROPY_INCLUDED_RP2_LWIP_LWIPOPTS_H
+#endif // LWIPOPTS_H

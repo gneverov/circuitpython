@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "newlib/flash.h"
 #include "newlib/flash_env.h"
 
 
@@ -84,11 +85,12 @@ void flash_env_clear(struct flash_env *env) {
 void flash_env_close(struct flash_env *env) {
     uint32_t flash_offset = (uintptr_t)&flash_env - XIP_BASE;
     assert((flash_offset & (FLASH_SECTOR_SIZE - 1)) == 0);
-    taskENTER_CRITICAL();
+
+    flash_lockout_start();
     flash_range_erase(flash_offset, FLASH_SECTOR_SIZE);
     flash_range_program(flash_offset, (const uint8_t *)env, FLASH_SECTOR_SIZE);
-    taskEXIT_CRITICAL();
-
     assert(memcmp(&flash_env, env, FLASH_SECTOR_SIZE) == 0);
+    flash_lockout_end();
+
     free(env);
 }

@@ -111,9 +111,10 @@ static void lvgl_anim_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     else if (attr == MP_QSTR_props) {
         lvgl_type_attr(attr, dest, LV_TYPE_PROP_LIST, &handle->props);
     }
-    else if (attr == MP_QSTR_exec_cb) {
-        lvgl_type_attr(attr, dest, LV_TYPE_GC_HANDLE, &handle->mp_exec_cb);
-    }
+    // TODO: use of Python callbacks can lead to thread starvation
+    // else if (attr == MP_QSTR_exec_cb) {
+    //     lvgl_type_attr(attr, dest, LV_TYPE_GC_HANDLE, &handle->mp_exec_cb);
+    // }
     else if (attr == MP_QSTR_delay) {
         uint32_t delay = lv_anim_get_delay(&handle->anim);
         delay = lvgl_bitfield_attr_int(attr, dest, delay);

@@ -139,6 +139,12 @@ if (MICROPY_PY_AUDIO_MP3)
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/subband.c
         ${MICROPY_LIB_AUDIO_MP3_DIR}/libhelix-mp3/trigtabs.c
     )
+
+    set_source_files_properties(
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/modaudio_mp3.c
+        ${MICROPY_EXTMOD_DIR}/audio_mp3/mp3_decoder.c
+        PROPERTIES MICROPY_SOURCE_QSTR ON
+    )    
 endif()
 
 # Single-precision libm math library.

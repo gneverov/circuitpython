@@ -20,9 +20,7 @@ target_include_directories(pico_helper INTERFACE include)
 
 target_link_libraries(pico_helper INTERFACE
     FreeRTOS-Kernel 
-    freertos_config
     hardware_uart
-    pico_stdlib
 )
 
 if(PICO_CYW43_SUPPORTED)

@@ -5,6 +5,8 @@
 
 #include "pico/pio.h"
 
+#include "freertos/interrupts.h"
+
 
 PIO pios[NUM_PIOS] = { pio0, pio1 };
 
@@ -41,7 +43,9 @@ static void pico_pio_irq_init(uint pio_index, uint irq, irq_handler_t irq_handle
     irq_set_enabled(irq, true);
 }
 
+__attribute__((constructor))
 void pico_pio_init(void) {
+    assert(check_interrupt_core_affinity());
     pico_pio_irq_init(0, PIO0_IRQ_0, pico_pio0_irq0_handler);
     pico_pio_irq_init(1, PIO1_IRQ_0, pico_pio1_irq0_handler);
 }

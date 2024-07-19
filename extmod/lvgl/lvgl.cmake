@@ -44,6 +44,12 @@ target_link_libraries(mp_lvgl INTERFACE
     lvgl
 )
 
+target_compile_options(lvgl PRIVATE 
+    -fvisibility=hidden
+    -ffunction-sections
+    -fdata-sections
+)
+
 target_link_libraries(lvgl newlib_helper_headers)
 
 set_source_files_properties(

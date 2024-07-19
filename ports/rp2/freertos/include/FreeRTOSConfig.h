@@ -50,6 +50,9 @@
 #define configMINIMAL_STACK_SIZE                (configSTACK_DEPTH_TYPE)256
 #define configUSE_16_BIT_TICKS                  0
 
+#define configNUMBER_OF_CORES                   2
+#define configRUN_MULTIPLE_PRIORITIES           1
+#define configUSE_CORE_AFFINITY                 1
 #define configIDLE_SHOULD_YIELD                 1
 
 /* Synchronization Related */
@@ -58,9 +61,10 @@
 #define configUSE_APPLICATION_TASK_TAG          0
 #define configUSE_COUNTING_SEMAPHORES           0
 #define configQUEUE_REGISTRY_SIZE               8
-#define configUSE_QUEUE_SETS                    1
+#define configUSE_QUEUE_SETS                    0
 #define configUSE_TIME_SLICING                  1
-#define configUSE_NEWLIB_REENTRANT              1
+#define configUSE_NEWLIB_REENTRANT              0
+#define configUSE_PICOLIBC_TLS                  1
 #define configENABLE_BACKWARD_COMPATIBILITY     0
 #define configNUM_THREAD_LOCAL_STORAGE_POINTERS 4
 
@@ -73,11 +77,13 @@
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configTOTAL_HEAP_SIZE                   0
 #define configAPPLICATION_ALLOCATED_HEAP        1
+#define configKERNEL_PROVIDED_STATIC_MEMORY     1
 
 /* Hook function related definitions. */
 #define configCHECK_FOR_STACK_OVERFLOW          2
 #define configUSE_MALLOC_FAILED_HOOK            1
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
+#define configUSE_PASSIVE_IDLE_HOOK             0
 
 /* Run time and task stats gathering related definitions. */
 #define configGENERATE_RUN_TIME_STATS           0
@@ -93,11 +99,6 @@
 #define configTIMER_TASK_PRIORITY               (configMAX_PRIORITIES - 1)
 #define configTIMER_QUEUE_LENGTH                10
 #define configTIMER_TASK_STACK_DEPTH            configMINIMAL_STACK_SIZE
-
-/* SMP port only */
-#define configNUM_CORES                         1
-#define configTICK_CORE                         1
-#define configRUN_MULTIPLE_PRIORITIES           1
 
 /* RP2040 specific */
 #define configSUPPORT_PICO_SYNC_INTEROP         0

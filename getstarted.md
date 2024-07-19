@@ -67,6 +67,8 @@ This deletes all extension modules and all frozen MicroPython modules, and retur
 ## Building
 Building MicroPythonRT firmware is the same as MicroPython. Refer to the MicroPython building [guide](https://docs.micropython.org/en/latest/develop/gettingstarted.html).
 
+Building Picolibc can be difficult because it requires a non-standard compiler. Refer to these [notes](/ports/rp2/picolibc/README.md) for details.
+
 Building an extension module is new. Refer to the [audio_mp3](/extmod/audio_mp3/modaudio_mp3.c) module for an example. In addition to creating a CMake library target for your module (i.e., micropy_lib_audio_mp3, for the audio example), the main [CMakeLists.txt](/ports/rp2/CMakeLists.txt) needs to be modified to build the top-level extension module executable and UF2 file. Add the following line to CMakeLists.txt where "audio_mp3" will be the name of the ELF/UF2 files produced.
 ```
 add_micropy_extension_library(audio_mp3 micropy_lib_audio_mp3)

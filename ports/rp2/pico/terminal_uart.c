@@ -9,7 +9,7 @@
 #include "FreeRTOS.h"
 #include "event_groups.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 #include "newlib/newlib.h"
 #include "newlib/poll.h"
 #include "newlib/vfs.h"
@@ -65,7 +65,7 @@ static int terminal_uart_write(void *state, const void *buf, size_t size) {
         int bw = pico_uart_write(&self->uart, buf + total, size - total);
         if (bw == 0) {
             if (thread_enable_interrupt()) {
-                return -1;
+                return total > 0 ? total : -1;
             }
             xEventGroupWaitBits(self->events, ~POLLIN & 0xff, pdTRUE, pdFALSE, portMAX_DELAY);
             thread_disable_interrupt();

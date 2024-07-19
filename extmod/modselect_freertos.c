@@ -6,7 +6,7 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 
 #include "py/runtime.h"
 #include "py/obj.h"

@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/times.h>
@@ -23,7 +24,6 @@
 #include "newlib/ioctl.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
-#include "newlib/random.h"
 
 #if MICROPY_PY_OS_UNAME
 #include "genhdr/mpversion.h"

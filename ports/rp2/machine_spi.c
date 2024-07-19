@@ -195,6 +195,7 @@ mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
         gpio_set_function(self->sck, GPIO_FUNC_SPI);
         gpio_set_function(self->miso, GPIO_FUNC_SPI);
         gpio_set_function(self->mosi, GPIO_FUNC_SPI);
+        gpio_disable_pulls(self->miso);
         pico_spi_give(spi);
     }
 

@@ -9,6 +9,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "newlib/flash.h"
 #include "newlib/flash_heap.h"
 #include "newlib/dlfcn.h"
 
@@ -47,7 +48,9 @@ const flash_heap_header_t *flash_heap_next_header(void) {
 static void flash_heap_read_page(flash_page_t *ram_page, const flash_page_t *flash_page) {
     assert(((uintptr_t)flash_page >= (uintptr_t)&flash_heap_head) && ((uintptr_t)flash_page < (uintptr_t)&__flash_heap_end));
     assert(((uintptr_t)ram_page >= (uintptr_t)&end) && ((uintptr_t)ram_page < (uintptr_t)&__StackLimit));
+    vTaskSuspendAll();
     memcpy(ram_page, flash_page, sizeof(flash_page_t));
+    xTaskResumeAll();
 }
 
 static void flash_heap_write_page(const flash_page_t *flash_page, const flash_page_t *ram_page) {
@@ -55,12 +58,11 @@ static void flash_heap_write_page(const flash_page_t *flash_page, const flash_pa
     assert(((uintptr_t)ram_page >= (uintptr_t)&end) && ((uintptr_t)ram_page < (uintptr_t)&__StackLimit));
     uint32_t flash_offset = (uintptr_t)flash_page - XIP_BASE;
 
-    taskENTER_CRITICAL();
+    flash_lockout_start();
     flash_range_erase(flash_offset, sizeof(flash_page_t));
     flash_range_program(flash_offset, (const uint8_t *)ram_page, sizeof(flash_page_t));
-    taskEXIT_CRITICAL();
-
     assert(memcmp(flash_page, ram_page, sizeof(flash_page_t)) == 0);
+    flash_lockout_end();
 }
 
 // inline size_t flash_heap_num_flash_pages(flash_heap_t *file) {
@@ -105,10 +107,12 @@ void *flash_heap_realloc_with_evict(flash_heap_t *file, void *ptr, size_t size) 
             return NULL;
         }
         free(evicted_page);
+        #if __GNUC__ == 12
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wuse-after-free"
         new_ptr = realloc(ptr, size);
         #pragma GCC diagnostic pop
+        #endif
     }
     return new_ptr;
 }

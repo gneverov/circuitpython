@@ -25,16 +25,22 @@
  */
 
 #include <errno.h>
+#include <memory.h>
 #include <stdio.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "py/runtime.h"
+#include "py/mphal.h"
 #include "shared/timeutils/timeutils.h"
 #include "hardware/rtc.h"
 #include "pico/time.h"
 #include "pico/unique_id.h"
+
+#if MICROPY_PY_NETWORK_CYW43
+#include "cyw43.h"
+#endif
 
 // This needs to be added to the result of time_us_64() to get the number of
 // microseconds since the Epoch.

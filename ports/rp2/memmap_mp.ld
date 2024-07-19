@@ -43,13 +43,13 @@ SECTIONS
     */
 
     .flash_begin : {
-        __flash_binary_start = .;
+        HIDDEN(__flash_binary_start = .);
     } > FLASH
 
     .boot2 : {
-        __boot2_start__ = .;
+        HIDDEN(__boot2_start__ = .);
         KEEP (*(.boot2))
-        __boot2_end__ = .;
+        HIDDEN(__boot2_end__ = .);
     } > FLASH
 
     ASSERT(__boot2_end__ - __boot2_start__ == 256,
@@ -63,10 +63,10 @@ SECTIONS
     */
 
     .text : {
-        __logical_binary_start = .;
+        HIDDEN(__logical_binary_start = .);
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
-        __binary_info_header_end = .;
+        HIDDEN(__binary_info_header_end = .);
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
@@ -104,7 +104,7 @@ SECTIONS
         *(.ARM.extab* .gnu.linkonce.armextab.*)
     } > FLASH
 
-    __exidx_start = .;
+    HIDDEN(__exidx_start = .);
     .ARM.exidx :
     {
         *(.ARM.exidx* .gnu.linkonce.armexidx.*)
@@ -113,13 +113,13 @@ SECTIONS
 
     /* Machine inspectable binary information */
     . = ALIGN(4);
-    __binary_info_start = .;
+    HIDDEN(__binary_info_start = .);
     .binary_info :
     {
         KEEP(*(.binary_info.keep.*))
         *(.binary_info.*)
     } > FLASH
-    __binary_info_end = .;
+    HIDDEN(__binary_info_end = .);
     . = ALIGN(4);
 
     /* End of .text-like segments */
@@ -130,7 +130,7 @@ SECTIONS
     } > RAM
 
     .data : {
-        __data_start__ = .;
+        HIDDEN(__data_start__ = .);
         *(vtable)
 
         *(.time_critical*)
@@ -172,12 +172,39 @@ SECTIONS
         *(SORT(.fini_array.*))
         *(.fini_array)
         PROVIDE_HIDDEN (__fini_array_end = .);
+    } > RAM AT> FLASH
 
-        *(.jcr)
+	.tdata : {
+        HIDDEN(__tdata_source = LOADADDR(.tdata));
+        HIDDEN(__tls_base = ADDR(.tdata));
+        HIDDEN(__tdata_start = .);
+		*(.tdata .tdata.* .gnu.linkonce.td.*)
+
         . = ALIGN(4);
         /* All data end */
-        __data_end__ = .;
-    } > RAM AT> FLASH
+        HIDDEN(__data_end__ = .);        
+		HIDDEN(__tdata_end = .);
+	} > RAM AT> FLASH
+
+    .flash_end : {
+        HIDDEN(__flash_binary_end = .);
+    } > FLASH
+
+	.tbss (NOLOAD) : {
+        HIDDEN(__bss_start__ = .);
+        HIDDEN(__tbss_start = .);
+		*(.tbss .tbss.* .gnu.linkonce.tb.*)
+		*(.tcommon)
+		PROVIDE( __tls_end = . );
+		PROVIDE( __tbss_end = . );
+	} > RAM
+
+	PROVIDE_HIDDEN( __tbss_offset = ADDR(.tbss) - ADDR(.tdata) );
+	PROVIDE_HIDDEN( __tls_size = __tls_end - __tls_base );
+	PROVIDE_HIDDEN( __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss)) );
+	PROVIDE_HIDDEN( __tls_size_align = (__tls_size + __tls_align - 1) & ~(__tls_align - 1));
+	PROVIDE_HIDDEN( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
+	PROVIDE_HIDDEN( __arm64_tls_tcb_offset = MAX(16, __tls_align) );
 
     .uninitialized_data (COPY): {
         . = ALIGN(4);
@@ -190,48 +217,39 @@ SECTIONS
         *(.uninitialized_bss*)
     } > RAM
 
-    /* Start and end symbols must be word-aligned */
-    .scratch_x : {
-        __scratch_x_start__ = .;
-        *(.scratch_x.*)
+    .bss (NOLOAD) : {
         . = ALIGN(4);
-        __scratch_x_end__ = .;
-    } > SCRATCH_X AT > FLASH
-    __scratch_x_source__ = LOADADDR(.scratch_x);
-
-    .scratch_y : {
-        __scratch_y_start__ = .;
-        *(.scratch_y.*)
-        . = ALIGN(4);
-        __scratch_y_end__ = .;
-    } > SCRATCH_Y AT > FLASH
-    __scratch_y_source__ = LOADADDR(.scratch_y);
-
-    .bss  : {
-        . = ALIGN(4);
-        __bss_start__ = .;
+        
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
         *(COMMON)
         . = ALIGN(4);
-        __bss_end__ = .;
+        HIDDEN(__bss_end__ = .);
+
+        HIDDEN(__end__ = .);
+        HIDDEN(end = __end__);
     } > RAM
 
-    .heap (COPY):
-    {
-        __end__ = .;
-        end = __end__;
-        *(.heap*)
-        __HeapLimit = .;
-    } > RAM
+    /* Scratch regions are used as MSP stack and are thus not initialized.
+     * These symbols are needed by pico sdk's crt0, but result in a no-op.
+     */
+    HIDDEN(__scratch_x_start__ = ORIGIN(SCRATCH_X));
+    HIDDEN(__scratch_x_end__ = ORIGIN(SCRATCH_X));
+    HIDDEN(__scratch_x_source__ = ORIGIN(SCRATCH_X));
+    HIDDEN(__scratch_y_start__ = ORIGIN(SCRATCH_Y));
+    HIDDEN(__scratch_y_end__ = ORIGIN(SCRATCH_Y));
+    HIDDEN(__scratch_y_source__ = ORIGIN(SCRATCH_Y));
 
-    .stack_dummy (NOLOAD):
-    {
-        KEEP(*(.stack*))
-    } > RAM
-
-    .flash_end : {
-        HIDDEN(__flash_binary_end = .);
-    }
+    /* These symbols define the MSP stacks (one per core). The MSP stack is 
+     * only used for "main" before the FreeRTOS scheduler starts, and for 
+     * interrupts.
+     */
+    HIDDEN(__StackLimit = ORIGIN(RAM) + LENGTH(RAM));
+    HIDDEN(__HeapLimit = __StackLimit);    
+    HIDDEN(__StackOneTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X));
+    HIDDEN(__StackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y));
+    HIDDEN(__StackOneBottom = ORIGIN(SCRATCH_X));
+    HIDDEN(__StackBottom = ORIGIN(SCRATCH_Y));
+    PROVIDE_HIDDEN(__stack = __StackTop);
 
     .flash_heap (READONLY) : ALIGN(4k) {
         HIDDEN(__flash_heap_start = .);
@@ -246,21 +264,6 @@ SECTIONS
     .flash_env __flash_storage_end (COPY) : ALIGN(4k) {
         *(.flash_env*)
     } > FLASH
-
-    /* This is the conventional C stack. It is only used for "main" before the 
-     * FreeRTOS scheduler starts, and for interrupts.
-     */
-    __StackTop = ORIGIN(RAM) + LENGTH(RAM);
-    __StackBottom = __StackTop - SIZEOF(.stack_dummy);
-    __StackLimit = __StackBottom;
-    PROVIDE(__stack = __StackTop);    
-
-    /* Check if data + heap + stack exceeds RAM limit */
-    ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
-
-    /* The stack range for the main MicroPython task. */
-    __MpStackBottom = ORIGIN(SCRATCH_X);
-    __MpStackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
 
     ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
     /* todo assert on extra code */

@@ -25,7 +25,6 @@ typedef struct thread {
 
     TaskFunction_t entry;
     void *param;
-    struct _reent *ptr;
     SemaphoreHandle_t joiner;
 } thread_t;
 
@@ -48,23 +47,25 @@ void thread_interrupt(thread_t *thread);
 // Thread join
 int thread_join(thread_t *thread, TickType_t timeout);
 
-
 // Thread reference management
-thread_t *thread_current(void);
-
 // thread_t *thread_attach(thread_t *thread);
 
 void thread_detach(thread_t *thread);
+
+// Thread lookup
+thread_t *thread_current(void);
 
 bool thread_iterate(thread_t **pthread);
 
 thread_t *thread_lookup(UBaseType_t id);
 
+// Thread control
 TaskHandle_t thread_suspend(thread_t *thread);
+
 void thread_resume(TaskHandle_t handle);
 
 // Task utilities
-inline StackType_t *task_pxTopOfStack(TaskHandle_t handle) {
+static inline StackType_t *task_pxTopOfStack(TaskHandle_t handle) {
     // assert(eTaskGetState(handle) == eSuspended);
     return *(StackType_t **)handle;
 }

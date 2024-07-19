@@ -27,6 +27,7 @@
 #include <malloc.h>
 #include <memory.h>
 
+#include "newlib/flash.h"
 #include "py/mphal.h"
 #include "py/runtime.h"
 #include "modrp2.h"
@@ -75,9 +76,30 @@ static mp_obj_t rp2_bootsel_button(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(rp2_bootsel_button_obj, rp2_bootsel_button);
 
+static mp_obj_t rp2_get_core_num(void) {
+    return MP_OBJ_NEW_SMALL_INT(get_core_num());
+}
+MP_DEFINE_CONST_FUN_OBJ_0(rp2_get_core_num_obj, rp2_get_core_num);
+
+static mp_obj_t rp2_flash_do_cmd(mp_obj_t txbuf) {
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(txbuf, &bufinfo, MP_BUFFER_READ);
+    vstr_t rxbuf;
+    vstr_init_len(&rxbuf, bufinfo.len);
+
+    flash_lockout_start();
+    flash_do_cmd(bufinfo.buf, (uint8_t *)rxbuf.buf, bufinfo.len);
+    flash_lockout_end();
+
+    return mp_obj_new_bytes_from_vstr(&rxbuf);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(rp2_flash_do_cmd_obj, rp2_flash_do_cmd);
+
 static const mp_rom_map_elem_t rp2_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),            MP_ROM_QSTR(MP_QSTR_rp2) },
     { MP_ROM_QSTR(MP_QSTR_bootsel_button),      MP_ROM_PTR(&rp2_bootsel_button_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_core_num),        MP_ROM_PTR(&rp2_get_core_num_obj) },
+    { MP_ROM_QSTR(MP_QSTR_flash_do_cmd),        MP_ROM_PTR(&rp2_flash_do_cmd_obj) },
 };
 static MP_DEFINE_CONST_DICT(rp2_module_globals, rp2_module_globals_table);
 

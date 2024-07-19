@@ -5,6 +5,7 @@
  */
 
 #include "FreeRTOS.h"
+#include "freertos/interrupts.h"
 #include "semphr.h"
 #include "task.h"
 #include "timers.h"
@@ -13,6 +14,8 @@
 #include "hardware/irq.h"
 #include "pico/unique_id.h"
 #include "cyw43.h"
+
+#include "pico/gpio.h"
 
 #ifndef CYW43_GPIO_IRQ_HANDLER_PRIORITY
 #define CYW43_GPIO_IRQ_HANDLER_PRIORITY 0x40
@@ -32,7 +35,7 @@ void cyw43_mutex_init(void) {
 static void cyw43_do_poll(void *pvParameter1, uint32_t ulParameter2);
 
 static void cyw43_set_irq_enabled(bool enabled) {
-    gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
+    pico_gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
 }
 
 // GPIO interrupt handler to tell us there's cyw43 has work to do
@@ -51,14 +54,18 @@ static void cyw43_gpio_irq_handler(void) {
 }
 
 void cyw43_irq_init(void) {
+    UBaseType_t save = set_interrupt_core_affinity();
     gpio_add_raw_irq_handler_with_order_priority(CYW43_PIN_WL_HOST_WAKE, cyw43_gpio_irq_handler, CYW43_GPIO_IRQ_HANDLER_PRIORITY);
     cyw43_set_irq_enabled(true);
     irq_set_enabled(IO_IRQ_BANK0, true);
+    clear_interrupt_core_affinity(save);
 }
 
 void cyw43_irq_deinit(void) {
+    UBaseType_t save = set_interrupt_core_affinity();
     gpio_remove_raw_irq_handler(CYW43_PIN_WL_HOST_WAKE, cyw43_gpio_irq_handler);
     cyw43_set_irq_enabled(false);
+    clear_interrupt_core_affinity(save);
 }
 
 void cyw43_post_poll_hook(void) {

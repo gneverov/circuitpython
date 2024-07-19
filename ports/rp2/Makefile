@@ -54,9 +54,14 @@ endif
 
 HELP_BUILD_ERROR ?= "See \033[1;31mhttps://github.com/micropython/micropython/wiki/Build-Troubleshooting\033[0m"
 
-all:
+all: picolibc
 	[ -e $(BUILD)/Makefile ] || cmake -S . -B $(BUILD) -DPICO_BUILD_DOCS=0 ${CMAKE_ARGS}
 	$(MAKE) $(MAKESILENT) -C $(BUILD) || (echo -e $(HELP_BUILD_ERROR); false)
+
+.PHONY: picolibc clean
+picolibc:
+	[ -e build-picolibc/Makefile ] || cmake -S picolibc -B build-picolibc
+	$(MAKE) $(MAKESILENT) -C build-picolibc
 
 clean:
 	$(RM) -rf $(BUILD)

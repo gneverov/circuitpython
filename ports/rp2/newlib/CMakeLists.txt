@@ -9,27 +9,26 @@ target_sources(newlib_helper INTERFACE
     flash.c
     flash_env.c
     flash_heap.c
-    # freertos.c
     lock.c
     newlib.c
     posix.c
     random.c
+    thread.c
     vfs.c
 )
 
 add_library(newlib_helper_headers INTERFACE)
-target_include_directories(newlib_helper_headers SYSTEM INTERFACE include)
+target_include_directories(newlib_helper_headers INTERFACE include)
 
 target_link_options(newlib_helper INTERFACE
-    LINKER:--wrap=_setenv_r
-    LINKER:--wrap=_unsetenv_r
+    LINKER:--wrap=setenv
+    LINKER:--wrap=unsetenv
 )
 
 target_link_libraries(newlib_helper INTERFACE
     newlib_helper_headers
-    FreeRTOS-Kernel 
-    freertos_config
-    freertos_helper
+    freertos
+    hardware_flash
     pico_flash
 )
 
@@ -55,6 +54,12 @@ target_link_libraries(newlib_dhara INTERFACE
 # TARGET - the firmware executable to create and modify
 function(add_firmware_executable TARGET)
     add_executable(${TARGET} ${ARGN})
+    target_link_options(${TARGET} PRIVATE
+        LINKER:--gc-keep-exported
+    )
+    target_compile_options(${TARGET} PRIVATE
+        -fvisibility=hidden
+    )    
     add_custom_command(
         TARGET ${TARGET} POST_BUILD
         COMMAND cp $<TARGET_FILE:${TARGET}> $<TARGET_FILE_BASE_NAME:${TARGET}>.orig$<TARGET_FILE_SUFFIX:${TARGET}>
@@ -85,8 +90,8 @@ endfunction()
 function(add_dynamic_library TARGET)
     add_executable(${TARGET} ${ARGN})
     target_link_options(${TARGET} PRIVATE
-        --specs=nano.specs
         -nostdlib
+        LINKER:--gc-keep-exported
         LINKER:-q
         LINKER:-entry=__dl_main
         LINKER:-init=__dl_init
@@ -114,6 +119,7 @@ endfunction()
 
 # Targets for extracting objects out of libc
 # ---
+if(MICROPY_DYNLINK)
 # Execute C compiler to find path to libc
 separate_arguments(NEWLIB_C_FLAGS NATIVE_COMMAND ${CMAKE_C_FLAGS})
 execute_process(COMMAND ${CMAKE_C_COMPILER} ${NEWLIB_C_FLAGS} "--print-file-name=libc_nano.a" OUTPUT_VARIABLE LIBC_PATH)
@@ -135,3 +141,4 @@ add_custom_target(
     VERBATIM
     COMMAND_EXPAND_LISTS
 )
+endif()

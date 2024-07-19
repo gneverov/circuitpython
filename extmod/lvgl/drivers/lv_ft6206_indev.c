@@ -118,8 +118,8 @@ static int touchpad_init(lv_ft6206_indev_t *drv, i2c_inst_t *i2c, uint trig, uin
     gpio_init(trig);
     gpio_set_dir(trig, false);
     gpio_set_pulls(trig, true, false);
-    pico_gpio_set_irq(trig, touchpad_irq_handler, drv);
-    gpio_set_irq_enabled(trig, GPIO_IRQ_LEVEL_LOW, true);
+    pico_gpio_add_handler(trig, touchpad_irq_handler, drv);
+    pico_gpio_set_irq_enabled(trig, GPIO_IRQ_LEVEL_LOW, true);
     drv->trig = trig;
 
     return 0;
@@ -127,7 +127,7 @@ static int touchpad_init(lv_ft6206_indev_t *drv, i2c_inst_t *i2c, uint trig, uin
 
 static void touchpad_deinit(lv_ft6206_indev_t *drv) {
     if (drv->trig != 255) {
-        pico_gpio_clear_irq(drv->trig);
+        pico_gpio_remove_handler(drv->trig);
         gpio_deinit(drv->trig);
         drv->trig = 255;
     }

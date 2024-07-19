@@ -155,7 +155,6 @@ static off_t sdcard_lseek(void *ctx, off_t pos, int whence) {
 
 static int sdcard_read(void *ctx, void *buf, size_t size) {
     struct sdcard_file *file = ctx;
-    uint8_t *buffer = buf;
     size_t count = 0;
     if (!sdcard_wait(file, pdMS_TO_TICKS(100))) {
         return -1;
@@ -168,7 +167,7 @@ static int sdcard_read(void *ctx, void *buf, size_t size) {
         if (sdcard_recv(file, buf, 512) < 0) {
             goto cleanup;
         }
-        buffer += 512;
+        buf += 512;
         count++;
         file->ptr += 512;
     }
@@ -210,7 +209,7 @@ void *sdcard_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
     }
     vfs_file_init(&file->base, &sdcard_vtable, mode);
     file->ptr = 0;
-    file->spi = &pico_spis_ll[0];
+    file->spi = &pico_spis_ll[(dev & 0xff) / 8];
     file->cs_pin = cs_pin;
     file->baudrate = 400000;
     gpio_init(file->cs_pin);

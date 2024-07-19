@@ -11,7 +11,12 @@ __attribute__ ((visibility("hidden")))
 void lvgl_image_event_delete(lv_obj_t *obj) {
     assert(lvgl_is_locked());
     const void *src = lv_image_get_src(obj);
-    lvgl_type_free(LV_TYPE_IMAGE_SRC, &src);
+    lv_image_src_t src_type = lv_image_src_get_type(src);
+    // lv_image_destructor will free src if it is a FILE or SYMBOL type.
+    // If it is not those types, then free it here.
+    if ((src_type != LV_IMAGE_SRC_FILE) && (src_type != LV_IMAGE_SRC_SYMBOL)) {
+        lvgl_type_free(LV_TYPE_IMAGE_SRC, &src);
+    }
 }
 
 static void lv_image_set_scale_x_0(lv_obj_t *obj, int32_t value) {
@@ -31,10 +36,12 @@ static void lvgl_image_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         if (dest[1] != MP_OBJ_NULL) {
             lvgl_type_from_mp(LV_TYPE_IMAGE_SRC, dest[1], &new_src);
         }
+        lv_image_src_t new_src_type = lv_image_src_get_type(new_src);
 
         lvgl_lock();
         lv_obj_t *obj = lvgl_lock_obj(handle);
         const void *old_src = lv_image_get_src(obj);
+        lv_image_src_t old_src_type = lv_image_src_get_type(old_src);
         if (dest[0] != MP_OBJ_SENTINEL) {
             const void *tmp = NULL;
             lvgl_type_clone(LV_TYPE_IMAGE_SRC, &tmp, &old_src);
@@ -46,7 +53,16 @@ static void lvgl_image_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
             lv_image_set_src(obj, new_src);
             lvgl_unlock();
             dest[0] = MP_OBJ_NULL;
-            lvgl_type_free(LV_TYPE_IMAGE_SRC, &old_src);
+            // lv_image_set_src creates a copy of new_src if it is a FILE or SYMBOL type.
+            // In those cases, free our reference here as it is no longer needed.
+            if ((new_src_type == LV_IMAGE_SRC_FILE) || (new_src_type == LV_IMAGE_SRC_SYMBOL)) {
+                lvgl_type_free(LV_TYPE_IMAGE_SRC, &new_src);
+            }            
+            // lv_image_set_src will free old_src if it is a FILE or SYMBOL type.
+            // If it is not those types, then free it here.
+            if ((old_src_type != LV_IMAGE_SRC_FILE) && (old_src_type != LV_IMAGE_SRC_SYMBOL)) {
+                lvgl_type_free(LV_TYPE_IMAGE_SRC, &old_src);
+            }
         }
     }
     else if (attr == MP_QSTR_scale_x) {

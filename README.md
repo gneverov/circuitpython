@@ -1,9 +1,9 @@
 # MicroPythonRT
-MicroPythonRT is a fork of [MicroPython](https://github.com/micropython/micropython/) with added support for concurrency, dynamic linking and interoperability. 
+MicroPythonRT is a fork of [MicroPython](https://github.com/micropython/micropython/) with added support for concurrency, dynamic linking and interoperability with non-Python projects. 
 
 Concurrency means multiple programs running at the same time. MicroPythonRT achieves this by adopting [FreeRTOS](https://www.freertos.org/) as a foundation layer. FreeRTOS provides robust concurrency and parallelism support for MicroPython and C components. This support extends into the Python API by providing support for the [`threading`](https://docs.python.org/3/library/threading.html), [`select`](https://docs.python.org/3/library/select.html)/[`selectors`](https://docs.python.org/3/library/selectors.html), and [`asyncio`](https://docs.python.org/3/library/asyncio.html) modules.
 
-Interoperability means the ease at which non-Python (e.g., C) code can be integrated into firmware to provide increased functionality in cooperation with or independently of the MicroPython runtime. MicroPythonRT does this in several ways by: dynamically linking C libraries on-device, partitioning software components into independent tasks, and providing a common C runtime library.
+Interoperability means the ease at which non-Python (e.g., C) code can be integrated into a MicroPython project to expand functionality either in cooperation with or independently of the MicroPython runtime. MicroPythonRT does this in several ways by: dynamically loading C libraries on-device, partitioning software components into independent tasks, and providing a common C runtime library.
 
 ## Support
 If you are interested in using MicroPythonRT, please open an [issue](https://github.com/gneverov/micropythonrt/issues) to let me know how MicroPythonRT helps your application, or what additional functionality you need, or to simply report bugs. Your feedback will help to direct future development efforts.
@@ -11,13 +11,13 @@ If you are interested in using MicroPythonRT, please open an [issue](https://git
 ## Highlights
 - Support for [dynamic linking](/examples/dynlink/README.md) (i.e., DLLs or shared libraries). Native code libraries can be built, distributed, and installed without recompiling or reinstalling the firmware. This allows users to add new native code to their application, with similar ease to which Python code can be added by copying files to the device.
 
-- All use of busy polling and background tasks have been removed from the MicroPython core and replaced with FreeRTOS-based concurrency.
+- FreeRTOS brings full concurrency support including multicore and multiple threads. All use of busy polling and background tasks have been removed from the MicroPython core and replaced with FreeRTOS-based concurrency. Never worry about Python code blocking the USB stack.
 
-- newlib-nano is used as the system-wide C runtime library. Crucially it implements malloc, allowing C programs to allocate their own memory independent of MicroPython. newlib-nano is also extended with additional POSIX [functionality](/ports/rp2/newlib/README.md) including a virtual filesystem.
+- [Picolibc](https://github.com/picolibc/picolibc) is used as the system-wide C runtime library. Crucially it implements malloc, allowing C programs to allocate their own memory independent of MicroPython; and thread-local storage, allowing code to execute on multiple cores. Picolibc is also extended with additional POSIX [functionality](/ports/rp2/newlib/README.md) including a virtual filesystem.
 
 - System services such as [lwIP](https://savannah.nongnu.org/projects/lwip/) and [TinyUSB](https://docs.tinyusb.org/en/latest/) run as separate FreeRTOS tasks isolated of MicroPython. There is no problem with MicroPython or Python code being able to interfere with these services, and the MicroPython VM can be restarted without any effect on them.
 
-- MicroPython threads are implemented as FreeRTOS tasks. The user can create any number of Python threads. Whether the threads can execute on separate hardware cores depends on the configuration of FreeRTOS. (The default for RP2 is not multicore.)
+- MicroPython threads are implemented as FreeRTOS tasks. The user can create any number of Python threads, which can execute on all available hardware cores. 
 
 - lwIP is configured to use dynamic memory allocation, thus allowing the user to create any number of sockets.
 
@@ -31,8 +31,6 @@ If you are interested in using MicroPythonRT, please open an [issue](https://git
 
 ## Supported Hardware
 **Ports**: Currently MicroPythonRT is only supported on the RP2 port. However with time and effort it can be supported on any platform that support FreeRTOS. Only the [RPI PICO](https://micropython.org/download/RPI_PICO/) and [RPI PICO W](https://micropython.org/download/RPI_PICO_W/) boards have been tested.
-
-**Multicore**: Multicore support is determined by FreeRTOS, not MicroPythonRT. Multicore support for RP2 exists but is not enabled by default in FreeRTOS. MicroPythonRT has not been tested with multicore support enabled.
 
 **WIFI**: CYW43 support is ported in MicroPythonRT. Other wifi hardware (ninaw10, wiznet5k) are not currently supported.
 
@@ -52,7 +50,7 @@ x[2:4] = b'hello'
 del x[7:]
 ```
 
-- `audio_mp3`: A new module that provides a Python wrapper of the libhelix-mp3 library for decoding MP3 streams. Primarily  introduced to support the  [audio player demo](/examples/async/audio_player.md). Note that libhelix-mp3 is released under a different [license](/lib/audio/src/libhelix-mp3/LICENSE.txt) that does not permit free commerical use. This module can be disabled at build-time.
+- `audio_mp3`: A new module that provides a Python wrapper of the libhelix-mp3 library for decoding MP3 streams. Primarily  introduced to support the  [audio player demo](/examples/async/audio_player.md). Note that libhelix-mp3 is released under a different [license](/lib/audio/src/libhelix-mp3/LICENSE.txt) that does not permit free commercial use. This module can be disabled at build-time.
 
 - `freeze`: A new module for "freezing" MicroPython runtime data structures into flash to free up RAM. See the [freezing demo](/examples/freeze/README.md) for more details.
 
@@ -77,7 +75,7 @@ pin.value = 1     # output high
 
 - `network_cyw43`: This subcomponent of the network module still exists as a way to configure the cyw43 network device (e.g., tell it which wifi network to connect to). The wifi scan method has be updated to use FreeRTOS instead of polling.
 
-- `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to newlib-nano. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices, and redirecting stdio through character devices. This module also contains the dynamic linking API and other functionality from the base C library.
+- `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to Picolibc. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices, and redirecting stdio through character devices. This module also contains the dynamic linking API and other functionality from the base C library.
 
 - `select`: The select module is rewritten to use FreeRTOS. It exposes a class called `Selector` which is basically a CPython-compatible [`selectors.EpollSelector`](https://docs.python.org/3/library/selectors.html?highlight=selector#selectors.BaseSelector) class. Under the hood, the select module implements a design similar to Linux [epoll](https://linux.die.net/man/4/epoll). In particular, MicroPython streams are extended with a POLL_CTL ioctl, which has similar behavior to Linux's [epoll_ctl](https://linux.die.net/man/2/epoll_ctl) syscall.
 The selector is a crucial part of any asyncio implementation. At its heart, an asyncio event loop will contain a selector to bring about IO concurrency between tasks.
@@ -93,7 +91,7 @@ socket.netif['wl0']         # Access a network interface by name
 socket.netif['wl0'].wait()  # Wait/blocks until the network interface has an IP address
 ```
 
-- `time`: Module refactored to be more consistent with CPython and to use newlib for time functions, including timezone information.
+- `time`: Module refactored to be more consistent with CPython and to use Picolibc for time functions, including timezone information.
 
 - `_thread` and `threading`: The `_thread` module is implemented using FreeRTOS tasks. Python code can create any number of threads (limited by available RAM). The implementation relies on a GIL, do just as in CPython, there is no automatic compute parallelism advantage to using multiple threads. `_thread` is a low-level module you don't use directly. The higher-level `threading` module in MicroPython is currently minimal. Much work remains to fully implement this module.
 
@@ -115,11 +113,11 @@ This class's methods can also take keyword arguments to define values for variou
 ### Framework
 - **blocking**: Functions such as sleep, blocking I/O, and select will block the calling task using a FreeRTOS API, thus allowing the CPU to continue executing other tasks. Additionally the GIL is released before the blocking call to give other MicroPython threads a chance to run. The macro `MICROPY_EVENT_POLL_HOOK` is not needed anymore.
 
-- **flash translation layer**: Uses a variant of [Dhara](https://github.com/gneverov/dhara16) to provide a flash translation layer to the XIP flash storage. This allows for wear levelling of the on-chip flash memory and a smaller filesystem block size.
+<!--- **flash translation layer**: Uses a variant of [Dhara](https://github.com/gneverov/dhara16) to provide a flash translation layer to the XIP flash storage. This allows for wear levelling of the on-chip flash memory and a smaller filesystem block size.-->
 
 - **main**: The C main function is responsible for starting FreeRTOS tasks for various subsystems. MicroPython, lwIP, and TinyUSB all execute as separate tasks. cyw43_driver executes as a FreeRTOS timer.
 
-- **memory map**: The 8 kB of RAM in the scratch X and Y regions is used as the stack for the main MicroPython task. The stack space for other tasks, including non-main MicroPython threads, is allocated from the C heap. It does not make sense to have a dedicated stack for the second core.
+- **memory map**: The 8 kB of RAM in the scratch X and Y regions are used as the ARM "main" stacks for each core. The "process" stacks for all FreeRTOS tasks, including the MicroPython threads, are dynamically allocated from the C heap.
 
 - **MICROPY_FREERTOS**: The rp2 port of this fork is hard-coded to depend on FreeRTOS. The C preprocessor macro `MICROPY_FREERTOS` is used in common code outside of the port directory to optionally refer to FreeRTOS functionally.
 
@@ -135,4 +133,4 @@ This functionality requires that the expression "asyncio.repl_runner" evaluates 
 Additionally lwIP supports SLIP network interfaces, and running SLIP over a USB CDC is possibly a more reliable way to get networking over USB. However I don't know how to set up a SLIP interface on Windows.
 
 ## Acknowledgements
-Thanks to the authors of MicroPython and CircuitPython for their awesome projects I was able to build upon.
+Thanks to the authors of MicroPython, CircuitPython, Picolibc, and FreeRTOS for their awesome projects I was able to build upon.

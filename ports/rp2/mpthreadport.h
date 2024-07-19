@@ -31,7 +31,7 @@
 #include "task.h"
 #include "semphr.h"
 
-#include "freertos/task_helper.h"
+#include "newlib/thread.h"
 
 #include "py/mpthread.h"
 
