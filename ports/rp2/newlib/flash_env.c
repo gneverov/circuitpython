@@ -10,6 +10,7 @@
 
 #include "newlib/flash.h"
 #include "newlib/flash_env.h"
+#include "newlib/flash_lockout.h"
 
 
 static_assert(sizeof(struct flash_env) == FLASH_SECTOR_SIZE);

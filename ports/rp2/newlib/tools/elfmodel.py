@@ -14,6 +14,13 @@ def align(address, alignment):
     return (address + alignment - 1) & ~(alignment - 1)
 
 
+def e2s(enum, value):
+    try:
+        return enum(value).name[len(enum.__name__) + 1 :]
+    except ValueError:
+        return str(value)
+
+
 class Node:
     fixed = False
     deleted = False
@@ -33,6 +40,9 @@ class Node:
     def delete(self):
         self.deleted = True
 
+    def __str__(self):
+        return str(self.struct)
+
 
 class Symbol(Node):
     c_type = elf32.Sym
@@ -41,6 +51,9 @@ class Symbol(Node):
         super().__init__(**kwargs)
         self.name = name
         self.section = section
+
+    def __str__(self):
+        return f"  {self.index:4}: {self.struct.st_value:08x} {self.struct.st_size:5} {e2s(elf32.STT, self.struct.st_type):7} {e2s(elf32.STB, self.struct.st_bind):6} {e2s(elf32.STV, self.struct.st_visibility):7} {e2s(elf32.SHN, self.struct.sec):4} {self.struct.name}"
 
 
 class Relocation(Node):
@@ -88,6 +101,12 @@ class Section(Node):
     def psize(self):
         return 0 if self.struct.sh_type == elf32.SHT_NOBITS else self.size
 
+    def __str__(self):
+        s = f"  [{self.index:2}] {self.name:16} {e2s(elf32.SHT, self.struct.sh_type):16} {self.struct.sh_addr:08x} {self.struct.sh_offset:06x} {self.struct.sh_size:06x}"
+        if hasattr(self, "paddr"):
+            s += f" -- {self.paddr:08x}"
+        return s
+
 
 class EntrySection(Section):
     @property
@@ -128,8 +147,11 @@ class SymtabSection(EntrySection):
         self.symbols = []
         self.symbols.append(Symbol(name=None))
 
-    def get_symbol(self, name):
-        syms = [st for st in self.symbols if st.name == name]
+    def get_all_symbols(self, name):
+        return [st for st in self.symbols if st.name == name]
+
+    def get_first_symbol(self, name):
+        syms = self.get_all_symbols(name)
         return syms[0] if syms else None
 
 
@@ -287,6 +309,9 @@ class Segment(Node):
             >= section.struct.sh_addr + section.struct.sh_size
         )
 
+    def __str__(self):
+        return f"  {e2s(elf32.PT, self.struct.p_type):12} 0x{self.struct.p_offset:06x} 0x{self.struct.p_vaddr:08x} 0x{self.struct.p_paddr:08x} 0x{self.struct.p_filesz:06x} 0x{self.struct.p_memsz:06x}"
+
 
 class Elf(Node):
     c_type = elf32.Ehdr
@@ -325,7 +350,12 @@ class Visitor:
         while node_type != object:
             method = f"visit_{node_type.__name__}"
             if hasattr(type(self), method):
-                return getattr(type(self), method)(self, node, *args)
+                try:
+                    return getattr(type(self), method)(self, node, *args)
+                except:
+                    print(f"While processing {node_type.__name__} node:")
+                    print(str(node))
+                    raise
             node_type = node_type.__bases__[0]
 
         print(type(node))
@@ -425,6 +455,14 @@ class IndexNodes(Visitor):
         section.symbols = local_symbols + nonlocal_symbols
         section.struct.sh_info = len(local_symbols)
         self.visit(section.symbols, itertools.count(0))
+
+    def visit_RelSection(self, section, index):
+        self.visit_Section(section, index)
+        section.relocs.sort(key=lambda r: r.struct.r_offset)
+        self.visit(section.relocs)
+
+    def visit_RelaSection(self, section, index):
+        self.visit_RelSection(section, index)
 
     def visit_Symbol(self, sym, index):
         sym.index = next(index)
@@ -545,19 +583,20 @@ class ComputeSegments(Visitor):
             segment.struct.p_align = 1
 
         for section in segment.sections:
-            # print(f"Section '{section.name}':")
-            # print(f"offset=0x{section.struct.sh_offset:x}, vaddr=0x{section.struct.sh_addr:x}, paddr=0x{section.paddr:x}, filesz=0x{section.psize:x}, memsz=0x{section.size:x}")
-
-            pos = section.struct.sh_offset - segment.struct.p_offset
-            assert pos >= 0
-            # print(f"next_offset=0x{segment.struct.p_offset + pos:x}, next_vaddr=0x{segment.struct.p_vaddr + pos:x}, next_paddr=0x{segment.struct.p_paddr + pos:x}")
-
-            assert section.struct.sh_addr == segment.struct.p_vaddr + pos
-            assert section.paddr == segment.struct.p_paddr + pos
-
             if not segment.fixed:
-                segment.struct.p_filesz = pos + section.psize
-                segment.struct.p_memsz = pos + section.size
+                assert (
+                    section.struct.sh_offset >= segment.struct.p_offset + segment.struct.p_filesz
+                )
+                segment.struct.p_filesz = (
+                    section.struct.sh_offset + section.psize - segment.struct.p_offset
+                )
+
+                assert section.paddr >= segment.struct.p_paddr + segment.struct.p_memsz
+
+                assert section.struct.sh_addr >= segment.struct.p_vaddr + segment.struct.p_memsz
+                segment.struct.p_memsz = (
+                    section.struct.sh_addr + section.size - segment.struct.p_vaddr
+                )
 
                 if section.struct.sh_flags & elf32.SHF_WRITE:
                     segment.struct.p_flags |= elf32.PF_W
@@ -565,6 +604,8 @@ class ComputeSegments(Visitor):
                     segment.struct.p_flags |= elf32.PF_X
 
                 segment.struct.p_align = max(segment.struct.p_align, section.struct.sh_addralign)
+            else:
+                assert section.fixed
 
 
 class WriteData(Visitor):
@@ -712,3 +753,11 @@ def open_elffile(path):
         ReadData(fp=fp).visit(elffile)
         Dereference().visit(elffile)
         return elffile
+
+
+class Dump(Visitor):
+    def visit_Segment(self, segment, elffile):
+        print(str(segment))
+
+    def visit_Section(self, section, elffile):
+        print(str(section))

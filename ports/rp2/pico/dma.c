@@ -20,7 +20,7 @@ static void pico_dma_irq_handler(void) {
     }
 }
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void pico_dma_init(void) {
     assert(check_interrupt_core_affinity());
     irq_add_shared_handler(DMA_IRQ_1, pico_dma_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);

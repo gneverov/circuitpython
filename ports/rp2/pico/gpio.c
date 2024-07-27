@@ -16,7 +16,7 @@ static void pico_gpio_irq_handler(uint gpio, uint32_t event_mask) {
     pico_gpio_handlers[gpio](gpio, event_mask, pico_gpio_contexts[gpio]);
 }
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void pico_gpio_init(void) {
     assert(check_interrupt_core_affinity());
     gpio_set_irq_callback(pico_gpio_irq_handler);

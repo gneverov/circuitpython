@@ -29,12 +29,10 @@ int close(int fd) {
 void __attribute__((noreturn)) _exit(int status) {
     // Picolibc's raise function calls _exit(128 + signum) for the default signal handler.
     if (status >= 128) {
-        psignal(status - 128, "exit");
-        fflush(stdout);
-        status = 0;
+        psignal(status - 128, "signal");
+        fflush(stderr);
+        status = 2;
     }
-
-    dl_init(DT_FINI);
 
     vTaskSuspendAll();
     // switch to MSP stack
@@ -253,6 +251,11 @@ clock_t times(struct tms *tms) {
     // Forward to Pico SDK's times function.
     extern int _times(struct tms *tms);
     return _times(tms);
+}
+
+__attribute__((noinline))
+int *tls_errno(void) {
+    return &errno;
 }
 
 int unlink(const char *file) {

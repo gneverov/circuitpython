@@ -53,6 +53,7 @@
 #define configNUMBER_OF_CORES                   2
 #define configRUN_MULTIPLE_PRIORITIES           1
 #define configUSE_CORE_AFFINITY                 1
+#define configUSE_TASK_PREEMPTION_DISABLE       1
 #define configIDLE_SHOULD_YIELD                 1
 
 /* Synchronization Related */
@@ -133,5 +134,15 @@ to exclude the API function. */
 
 // Backwards compatibility for lib/pico-sdk/lib/lwip/contrib/ports/freertos/sys_arch.c
 #define portTICK_RATE_MS portTICK_PERIOD_MS
+
+// Backwards compatibility for lib/pico-sdk/src/rp2_common/pico_flash/flash.c
+#define configNUM_CORES configNUMBER_OF_CORES
+
+// RP2040-specific support for interprocessor interrupts
+#define configUSE_IPIS                          1
+#if configUSE_IPIS
+extern void vPortTaskSwitchHook();
+#define portTASK_SWITCH_HOOK vPortTaskSwitchHook
+#endif
 
 #endif /* FREERTOS_CONFIG_H */

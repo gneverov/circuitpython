@@ -24,3 +24,7 @@ UBaseType_t set_interrupt_core_affinity(void);
 void clear_interrupt_core_affinity(UBaseType_t uxCoreAffinityMask);
 
 bool check_interrupt_core_affinity(void);
+
+#if configUSE_IPIS
+void send_interprocessor_interrupt(uint core_num, uint irq_num);
+#endif

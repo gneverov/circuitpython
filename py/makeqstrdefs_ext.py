@@ -95,7 +95,7 @@ def gen_source(module_name, qstrs, modules, file=None):
         print(f"extern const mp_obj_module_t {m};", file=file)
         print(file=file)
 
-        print('__attribute__((used, weak, visibility("default")))', file=file)
+        print('__attribute__((used, visibility("default")))', file=file)
         print("mp_obj_t mp_extmod_init(void) {", file=file)
         print(f"    return MP_OBJ_FROM_PTR(&{m});", file=file)
         print("}", file=file)

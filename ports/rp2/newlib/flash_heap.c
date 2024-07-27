@@ -11,6 +11,7 @@
 
 #include "newlib/flash.h"
 #include "newlib/flash_heap.h"
+#include "newlib/flash_lockout.h"
 #include "newlib/dlfcn.h"
 
 #define FLASH_HEAP_NUM_PAGES 16
@@ -25,7 +26,7 @@ static flash_heap_header_t flash_heap_head = { 0, 0, 0, &end, NULL };
 
 static const flash_heap_header_t *flash_heap_tail;
 
-__attribute__((constructor))
+__attribute__((constructor(101), visibility("hidden")))
 void flash_heap_init(void) {
     const flash_heap_header_t *header = &flash_heap_head;
     while (header->type) {
@@ -37,8 +38,6 @@ void flash_heap_init(void) {
         header = (flash_heap_header_t *)((uint8_t *)header + header->flash_size);
     }
     flash_heap_tail = header;
-
-    dl_init(DT_INIT);
 }
 
 const flash_heap_header_t *flash_heap_next_header(void) {
@@ -107,12 +106,12 @@ void *flash_heap_realloc_with_evict(flash_heap_t *file, void *ptr, size_t size) 
             return NULL;
         }
         free(evicted_page);
-        #if __GNUC__ == 12
         #pragma GCC diagnostic push
+        #if __GNUC__ >= 12
         #pragma GCC diagnostic ignored "-Wuse-after-free"
+        #endif
         new_ptr = realloc(ptr, size);
         #pragma GCC diagnostic pop
-        #endif
     }
     return new_ptr;
 }

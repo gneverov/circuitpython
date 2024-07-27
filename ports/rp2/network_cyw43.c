@@ -123,13 +123,6 @@ static MP_DEFINE_CONST_FUN_OBJ_3(network_cyw43_ioctl_obj, network_cyw43_ioctl);
 /*******************************************************************************/
 // network API
 
-static mp_obj_t network_cyw43_deinit(mp_obj_t self_in) {
-    network_cyw43_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    cyw43_deinit(self->cyw);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(network_cyw43_deinit_obj, network_cyw43_deinit);
-
 static uint32_t network_cyw43_country(void) {
     const char *country = getenv("COUNTRY");
     if (!country || strlen(country) < 2) {
@@ -615,7 +608,6 @@ static const mp_rom_map_elem_t network_cyw43_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_send_ethernet), MP_ROM_PTR(&network_cyw43_send_ethernet_obj) },
     { MP_ROM_QSTR(MP_QSTR_ioctl), MP_ROM_PTR(&network_cyw43_ioctl_obj) },
 
-    { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&network_cyw43_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_active), MP_ROM_PTR(&network_cyw43_active_obj) },
     { MP_ROM_QSTR(MP_QSTR_scan), MP_ROM_PTR(&network_cyw43_scan_obj) },
     { MP_ROM_QSTR(MP_QSTR_connect), MP_ROM_PTR(&network_cyw43_connect_obj) },

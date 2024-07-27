@@ -18,6 +18,7 @@ add_custom_command(
         setup
         --reconfigure
         --cross-file=${CMAKE_CURRENT_LIST_DIR}/cross-${ARCH}.txt
+        --buildtype minsize
         -Dprefix=${INSTALL_DIR}
         -Dspecsdir=none
         -Dtests=false
@@ -26,6 +27,7 @@ add_custom_command(
         -Dsemihost=false
         -Dpicolib=true
         -Dpicocrt=false
+        -Dnewlib-initfini=false
         -Dcrt-runtime-size=true
         -Dthread-local-storage=true
         -Dnewlib-iconv-encodings=us_ascii,utf_8,utf_16

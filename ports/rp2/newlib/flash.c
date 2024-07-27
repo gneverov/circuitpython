@@ -8,12 +8,12 @@
 #include <stdio.h>
 
 #include "hardware/flash.h"
-#include "pico/flash.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "newlib/flash.h"
+#include "newlib/flash_lockout.h"
 #include "newlib/ioctl.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
@@ -149,18 +149,4 @@ void *flash_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
     file->ptr = __flash_storage_start;
     file->flags = flags;
     return file;
-}
-
-void flash_lockout_start(void) {
-    flash_safety_helper_t *f = get_flash_safety_helper();
-    if (!f->enter_safe_zone_timeout_ms(INT32_MAX)) {
-        assert(0);
-    }
-}
-
-void flash_lockout_end(void) {
-    flash_safety_helper_t *f = get_flash_safety_helper();
-    if (!f->exit_safe_zone_timeout_ms(INT32_MAX)) {
-        assert(0);
-    }
 }

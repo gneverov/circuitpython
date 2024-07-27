@@ -43,7 +43,7 @@ static void pico_pio_irq_init(uint pio_index, uint irq, irq_handler_t irq_handle
     irq_set_enabled(irq, true);
 }
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void pico_pio_init(void) {
     assert(check_interrupt_core_affinity());
     pico_pio_irq_init(0, PIO0_IRQ_0, pico_pio0_irq0_handler);

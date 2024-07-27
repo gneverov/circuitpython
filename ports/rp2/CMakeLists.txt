@@ -63,13 +63,13 @@ include("cmake/pico-sdk.cmake")
 
 set(PICOLIBC_SYSROOT ${CMAKE_CURRENT_SOURCE_DIR}/build-picolibc/install)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${PICOLIBC_SYSROOT}/include -ftls-model=local-exec")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L${PICOLIBC_SYSROOT}/lib")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostartfiles -L${PICOLIBC_SYSROOT}/lib")
 
 add_subdirectory(freertos)
 
 set(MICROPY_FREERTOS ON)
-set(MICROPY_DYNLINK OFF)
-set(MICROPY_PY_AUDIO_MP3 OFF)
-set(MICROPY_LVGL OFF)
+set(MICROPY_DYNLINK ON)
+set(MICROPY_PY_AUDIO_MP3 ON)
+set(MICROPY_LVGL ON)
 set(MICROPY_SSL_MBEDTLS OFF)
 include(cmake/micropy.cmake)

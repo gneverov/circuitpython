@@ -22,9 +22,10 @@ static struct vfs_file *vfs_fd_table[VFS_FD_MAX];
 
 static char *vfs_cwd;
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void vfs_init(void) {
-    vfs_mutex = xSemaphoreCreateMutex();
+    static StaticSemaphore_t xMutexBuffer;
+    vfs_mutex = xSemaphoreCreateMutexStatic(&xMutexBuffer);
 }
 
 #ifndef NDEBUG
@@ -415,4 +416,11 @@ int dup2(int oldfd, int newfd) {
     int ret = vfs_replace(newfd, old_file);
     vfs_release_file(old_file);
     return ret;
+}
+
+__attribute__((destructor(200)))
+void vfs_deinit(void) {
+    for (int fd = VFS_FD_MAX - 1; fd >= 0; fd--) {
+        vfs_close(fd);
+    }
 }

@@ -9,10 +9,10 @@ else:
 msc = usb.MscDevice()
 
 
-def local():
+def local(flags=0):
     msc.eject()
     try:
-        os.mount(root_device, "/", root_fstype)
+        os.mount(root_device, "/", root_fstype, flags)
     except OSError:
         pass
 

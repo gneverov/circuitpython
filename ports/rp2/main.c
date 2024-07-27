@@ -37,12 +37,13 @@
 #include "freertos/interrupts.h"
 #include "task.h"
 
-#include "newlib/thread.h"
 #if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
 #endif
+#include "newlib/flash_lockout.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
+#include "newlib/thread.h"
 #include "pico/dma.h"
 #include "pico/gpio.h"
 #include "pico/pio.h"
@@ -189,6 +190,8 @@ StaticTask_t mp_taskdef;
 #define MIN_MP_STACK (4 << 10)
 
 void mp_task(void *params) {
+    flash_lockout_init();
+
     size_t mp_stack_size = (uintptr_t)params;
     const char *gc_heap_str = getenv("GC_HEAP");
     size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;

@@ -42,4 +42,3 @@ int dlclose(const void *handle);
 char *dlerror(void);
 const void *dlopen(const char *file, int mode);
 void *dlsym(const void *handle, const char *name);
-void dl_init(Elf32_Sword);

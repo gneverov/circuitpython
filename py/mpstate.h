@@ -184,7 +184,7 @@ typedef struct _mp_state_vm_t {
     #endif
 
     // Include any root pointers registered with MP_REGISTER_ROOT_POINTER().
-    #ifndef NO_QSTR
+    #if !defined(NO_QSTR) || defined(MP_QSTRDEFSFILE)
     // Only include root pointer definitions when not doing qstr extraction, because
     // the qstr extraction stage also generates the root pointers header file.
     #include "genhdr/root_pointers.h"

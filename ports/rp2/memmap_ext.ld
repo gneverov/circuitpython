@@ -30,17 +30,34 @@ MEMORY
 SECTIONS
 {
     .text : {
-        /* TODO revisit this now memset/memcpy/float in ROM */
-        /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
-         * FLASH ... we will include any thing excluded here in .data below by default */
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
+        *(.text .text.*)
+
+        /* init data */
+        . = ALIGN(4);        
+        PROVIDE_HIDDEN (__init_array_start = .);
+		KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+		KEEP (*(.init_array .ctors))
+        PROVIDE_HIDDEN (__init_array_end = .);
+
+        /* fini data */
+        . = ALIGN(4);        
+        PROVIDE_HIDDEN (__fini_array_start = .);
+		KEEP (*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+		KEEP (*(.fini_array .dtors))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+
+        /* object data */
+        . = ALIGN(4);
+        HIDDEN(__init_object_start = .);
+        KEEP(*(.init_object))
+        HIDDEN(__init_object_end = .);
+
+        *(.eh_frame*);
     } > FLASH
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
-        . = ALIGN(4);
+        *(.rodata .rodata.*)
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
-        . = ALIGN(4);
     } > FLASH
 
     .ARM.extab :
@@ -55,79 +72,40 @@ SECTIONS
     } > FLASH
     __exidx_end = .;
 
-    /* Machine inspectable binary information */
-    . = ALIGN(4);
-    __binary_info_start = .;
-    .binary_info :
-    {
-        KEEP(*(.binary_info.keep.*))
-        *(.binary_info.*)
-    } > FLASH
-    __binary_info_end = .;
-    . = ALIGN(4);
-
     /* End of .text-like segments */
     HIDDEN(__etext = .);
 
-    .data : {
-        __data_start__ = .;
-        *(vtable)
-
+    .data : ALIGN_WITH_INPUT {
+        HIDDEN(__data_start__ = .);
         *(.time_critical*)
-
-        /* remaining .text and .rodata; i.e. stuff we exclude above because we want it in RAM */
-        *(.text*)
-        . = ALIGN(4);
-        *(.rodata*)
-        . = ALIGN(4);
-
-        *(.data*)
-
-        . = ALIGN(4);
+        *(.data .data.*)
         *(.after_data.*)
-        . = ALIGN(4);
-        /* preinit data */
+        
+        /* mutex data */
+        . = ALIGN(4);        
         PROVIDE_HIDDEN (__mutex_array_start = .);
         KEEP(*(SORT(.mutex_array.*)))
         KEEP(*(.mutex_array))
         PROVIDE_HIDDEN (__mutex_array_end = .);
 
-        . = ALIGN(4);
-        /* init data */
-        PROVIDE_HIDDEN (__init_array_start = .);
-        KEEP(*(SORT(.init_array.*)))
-        KEEP(*(EXCLUDE_FILE(*crtbegin.o) .init_array))
-        PROVIDE_HIDDEN (__init_array_end = .);
-
-        . = ALIGN(4);
-        /* finit data */
-        PROVIDE_HIDDEN (__fini_array_start = .);
-        *(SORT(.fini_array.*))
-        *(EXCLUDE_FILE(*crtbegin.o) .fini_array)
-        PROVIDE_HIDDEN (__fini_array_end = .);
-
-        . = ALIGN(4);
-        HIDDEN(__init_object_start = .);
-        KEEP(*(.init_object))
-        HIDDEN(__init_object_end = .);
-
-        *(.jcr)
-        . = ALIGN(4);
         /* All data end */
-        __data_end__ = .;
+        HIDDEN(__data_end__ = .);
     } > RAM AT> FLASH
     
-    .uninitialized_data (NOLOAD): {
-        . = ALIGN(4);
+    .uninitialized_data (NOLOAD) : {
         *(.uninitialized_data*)
     } > RAM
 
-    .bss  : {
-        . = ALIGN(4);
-        __bss_start__ = .;
-        *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
-        *(COMMON)
-        . = ALIGN(4);
-        __bss_end__ = .;
+    /* bss without zero init on startup */
+    .uninitialized_bss (NOLOAD) : {
+        *(.uninitialized_bss*)
+    } > RAM
+
+    .bss (NOLOAD) : {
+        HIDDEN(__bss_start__ = .);
+        *(.bss .bss.*)
+        /* bss_end needs alignment because of Pico SDK's crt0 implementation */
+        .  = ALIGN(4);        
+        HIDDEN(__bss_end__ = .);
     } > RAM
 }

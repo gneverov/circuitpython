@@ -14,12 +14,12 @@ void tud_callback(tusb_cb_func_t func, void *arg) {
 }
 
 static SemaphoreHandle_t tud_mutex;
-static StaticSemaphore_t tud_mutex_buffer;
 static int tud_task_blocked;
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void tud_lock_init(void) {
-    tud_mutex = xSemaphoreCreateMutexStatic(&tud_mutex_buffer);
+    static StaticSemaphore_t xMutexBuffer;
+    tud_mutex = xSemaphoreCreateMutexStatic(&xMutexBuffer);
 }
 
 static void tud_sync(void *arg) {

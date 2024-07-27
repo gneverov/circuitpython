@@ -9,6 +9,7 @@ target_sources(newlib_helper INTERFACE
     flash.c
     flash_env.c
     flash_heap.c
+    flash_lockout.c
     lock.c
     newlib.c
     posix.c
@@ -29,7 +30,6 @@ target_link_libraries(newlib_helper INTERFACE
     newlib_helper_headers
     freertos
     hardware_flash
-    pico_flash
 )
 
 
@@ -57,9 +57,6 @@ function(add_firmware_executable TARGET)
     target_link_options(${TARGET} PRIVATE
         LINKER:--gc-keep-exported
     )
-    target_compile_options(${TARGET} PRIVATE
-        -fvisibility=hidden
-    )    
     add_custom_command(
         TARGET ${TARGET} POST_BUILD
         COMMAND cp $<TARGET_FILE:${TARGET}> $<TARGET_FILE_BASE_NAME:${TARGET}>.orig$<TARGET_FILE_SUFFIX:${TARGET}>
@@ -119,26 +116,13 @@ endfunction()
 
 # Targets for extracting objects out of libc
 # ---
-if(MICROPY_DYNLINK)
-# Execute C compiler to find path to libc
-separate_arguments(NEWLIB_C_FLAGS NATIVE_COMMAND ${CMAKE_C_FLAGS})
-execute_process(COMMAND ${CMAKE_C_COMPILER} ${NEWLIB_C_FLAGS} "--print-file-name=libc_nano.a" OUTPUT_VARIABLE LIBC_PATH)
-string(STRIP ${LIBC_PATH} LIBC_PATH)
-cmake_path(NORMAL_PATH LIBC_PATH)
-
 # Execute "ar t" to list objects in libc archive
-execute_process(COMMAND ${CMAKE_AR} t "${LIBC_PATH}" OUTPUT_VARIABLE LIBC_OBJS)
+execute_process(COMMAND ${CMAKE_AR} t ${PICOLIBC_SYSROOT}/lib/libc.a OUTPUT_VARIABLE LIBC_OBJS )
 separate_arguments(LIBC_OBJS UNIX_COMMAND ${LIBC_OBJS})
-# set(LIBC_OBJS ${LIBC_OBJS} CACHE INTERNAL "the object files of libc")
 
 # Extract object files ("ar x") into output directory
-list(TRANSFORM LIBC_OBJS PREPEND "stdlib/")
-add_custom_target(
-    extract_stdlib
-    COMMAND mkdir -p stdlib
-    COMMAND ${CMAKE_AR} x "${LIBC_PATH}" --output stdlib
+add_custom_target(extract_libc
+    COMMAND ${CMAKE_AR} x ${PICOLIBC_SYSROOT}/lib/libc.a
     BYPRODUCTS ${LIBC_OBJS}
     VERBATIM
-    COMMAND_EXPAND_LISTS
 )
-endif()

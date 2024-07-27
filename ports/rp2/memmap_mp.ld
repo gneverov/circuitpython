@@ -68,35 +68,38 @@ SECTIONS
         KEEP (*(.binary_info_header))
         HIDDEN(__binary_info_header_end = .);
         KEEP (*(.reset))
-        /* TODO revisit this now memset/memcpy/float in ROM */
-        /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
-         * FLASH ... we will include any thing excluded here in .data below by default */
-        *(.init)
-        /* Change for MicroPython... exclude gc.c, parse.c, vm.c from flash */
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a: *lib_a-mem*.o *libm.a: *gc.c.obj *vm.c.obj *parse.c.obj) .text*)
-        *(.fini)
-        /* Pull all c'tors into .text */
-        *crtbegin.o(.ctors)
-        *crtbegin?.o(.ctors)
-        *(EXCLUDE_FILE(*crtend?.o *crtend.o) .ctors)
-        *(SORT(.ctors.*))
-        *(.ctors)
-        /* Followed by destructors */
-        *crtbegin.o(.dtors)
-        *crtbegin?.o(.dtors)
-        *(EXCLUDE_FILE(*crtend?.o *crtend.o) .dtors)
-        *(SORT(.dtors.*))
-        *(.dtors)
 
-        *(.eh_frame*)
-        . = ALIGN(4);
+        KEEP (*(.init .init.*))
+        *(.text .text.*)
+        KEEP (*(.fini .fini.*))
+
+        /* preinit data */
+        . = ALIGN(4);        
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+		KEEP (*(SORT_BY_INIT_PRIORITY(.preinit_array.*)))
+		KEEP (*(.preinit_array))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+
+        /* init data */
+        . = ALIGN(4);        
+        PROVIDE_HIDDEN (__init_array_start = .);
+		KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+		KEEP (*(.init_array .ctors))
+        PROVIDE_HIDDEN (__init_array_end = .);
+
+        /* fini data */
+        . = ALIGN(4);        
+        PROVIDE_HIDDEN (__fini_array_start = .);
+		KEEP (*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+		KEEP (*(.fini_array .dtors))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+
+        *(.eh_frame*);
     } > FLASH
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
-        . = ALIGN(4);
+        *(.rodata .rodata.*)
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
-        . = ALIGN(4);
     } > FLASH
 
     .ARM.extab :
@@ -120,67 +123,35 @@ SECTIONS
         *(.binary_info.*)
     } > FLASH
     HIDDEN(__binary_info_end = .);
-    . = ALIGN(4);
 
     /* End of .text-like segments */
+    . = ALIGN(4);    
     HIDDEN(__etext = .);
 
    .ram_vector_table (COPY): {
         *(.ram_vector_table)
     } > RAM
 
-    .data : {
+    .data : ALIGN_WITH_INPUT {
         HIDDEN(__data_start__ = .);
-        *(vtable)
-
         *(.time_critical*)
-
-        /* remaining .text and .rodata; i.e. stuff we exclude above because we want it in RAM */
-        *(.text*)
-        . = ALIGN(4);
-        *(.rodata*)
-        . = ALIGN(4);
-
-        *(.data*)
-
-        . = ALIGN(4);
+        *(.data .data.*)
         *(.after_data.*)
+
+        /* mutex data */
         . = ALIGN(4);
-        /* preinit data */
         PROVIDE_HIDDEN (__mutex_array_start = .);
         KEEP(*(SORT(.mutex_array.*)))
         KEEP(*(.mutex_array))
         PROVIDE_HIDDEN (__mutex_array_end = .);
-
-        . = ALIGN(4);
-        /* preinit data */
-        PROVIDE_HIDDEN (__preinit_array_start = .);
-        KEEP(*(SORT(.preinit_array.*)))
-        KEEP(*(.preinit_array))
-        PROVIDE_HIDDEN (__preinit_array_end = .);
-
-        . = ALIGN(4);
-        /* init data */
-        PROVIDE_HIDDEN (__init_array_start = .);
-        KEEP(*(SORT(.init_array.*)))
-        KEEP(*(.init_array))
-        PROVIDE_HIDDEN (__init_array_end = .);
-
-        . = ALIGN(4);
-        /* finit data */
-        PROVIDE_HIDDEN (__fini_array_start = .);
-        *(SORT(.fini_array.*))
-        *(.fini_array)
-        PROVIDE_HIDDEN (__fini_array_end = .);
     } > RAM AT> FLASH
 
-	.tdata : {
+	.tdata : ALIGN_WITH_INPUT {
         HIDDEN(__tdata_source = LOADADDR(.tdata));
         HIDDEN(__tls_base = ADDR(.tdata));
         HIDDEN(__tdata_start = .);
-		*(.tdata .tdata.* .gnu.linkonce.td.*)
+		*(.tdata .tdata.*)
 
-        . = ALIGN(4);
         /* All data end */
         HIDDEN(__data_end__ = .);        
 		HIDDEN(__tdata_end = .);
@@ -193,10 +164,9 @@ SECTIONS
 	.tbss (NOLOAD) : {
         HIDDEN(__bss_start__ = .);
         HIDDEN(__tbss_start = .);
-		*(.tbss .tbss.* .gnu.linkonce.tb.*)
-		*(.tcommon)
-		PROVIDE( __tls_end = . );
-		PROVIDE( __tbss_end = . );
+		*(.tbss .tbss.*)
+		HIDDEN( __tls_end = . );
+		HIDDEN( __tbss_end = . );
 	} > RAM
 
 	PROVIDE_HIDDEN( __tbss_offset = ADDR(.tbss) - ADDR(.tdata) );
@@ -206,23 +176,30 @@ SECTIONS
 	PROVIDE_HIDDEN( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
 	PROVIDE_HIDDEN( __arm64_tls_tcb_offset = MAX(16, __tls_align) );
 
-    .uninitialized_data (COPY): {
-        . = ALIGN(4);
+	/*
+	 * Unlike ld.lld, ld.bfd does not advance the location counter for
+	 * .tbss, but we actually need memory allocated for .tbss as we use
+	 * it for the initial TLS storage.
+	 * Create special section here just to make room.
+	 */
+    .tbss_space (NOLOAD) : {
+		. = ADDR(.tbss);
+		. = . + SIZEOF(.tbss);
+	} > RAM
+
+    .uninitialized_data (NOLOAD) : {
         *(.uninitialized_data*)
     } > RAM
 
     /* bss without zero init on startup */
-    .uninitialized_bss (NOLOAD): {
-        . = ALIGN(4);
+    .uninitialized_bss (NOLOAD) : {
         *(.uninitialized_bss*)
     } > RAM
 
     .bss (NOLOAD) : {
-        . = ALIGN(4);
-        
-        *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
-        *(COMMON)
-        . = ALIGN(4);
+        *(.bss .bss.*)
+        /* bss_end needs alignment because of Pico SDK's crt0 implementation */
+        .  = ALIGN(4);
         HIDDEN(__bss_end__ = .);
 
         HIDDEN(__end__ = .);

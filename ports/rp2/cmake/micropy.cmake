@@ -32,7 +32,7 @@ function(add_micropy_extension_library target lib)
         target_link_libraries(${target} micropython_import ${lib})
         target_link_options(${target} PRIVATE
             LINKER:--script=${MICROPY_PORT_DIR}/memmap_ext.ld
-            LINKER:--no-warn-rwx-segments
+            # LINKER:--no-warn-rwx-segments
             LINKER:-Map=$<TARGET_FILE:${target}>.map
         )
         set_target_properties(${target} PROPERTIES NEWLIB_DYNLINK_OPTIONS "--entry;0x6000000E;mp_extmod_module")
@@ -41,7 +41,7 @@ function(add_micropy_extension_library target lib)
         target_compile_definitions(${lib} INTERFACE
             MICROPY_PY_EXTENSION
             NO_QSTR
-            MP_QSTRDEFSFILE=${genhdr_dir}/${target}.qstrdefs.h
+            MP_QSTRDEFSFILE="${genhdr_dir}/${target}.qstrdefs.h"
         )    
         add_custom_command(
             OUTPUT ${genhdr_dir}/${target}.qstrdefs.h ${genhdr_dir}/${target}.qstrdefs.c
@@ -54,6 +54,7 @@ function(add_micropy_extension_library target lib)
             ${genhdr_dir}/${target}.qstrdefs.c
         )
         add_import_library(${target}_import ${target})
+        add_dependencies(${target} ${MICROPY_TARGET})
     else()
         target_link_libraries(${MICROPY_TARGET} ${lib})
     endif()
@@ -549,12 +550,11 @@ add_custom_command(
 if(MICROPY_DYNLINK)
     add_import_library(micropython_import ${MICROPY_TARGET})
 
-    # Explicitly add certain objects from libc_nano.a to support dynamic linking
-    include(newlib_obj.cmake)
-    get_target_property(DIR extract_stdlib BINARY_DIR)
-    list(TRANSFORM STDLIB_OBJECTS PREPEND "${DIR}/stdlib/")
+    # Explicitly add certain objects from libc.a to support dynamic linking
+    include(${MICROPY_PORT_DIR}/cmake/picolibc_objs.cmake)
+    list(TRANSFORM LIBC_OBJECTS PREPEND ${CMAKE_BINARY_DIR}/newlib/)
     target_sources(${MICROPY_TARGET} PRIVATE
-        ${STDLIB_OBJECTS}
+        ${LIBC_OBJECTS}
     )
-    add_dependencies(${MICROPY_TARGET} extract_stdlib)
+    add_dependencies(${MICROPY_TARGET} extract_libc)
 endif()

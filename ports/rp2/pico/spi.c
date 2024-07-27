@@ -15,7 +15,7 @@ struct pico_spi_ll pico_spis_ll[NUM_SPIS] = {
     { .inst = spi1, 0 },
 };
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void pico_spi_init_init(void) {
     for (int i = 0; i < NUM_SPIS; i++) {
         pico_spis_ll[i].mutex = xSemaphoreCreateMutexStatic(&pico_spis_ll[i].buffer);

@@ -12,7 +12,7 @@ static SemaphoreHandle_t thread_mutex;
 
 static thread_t *thread_list;
 
-__attribute__((constructor))
+__attribute__((constructor, visibility("hidden")))
 void thread_init(void) {
     static StaticSemaphore_t buffer;
     thread_mutex = xSemaphoreCreateMutexStatic(&buffer);

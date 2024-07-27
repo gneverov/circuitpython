@@ -7,8 +7,6 @@
 #include "hardware/flash.h"
 
 
-void flash_heap_init(void);
-
 typedef uint8_t flash_page_t[FLASH_SECTOR_SIZE];
 
 typedef uintptr_t flash_ptr_t;

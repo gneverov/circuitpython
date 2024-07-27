@@ -18,7 +18,8 @@
 
 typedef char elf_str_t[256];
 
-static const flash_heap_header_t *last_loaded;
+// Variable is properly initialized in dl_init.
+static const flash_heap_header_t *last_loaded = (void *)-1;
 
 static int dl_error;
 static char dl_error_msg[256];
@@ -46,6 +47,10 @@ struct dl_link_state {
 
     dl_post_link_fun_t post_link;
 };
+
+static void dl_seterror() {
+    dl_error = errno;
+}
 
 int dl_loader_open(dl_loader_t *loader) {
     if (flash_heap_open(&loader->heap, DL_FLASH_HEAP_TYPE) < 0) {
@@ -75,7 +80,8 @@ flash_ptr_t dl_loader_relocate(const dl_loader_t *loader, flash_ptr_t addr) {
         case 2:
             return (addr - SRAM_BASE) + loader->ram_base;
         default:
-            dl_error = errno = EFAULT;
+            errno = EFAULT;
+            dl_seterror();
             return 0;
     }
 }
@@ -87,7 +93,7 @@ int dl_loader_read(dl_loader_t *loader, void *buffer, size_t length, flash_ptr_t
     }
     int ret = flash_heap_pread(&loader->heap, buffer, length, addr);
     if (ret < 0) {
-        dl_error = errno;
+        dl_seterror();
     }
     return ret;
 }
@@ -99,7 +105,7 @@ int dl_loader_write(dl_loader_t *loader, const void *buffer, size_t length, flas
     }
     int ret = flash_heap_pwrite(&loader->heap, buffer, length, addr);
     if (ret < 0) {
-        dl_error = errno;
+        dl_seterror();
     }
     return ret;
 }
@@ -187,7 +193,8 @@ flash_ptr_t dl_linker_map(const dl_linker_t *linker, flash_ptr_t addr) {
         return ret;
     }
 error:
-    dl_error = errno = EFAULT;
+    errno = EFAULT;
+    dl_seterror();
     // snprintf(dl_error_msg, sizeof(dl_error_msg), "bad vaddr mapping %08x", addr);
     return 0;
 }
@@ -271,7 +278,7 @@ int dl_link(dl_loader_t *loader) {
     return 0;
 
 error:
-    dl_error = errno;
+    dl_seterror();
     return -1;
 }
 
@@ -327,7 +334,7 @@ int dl_flash(const char *file) {
     return 0;
 
 cleanup:
-    dl_error = errno;
+    dl_seterror();
     if (fd >= 0) {
         close(fd);
     }
@@ -611,7 +618,7 @@ int dl_linker_read(const dl_linker_t *linker, void *buffer, size_t length, flash
     }
     int ret = flash_heap_pread(&linker->loader->heap, buffer, length, addr);
     if (ret < 0) {
-        dl_error = errno;
+        dl_seterror();
     }
     return ret;
 }
@@ -623,7 +630,7 @@ int dl_linker_write(const dl_linker_t *linker, const void *buffer, size_t length
     }
     int ret = flash_heap_pwrite(&linker->loader->heap, buffer, length, addr);
     if (ret < 0) {
-        dl_error = errno;
+        dl_seterror();
     }
     return ret;
 }
@@ -720,12 +727,9 @@ char *dlerror(void) {
     return NULL;
 }
 
-void dl_init(Elf32_Sword tag) {
+static const flash_heap_header_t *dl_finit(Elf32_Sword tag) {
     const flash_heap_header_t *header = NULL;
-    while (flash_heap_iterate(&header)) {
-        if (header->type != DL_FLASH_HEAP_TYPE) {
-            continue;
-        }
+    while (dl_iterate(&header)) {
         const Elf32_Dyn *dyn = header->entry;
         while (dyn->d_tag != DT_NULL) {
             if (dyn->d_tag == tag) {
@@ -734,5 +738,16 @@ void dl_init(Elf32_Sword tag) {
             dyn++;
         }
     }
-    last_loaded = header;
+    return header;
+}
+
+__attribute__((constructor, visibility("hidden")))
+void dl_init(void) {
+    last_loaded = dl_finit(DT_INIT);
+}
+
+__attribute__((destructor, visibility("hidden")))
+void dl_fini(void) {
+    last_loaded = dl_finit(DT_FINI);
+    last_loaded = NULL;
 }

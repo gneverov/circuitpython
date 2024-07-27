@@ -83,6 +83,33 @@ for section in elffile.iter_sections(elf32.SHT_SYMTAB):
             continue
         if sym.struct.st_bind != elf32.STB_LOCAL and sym.struct.st_visibility == elf32.STV_DEFAULT:
             mk_dyn(sym)
+        if sym.name.startswith("__") and sym.name.endswith("_veneer"):
+            # GCC with -q does not emit relocations within generated veneer functions. Therefore we
+            # create our own such relocations here. The symbol for the real function is assumed to
+            # be at offset 12 within the veneer.
+            r_offset = (sym.struct.st_value & 0xFFFFFFFE) + 12
+            offset = r_offset - sym.section.struct.sh_addr
+            real_sym_value = int.from_bytes(sym.section.data[offset : offset + 4], "little")
+
+            real_sym_name = sym.name[2:-7]
+            real_sym = [
+                x
+                for x in section.get_all_symbols(real_sym_name)
+                if x.struct.st_value == real_sym_value
+            ]
+            if not real_sym:
+                raise ValueError(
+                    f"cannot find symbol '{real_sym_name}' for veneer '{sym.name}' with value 0x{real_sym_value:08x}"
+                )
+
+            dynrela.relocs.append(
+                RelocationWithAddend(
+                    mk_dyn(real_sym[0]),
+                    r_offset=r_offset,
+                    r_type=elf32.R_ARM.R_ARM_ABS32,
+                    r_addend=0,
+                )
+            )
 
 
 def decode_addend(r_type, insn):
@@ -123,6 +150,7 @@ def undo_relocation(r_type, S, P, A):
 
 for section in elffile.iter_sections(elf32.SHT_REL):
     if not (section.info.struct.sh_flags & elf32.SHF_ALLOC):
+        section.delete()
         continue
     for rel in section.relocs:
         sym = rel.symbol
@@ -214,17 +242,17 @@ if len(dynrel.relocs):
 
 dynamic.dyns.append(DynEntry(d_tag=elf32.DT_FLAGS, d_val=elf32.DF_BIND_NOW | elf32.DF_TEXTREL))
 
-init = dynsym.get_symbol("__dl_init")
+init = dynsym.get_first_symbol("__dl_init")
 if init:
     dynamic.dyns.append(DynEntry(d_tag=elf32.DT_INIT, d_ptr=init.struct.st_value))
 
-fini = dynsym.get_symbol("__dl_fini")
+fini = dynsym.get_first_symbol("__dl_fini")
 if fini:
     dynamic.dyns.append(DynEntry(d_tag=elf32.DT_FINI, d_ptr=fini.struct.st_value))
 
 for tag, symbol_name in args.dyn_entries:
     tag = int(tag, 16)
-    symbol = dynsym.get_symbol(symbol_name)
+    symbol = dynsym.get_first_symbol(symbol_name)
     if symbol:
         dynamic.dyns.append(DynEntry(d_tag=tag, d_ptr=symbol.struct.st_value))
 
