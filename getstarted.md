@@ -5,7 +5,7 @@ MicroPythonRT takes advantage of its dynamic linking functionality to build a bo
 
 ### Download
 Download a firmware UF2 image for your board:
-- [RPI PICO](https://github.com/gneverov/micropythonrt/releases/download/v0.0.1/firmware.uf2)
+- [RPI PICO](https://github.com/gneverov/micropythonrt/releases/download/v0.0.2/firmware.uf2)
 
 Only the RPI PICO and RPI PICO W boards are supported. This firmware may also work on other RP2040 boards, but it is not tested.
 
@@ -43,9 +43,9 @@ fsutil.uf2()
 ```
 
 Next choose the extension module you wish to flash. The following are provided prebuilt.
-- [audio_mp3](https://github.com/gneverov/micropythonrt/releases/download/v0.0.1/libaudio_mp3.uf2): An MP3 audio stream decoder.
-- [cyw43](https://github.com/gneverov/micropythonrt/releases/download/v0.0.1/libcyw43.uf2): The wifi driver for the PICO W.
-- [lvgl](https://github.com/gneverov/micropythonrt/releases/download/v0.0.1/liblvgl.uf2): The [LVGL](https://github.com/lvgl/lvgl) graphics library.
+- [audio_mp3](https://github.com/gneverov/micropythonrt/releases/download/v0.0.2/libaudio_mp3.uf2): An MP3 audio stream decoder.
+- [cyw43](https://github.com/gneverov/micropythonrt/releases/download/v0.0.2/libcyw43.uf2): The wifi driver for the PICO W.
+- [lvgl](https://github.com/gneverov/micropythonrt/releases/download/v0.0.2/liblvgl.uf2): The [LVGL](https://github.com/lvgl/lvgl) graphics library.
 
 Download a UF2 file and copy it to the UF2 drive the same way you copied the firmware UF2 file.
 

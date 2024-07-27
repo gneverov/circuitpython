@@ -12,7 +12,7 @@ sudo apt-get install arm-none-eabi-gcc
 ```
 might install a version of GCC configured with TLS.
 
-If that fails then you may need to build the toolchain yourself.
+If that fails then you may need to build the toolchain yourself. See this [repo](https://github.com/gneverov/gcc-cross-compiler) for an example CMake build machinery for building the GNU toolchain.
 
 ## Building
 Meson (the Picolibc build system) expects to find a suitable `arm-none-eabi-gcc` compiler on the PATH.
