@@ -15,7 +15,7 @@ static void *pico_pio_contexts[NUM_PIOS][NUM_PIO_INTERRUPT_SOURCES];
 
 
 PIO pico_pio(uint pio_index) {
-    valid_params_if(PIO, pio_index < NUM_PIOS);
+    valid_params_if(HARDWARE_PIO, pio_index < NUM_PIOS);
     return pio_index == 1 ? pio1 : pio0;
 }
 

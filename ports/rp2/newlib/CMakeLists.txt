@@ -78,7 +78,10 @@ function(add_import_library TARGET EXE)
     )
     target_include_directories(${TARGET} INTERFACE
         $<TARGET_PROPERTY:${EXE},INCLUDE_DIRECTORIES>
-    )    
+    )
+    target_compile_definitions(${TARGET} INTERFACE
+        $<TARGET_PROPERTY:${EXE},COMPILE_DEFINITIONS>
+    )     
     add_dependencies(${TARGET} ${EXE})
 endfunction()
 
@@ -117,12 +120,12 @@ endfunction()
 # Targets for extracting objects out of libc
 # ---
 # Execute "ar t" to list objects in libc archive
-execute_process(COMMAND ${CMAKE_AR} t ${PICOLIBC_SYSROOT}/lib/libc.a OUTPUT_VARIABLE LIBC_OBJS )
+execute_process(COMMAND ${CMAKE_AR} t ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}/libc.a OUTPUT_VARIABLE LIBC_OBJS )
 separate_arguments(LIBC_OBJS UNIX_COMMAND ${LIBC_OBJS})
 
 # Extract object files ("ar x") into output directory
 add_custom_target(extract_libc
-    COMMAND ${CMAKE_AR} x ${PICOLIBC_SYSROOT}/lib/libc.a
+    COMMAND ${CMAKE_AR} x ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}/libc.a
     BYPRODUCTS ${LIBC_OBJS}
     VERBATIM
 )

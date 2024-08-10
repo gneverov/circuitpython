@@ -75,6 +75,10 @@ SECTIONS
     /* End of .text-like segments */
     HIDDEN(__etext = .);
 
+    .uninitialized_data (NOLOAD) : {
+        *(.uninitialized_data*)
+    } > RAM
+
     .data : ALIGN_WITH_INPUT {
         HIDDEN(__data_start__ = .);
         *(.time_critical*)
@@ -92,15 +96,6 @@ SECTIONS
         HIDDEN(__data_end__ = .);
     } > RAM AT> FLASH
     
-    .uninitialized_data (NOLOAD) : {
-        *(.uninitialized_data*)
-    } > RAM
-
-    /* bss without zero init on startup */
-    .uninitialized_bss (NOLOAD) : {
-        *(.uninitialized_bss*)
-    } > RAM
-
     .bss (NOLOAD) : {
         HIDDEN(__bss_start__ = .);
         *(.bss .bss.*)

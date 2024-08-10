@@ -86,7 +86,7 @@ static const struct vfs_file_vtable terminal_uart_vtable = {
 };
 
 void *terminal_uart_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
-    uart_inst_t *uart = PICO_DEFAULT_UART_INSTANCE;
+    uart_inst_t *uart = uart_default;
     switch (dev) {
         case DEV_TTYS0:
             uart = uart0;

@@ -195,7 +195,9 @@ static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
     rosc_hw->ctrl = ROSC_CTRL_ENABLE_VALUE_ENABLE << ROSC_CTRL_ENABLE_LSB;
 
     // Bring back all clocks.
-    clocks_init();
+    // clocks_init();
+    // Will be fixed upstream
+    assert(0);
     mp_thread_end_atomic_section(my_interrupts);
 }
 

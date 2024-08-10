@@ -468,7 +468,7 @@ set_source_files_properties(
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_FLOAT_PROPAGATE_NANS=1
     PICO_HEAP_SIZE=0
-    PICO_STACK_SIZE=1024
+    PICO_STACK_SIZE=0
     PICO_CORE1_STACK_SIZE=0
     PICO_MAX_SHARED_IRQ_HANDLERS=8 # we need more than the default
     PICO_PROGRAM_NAME="MicroPythonRT"

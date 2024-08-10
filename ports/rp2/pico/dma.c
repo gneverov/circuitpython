@@ -56,9 +56,9 @@ void pico_dma_debug(uint channel) {
     printf("  enabled:     %d\n", !!(hw->ctrl_trig & 1));
     printf("  ctrl:        %08lx\n", hw->ctrl_trig);
 
-    struct dma_debug_hw_channel *debug_hw = &dma_debug_hw->ch[channel];
-    printf("  ctrdeq:      %lu\n", debug_hw->ctrdeq);
-    printf("  tcr:         %lu\n", debug_hw->tcr);
+    dma_debug_channel_hw_t *debug_hw = &dma_debug_hw->ch[channel];
+    printf("  ctrdeq:      %lu\n", debug_hw->dbg_ctdreq);
+    printf("  tcr:         %lu\n", debug_hw->dbg_tcr);
 
     uint bit = 1u << channel;
     printf("  inte:        %d\n", !!(dma_hw->inte1 & bit));

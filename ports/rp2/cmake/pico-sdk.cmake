@@ -1,3 +1,4 @@
+set(PICO_CLIB picolibc)
 set(PICO_STDIO_UART OFF)
 pico_sdk_init()
 
@@ -18,10 +19,3 @@ target_remove_property_value(pico_runtime INTERFACE_LINK_OPTIONS --specs=nosys.s
 # We use the the standard FreeRTOS mode of TinyUSB, not the specialized Pico mode.
 target_remove_property_value(tinyusb_common_base INTERFACE_COMPILE_DEFINITIONS CFG_TUSB_OS=OPT_OS_PICO)
 target_compile_definitions(tinyusb_common_base INTERFACE CFG_TUSB_OS=OPT_OS_FREERTOS)
-
-# exit is defined by Picolibc. Rename the exit definition from pico_runtime to prevent collision.
-set_property(SOURCE
-        ${PICO_SDK_PATH}/src/rp2_common/pico_runtime/runtime.c
-        TARGET pico_runtime
-        APPEND PROPERTY COMPILE_DEFINITIONS "exit=pico_exit"
-    )

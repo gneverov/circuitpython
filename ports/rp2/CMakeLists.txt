@@ -61,9 +61,19 @@ project(${MICROPY_TARGET})
 # Calls pico_sdk_init()
 include("cmake/pico-sdk.cmake")
 
-set(PICOLIBC_SYSROOT ${CMAKE_CURRENT_SOURCE_DIR}/build-picolibc/install)
+# Find the location of picolibc based on the location of GCC
+if(NOT DEFINED PICOLIBC_SYSROOT)
+    set(PICOLIBC_SYSROOT ${CMAKE_C_COMPILER})
+    cmake_path(GET PICOLIBC_SYSROOT PARENT_PATH PICOLIBC_SYSROOT)
+    cmake_path(APPEND PICOLIBC_SYSROOT .. picolibc)
+    cmake_path(NORMAL_PATH PICOLIBC_SYSROOT)
+endif()
+if(NOT EXISTS ${PICOLIBC_SYSROOT})
+    message(FATAL_ERROR "Picolibc not found at ${PICOLIBC_SYSROOT}")
+endif()
+set(PICOLIBC_BUILDTYPE thumb/v6-m/nofp)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${PICOLIBC_SYSROOT}/include -ftls-model=local-exec")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostartfiles -L${PICOLIBC_SYSROOT}/lib")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostartfiles -L${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}")
 
 add_subdirectory(freertos)
 

@@ -72,12 +72,6 @@ int getpid(void) {
     return task_status.xTaskNumber;
 }
 
-int gettimeofday(struct timeval *__restrict tv, void *__restrict tz) {
-    // Forward to Pico SDK's gettimeofday function.
-    extern int _gettimeofday(struct timeval *__restrict tv, __unused void *__restrict tz);
-    return _gettimeofday(tv, tz);
-}
-
 int isatty(int fd) {
     struct vfs_file *file = vfs_acquire_file(fd);
     if (!file) {
@@ -224,12 +218,6 @@ exit:
     return ret;
 }
 
-void *sbrk(ptrdiff_t incr) {
-    // Forward to Pico SDK's sbrk function.
-    extern void *_sbrk(int incr);
-    return _sbrk(incr);
-}
-
 int stat(const char *file, struct stat *pstat) {
     vfs_path_buffer_t vfs_path;
     struct vfs_mount *vfs = vfs_acquire_mount(file, &vfs_path);
@@ -245,12 +233,6 @@ int stat(const char *file, struct stat *pstat) {
     }
     vfs_release_mount(vfs);
     return ret;
-}
-
-clock_t times(struct tms *tms) {
-    // Forward to Pico SDK's times function.
-    extern int _times(struct tms *tms);
-    return _times(tms);
 }
 
 __attribute__((noinline))

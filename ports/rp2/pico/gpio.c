@@ -32,7 +32,7 @@ void pico_gpio_init(void) {
  * TODO: similar wrappers for irq_set_mask_enabled and irq_is_enabled.
  */
 void pico_gpio_set_irq_enabled(uint gpio, uint32_t events, bool enabled) {
-    io_irq_ctrl_hw_t *irq_ctrl_base = &iobank0_hw->proc0_irq_ctrl + INTERRUPT_CORE_NUM;
+    io_bank0_irq_ctrl_hw_t *irq_ctrl_base = &io_bank0_hw->proc0_irq_ctrl + INTERRUPT_CORE_NUM;
 
     // Clear stale events which might cause immediate spurious handler entry
     gpio_acknowledge_irq(gpio, events);
@@ -78,7 +78,7 @@ bool pico_gpio_remove_handler(uint gpio) {
 
 void pico_gpio_debug(uint gpio) {
     check_gpio_param(gpio);
-    io_irq_ctrl_hw_t *irq_ctrl_base = &iobank0_hw->proc0_irq_ctrl + INTERRUPT_CORE_NUM;
+    io_bank0_irq_ctrl_hw_t *irq_ctrl_base = &io_bank0_hw->proc0_irq_ctrl + INTERRUPT_CORE_NUM;
     printf("gpio %u\n", gpio);
     printf("  function:    %d\n", gpio_get_function(gpio));
     printf("  pulls:       ");

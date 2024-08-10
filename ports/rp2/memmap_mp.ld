@@ -67,6 +67,8 @@ SECTIONS
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
         HIDDEN(__binary_info_header_end = .);
+        KEEP (*(.embedded_block))
+        HIDDEN(__embedded_block_end = .);
         KEEP (*(.reset))
 
         KEEP (*(.init .init.*))
@@ -132,6 +134,10 @@ SECTIONS
         *(.ram_vector_table)
     } > RAM
 
+    .uninitialized_data (NOLOAD) : {
+        *(.uninitialized_data*)
+    } > RAM
+
     .data : ALIGN_WITH_INPUT {
         HIDDEN(__data_start__ = .);
         *(.time_critical*)
@@ -187,15 +193,6 @@ SECTIONS
 		. = . + SIZEOF(.tbss);
 	} > RAM
 
-    .uninitialized_data (NOLOAD) : {
-        *(.uninitialized_data*)
-    } > RAM
-
-    /* bss without zero init on startup */
-    .uninitialized_bss (NOLOAD) : {
-        *(.uninitialized_bss*)
-    } > RAM
-
     .bss (NOLOAD) : {
         *(.bss .bss.*)
         /* bss_end needs alignment because of Pico SDK's crt0 implementation */
@@ -227,6 +224,8 @@ SECTIONS
     HIDDEN(__StackOneBottom = ORIGIN(SCRATCH_X));
     HIDDEN(__StackBottom = ORIGIN(SCRATCH_Y));
     PROVIDE_HIDDEN(__stack = __StackTop);
+    PROVIDE_HIDDEN(__heap_start = __end__);
+    PROVIDE_HIDDEN(__heap_end = __HeapLimit);
 
     .flash_heap (READONLY) : ALIGN(4k) {
         HIDDEN(__flash_heap_start = .);
