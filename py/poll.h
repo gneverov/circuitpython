@@ -43,3 +43,7 @@ bool mp_poll_wait(mp_obj_poll_t *self, TickType_t *timeout);
 void mp_poll_deinit(mp_obj_poll_t *self);
 
 mp_uint_t mp_poll_block(mp_obj_t stream_obj, void *buf, mp_uint_t size, int *errcode, mp_uint_t (*func)(mp_obj_t, void *, mp_uint_t, int *), mp_uint_t events, TickType_t xTicksToWait, bool greedy);
+
+uint32_t mp_ulTaskNotifyTake(BaseType_t xClearCountOnExit, TickType_t *pxTicksToWait);
+
+void mp_vTaskDelay(TickType_t xTicksToDelay);

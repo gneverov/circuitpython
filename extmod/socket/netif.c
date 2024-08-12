@@ -176,7 +176,12 @@ static void netif_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind
 
     char address[IP4ADDR_STRLEN_MAX];
     ip4addr_ntoa_r(netif_ip_addr4(&netif), address, IP4ADDR_STRLEN_MAX);
-    mp_printf(print, "NetInterface(name=%s, address=%s, link=%s)", name, address, netif_is_link_up(&netif) ? "up" : "down");
+    if (netif_is_up(&netif)) {
+        mp_printf(print, "NetInterface(name=%s, address=%s, link=%s)", name, address, netif_is_link_up(&netif) ? "up" : "down");
+    }
+    else {
+        mp_printf(print, "NetInterface(name=%s, disabled)", name);
+    }
 }
 
 static err_t netif_lwip_configure(struct netif *netif, va_list args) {
@@ -453,7 +458,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     iter, netif_list_getiter
     );
 
-static mp_obj_t netif_dns_servers() {
+static mp_obj_t netif_dns_servers_get(void) {
     ip_addr_t dns_servers[DNS_MAX_SERVERS];
     LOCK_TCPIP_CORE();
     for (size_t i = 0; i < DNS_MAX_SERVERS; i++) {
@@ -472,12 +477,41 @@ static mp_obj_t netif_dns_servers() {
     return mp_obj_new_list(len, items);
 }
 
+static mp_obj_t netif_dns_servers_set(mp_obj_t value) {
+    size_t len = 0;
+    mp_obj_t *items;
+    mp_obj_list_get(value, &len, &items);
+    if (len > DNS_MAX_SERVERS) {
+        mp_raise_ValueError(NULL);
+    }
+    
+    ip_addr_t dns_servers[DNS_MAX_SERVERS];
+    for (size_t i = 0; i < len; i++) {
+        netutils_parse_ipv4_addr(items[i], (uint8_t *)&dns_servers[i], NETUTILS_BIG);
+    }
+    
+    LOCK_TCPIP_CORE();
+    for (size_t i = 0; i < DNS_MAX_SERVERS; i++) {
+        dns_setserver(i, (i < len) ? &dns_servers[i] : NULL);
+    }
+    UNLOCK_TCPIP_CORE();
+    return mp_const_none;
+}
+
+static mp_obj_t netif_dns_servers(size_t n_args, const mp_obj_t *args) {
+    if (n_args == 0) {
+        return netif_dns_servers_get();
+    }
+    else {
+        return netif_dns_servers_set(args[0]);
+    }
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(netif_dns_servers_obj, 0, 1, netif_dns_servers);
+
 static mp_obj_t netif_getattr(mp_obj_t attr) {
     switch (MP_OBJ_QSTR_VALUE(attr)) {
         case MP_QSTR_netif:
             return netif_list_make_new(&netif_list_type, 0, NULL);
-        case MP_QSTR_dns_servers:
-            return netif_dns_servers();
         default:
             return MP_OBJ_NULL;
     }

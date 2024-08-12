@@ -140,3 +140,35 @@ mp_uint_t mp_poll_block(mp_obj_t stream_obj, void *buf, mp_uint_t size, int *err
     mp_poll_deinit(&poll);
     return total_ret;
 }
+
+uint32_t mp_ulTaskNotifyTake(BaseType_t xClearCountOnExit, TickType_t *pxTicksToWait) {
+    uint32_t result = 0;
+    TimeOut_t xTimeOut;
+    vTaskSetTimeOutState(&xTimeOut);
+    while (!result && !xTaskCheckForTimeOut(&xTimeOut, pxTicksToWait)) {
+        while (thread_enable_interrupt()) {
+            mp_handle_pending(true);
+        }
+
+        MP_THREAD_GIL_EXIT();
+        result = ulTaskNotifyTake(xClearCountOnExit, *pxTicksToWait);
+        thread_disable_interrupt();
+        MP_THREAD_GIL_ENTER();
+    }
+    return result;
+}
+
+void mp_vTaskDelay(TickType_t xTicksToDelay) {
+    TimeOut_t xTimeOut;
+    vTaskSetTimeOutState(&xTimeOut);
+    while (!xTaskCheckForTimeOut(&xTimeOut, &xTicksToDelay)) {
+        while (thread_enable_interrupt()) {
+            mp_handle_pending(true);
+        }
+
+        MP_THREAD_GIL_EXIT();
+        vTaskDelay(xTicksToDelay);
+        thread_disable_interrupt();
+        MP_THREAD_GIL_ENTER();
+    }
+}

@@ -77,7 +77,6 @@
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/unique_id.h"
-#include "hardware/rtc.h"
 #include "hardware/structs/rosc.h"
 
 
@@ -104,20 +103,6 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
     mp_thread_init();
     mp_thread_set_state(&mp_state_ctx.thread);
     #endif
-
-    // Start and initialise the RTC
-    datetime_t t = {
-        .year = 2021,
-        .month = 1,
-        .day = 1,
-        .dotw = 4, // 0 is Monday, so 4 is Friday
-        .hour = 0,
-        .min = 0,
-        .sec = 0,
-    };
-    rtc_init();
-    rtc_set_datetime(&t);
-    mp_hal_time_ns_set_from_rtc();
 
     // Initialise stack extents and GC heap.
     mp_stack_set_top(stack_top);

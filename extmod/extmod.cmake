@@ -80,7 +80,10 @@ if(MICROPY_FREERTOS)
             ${MICROPY_EXTMOD_DIR}/socket/dns.c
             ${MICROPY_EXTMOD_DIR}/socket/tcp.c        
             ${MICROPY_EXTMOD_DIR}/socket/udp.c
+            ${MICROPY_EXTMOD_DIR}/socket/modnetwork.c
             ${MICROPY_EXTMOD_DIR}/socket/netif.c
+            ${MICROPY_EXTMOD_DIR}/socket/ping.c
+            ${MICROPY_EXTMOD_DIR}/socket/sntp.c
         )
     endif()
     

@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "./dns.h"
-#include "./netif.h"
 #include "./socket.h"
 #include "./tcp.h"
 #include "./udp.h"
@@ -772,9 +771,6 @@ static const mp_rom_map_elem_t socket_module_globals_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_create_connection),   MP_ROM_PTR(&socket_create_connection_obj) },
     { MP_ROM_QSTR(MP_QSTR_create_server),   MP_ROM_PTR(&socket_create_server_obj) },
-
-    { MP_ROM_QSTR(MP_QSTR_NetInterface),    MP_ROM_PTR(&netif_type) },
-    { MP_ROM_QSTR(MP_QSTR___getattr__),     MP_ROM_PTR(&netif_getattr_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_AF_INET),         MP_ROM_INT(AF_INET) },
     { MP_ROM_QSTR(MP_QSTR_SOCK_STREAM),     MP_ROM_INT(SOCK_STREAM) },

@@ -24,6 +24,7 @@
 #define LWIP_IPV6                       0
 #define LWIP_DHCP                       1
 #define LWIP_DHCP_CHECK_LINK_UP         1
+#define LWIP_DHCP_GET_NTP_SRV           1
 #define DHCP_DOES_ARP_CHECK             0 // to speed DHCP up
 #define LWIP_DNS                        1
 #define LWIP_DNS_SUPPORT_MDNS_QUERIES   1
@@ -35,8 +36,8 @@
 #define SO_REUSE                        1
 #define TCP_LISTEN_BACKLOG              1
 
-extern uint32_t rosc_random_u32(void);
-#define LWIP_RAND() rosc_random_u32()
+#define IP_OPTIONS_ALLOWED              0
+#define IP_DEFAULT_TTL                 64
 
 #define MEM_SIZE (256 << 10)
 #define TCP_MSS (1460)
@@ -61,5 +62,19 @@ void sys_lock_tcpip_core(void);
 #define LOCK_TCPIP_CORE()          sys_lock_tcpip_core()
 void sys_unlock_tcpip_core(void);
 #define UNLOCK_TCPIP_CORE()        sys_unlock_tcpip_core()
+
+#include <sys/time.h>
+#define SNTP_SET_SYSTEM_TIME_US(sec, us)    do { \
+        struct timeval tv = { (sec), (us) }; \
+        settimeofday(&tv, NULL); \
+} while (0)
+#define SNTP_GET_SYSTEM_TIME(sec, us)       do { \
+        struct timeval tv; \
+        gettimeofday(&tv, NULL); \
+        (sec) = tv.tv_sec; \
+        (us) = tv.tv_usec; \
+} while (0)
+#define SNTP_CHECK_RESPONSE             2
+#define SNTP_COMP_ROUNDTRIP             1
 
 #endif // LWIPOPTS_H

@@ -220,6 +220,7 @@ if(MICROPY_PY_LWIP)
         pico_lwip_contrib_freertos
         # pico_lwip_freertos
         pico_lwip_mdns
+        pico_lwip_sntp
     )
     target_sources(${MICROPY_TARGET} PRIVATE
         ${PICO_LWIP_PATH}/src/api/err.c

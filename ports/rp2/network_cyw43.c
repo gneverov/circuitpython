@@ -33,6 +33,7 @@
 #include "py/runtime.h"
 #include "py/objstr.h"
 #include "py/mphal.h"
+#include "py/poll.h"
 
 #if MICROPY_PY_NETWORK_CYW43
 
@@ -143,7 +144,10 @@ static mp_obj_t network_cyw43_active(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(network_cyw43_active_obj, 1, 2, network_cyw43_active);
 
+// Shared state object for performing the asynchronous scan
 typedef struct {
+    nlr_jump_callback_node_t nlr_callback;
+    struct pbuf *pbuf;
     cyw43_t *cyw;
     TaskHandle_t task;
     struct pbuf *results;
@@ -152,6 +156,7 @@ typedef struct {
     StaticSemaphore_t mutex_buffer;
 } network_cyw43_scan_t;
 
+// Callback from the cyw43 driver via cyw43_wifi_scan
 static int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
     struct pbuf *result = pbuf_alloc(PBUF_RAW, sizeof(*res), PBUF_RAM);
     if (!result) {
@@ -169,7 +174,6 @@ static int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
             results = &(*results)->next;
         }
         *results = result;
-        // xTaskNotifyGive(pcb->task);
     } else {
         pbuf_free(result);
     }
@@ -178,6 +182,7 @@ static int network_cyw43_scan_cb(void *env, const cyw43_ev_scan_result_t *res) {
     return 0;
 }
 
+// Callback from the FreeRTOS timer
 void network_cyw43_scan_timer(TimerHandle_t xTimer) {
     struct pbuf *pbuf = pvTimerGetTimerID(xTimer);
     network_cyw43_scan_t *pcb = pbuf->payload;
@@ -197,7 +202,9 @@ void network_cyw43_scan_timer(TimerHandle_t xTimer) {
     }
 }
 
-static void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
+// Callback from NLR scope
+static void network_cyw43_scan_nlr_callback(void *ctx) {
+    network_cyw43_scan_t *pcb = ctx - offsetof(network_cyw43_scan_t, nlr_callback);
     xSemaphoreTake(pcb->mutex, portMAX_DELAY);
     pcb->task = NULL;
     if (pcb->results) {
@@ -205,41 +212,28 @@ static void network_cyw43_scan_deinit(network_cyw43_scan_t *pcb) {
         pcb->results = NULL;
     }
     xSemaphoreGive(pcb->mutex);
+    pbuf_free(pcb->pbuf);
 }
 
-static void network_cyw43_scan_init(network_cyw43_scan_t *pcb, cyw43_t *cyw, cyw43_wifi_scan_options_t *opts) {
+// Initializes the scan state object
+static network_cyw43_scan_t *network_cyw43_scan_init(struct pbuf *pbuf, cyw43_t *cyw, cyw43_wifi_scan_options_t *opts) {
+    network_cyw43_scan_t *pcb = pbuf->payload;
+    nlr_push_jump_callback(&pcb->nlr_callback, network_cyw43_scan_nlr_callback);
+    pcb->pbuf = pbuf;
     pcb->cyw = cyw;
     pcb->task = xTaskGetCurrentTaskHandle();
     pcb->results = NULL;
     pcb->scan_active = false;
     pcb->mutex = xSemaphoreCreateMutexStatic(&pcb->mutex_buffer);
-    xTaskNotifyStateClear(NULL);
+    return pcb;
 }
 
-static struct pbuf *network_cyw43_scan_wait(network_cyw43_scan_t *pcb, TickType_t timeout) {
-    xSemaphoreTake(pcb->mutex, portMAX_DELAY);
-    TimeOut_t xTimeOut;
-    vTaskSetTimeOutState(&xTimeOut);
-    while (pcb->scan_active && !xTaskCheckForTimeOut(&xTimeOut, &timeout)) {
-        xSemaphoreGive(pcb->mutex);
-        while (thread_enable_interrupt()) {
-            mp_handle_pending(true);
-        }
-
-        MP_THREAD_GIL_EXIT();
-        ulTaskNotifyTake(pdTRUE, timeout);
-        thread_disable_interrupt();
-        MP_THREAD_GIL_ENTER();
-
-        xSemaphoreTake(pcb->mutex, portMAX_DELAY);
-    }
-
-    struct pbuf *results = pcb->results;
-    pcb->results = NULL;
-    xSemaphoreGive(pcb->mutex);
-    return results;
+// Deinitialize and dereference the scan state object
+static void network_cyw43_scan_deinit(struct pbuf *pbuf) {
+    nlr_pop_jump_callback(true);
 }
 
+// Converts a cyw43_ev_scan_result_t into a MP object
 static void network_cyw43_scan_process(mp_obj_t list, const cyw43_ev_scan_result_t *res) {
     // Search for existing BSSID to remove duplicates
     bool found = false;
@@ -313,30 +307,49 @@ static mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_m
         mp_raise_ValueError(MP_ERROR_TEXT("Scan already active"));
     }
 
+    // Allocate and initialize the shared state object for doing asynchronous scan
     struct pbuf *pbuf = pbuf_alloc(PBUF_RAW, sizeof(network_cyw43_scan_t), PBUF_RAM);
     if (!pbuf) {
         mp_raise_type(&mp_type_MemoryError);
     }
-    network_cyw43_scan_t *pcb = pbuf->payload;
-    network_cyw43_scan_init(pcb, self->cyw, &opts);
+    network_cyw43_scan_t *pcb = network_cyw43_scan_init(pbuf, self->cyw, &opts);
 
+    // Start the scan
     xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+    ulTaskNotifyValueClear(NULL, -1);
     int scan_res = cyw43_wifi_scan(self->cyw, &opts, pbuf, network_cyw43_scan_cb);
     if (scan_res >= 0) {
         pcb->scan_active = true;
-        pbuf_ref(pbuf);
         TimerHandle_t timer = xTimerCreate("cyw43_scan", pdMS_TO_TICKS(50), true, pbuf, network_cyw43_scan_timer);
+        // Add ref for timer
+        // The timer is responsible for monitoring the lifetime of pbuf in cyw43_wifi_scan, as the cyw43 driver itself
+        // gives no indication of when the scan is done.
+        pbuf_ref(pbuf);
         xTimerStart(timer, portMAX_DELAY);
     }
     xSemaphoreGive(pcb->mutex);
 
+    // Wait for scan to finish or time out
     struct pbuf *results = NULL;
     if (scan_res >= 0) {
-        results = network_cyw43_scan_wait(pcb, pdMS_TO_TICKS(10000));
+        TickType_t timeout = pdMS_TO_TICKS(10000);
+        while (mp_ulTaskNotifyTake(pdTRUE, &timeout)) {
+            xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+            bool scan_active = pcb->scan_active;
+            xSemaphoreGive(pcb->mutex);
+            if (!scan_active) {
+                break;
+            }
+        }
+
+        xSemaphoreTake(pcb->mutex, portMAX_DELAY);
+        results = pcb->results;
+        pcb->results = NULL;
+        xSemaphoreGive(pcb->mutex);
     }
 
-    network_cyw43_scan_deinit(pcb);
-    pbuf_free(pbuf);
+    // Release our ref to the shared state object
+    network_cyw43_scan_deinit(pbuf);
 
     if (scan_res < 0) {
         mp_raise_OSError(-scan_res);

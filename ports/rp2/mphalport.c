@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -41,10 +42,6 @@
 #if MICROPY_PY_NETWORK_CYW43
 #include "cyw43.h"
 #endif
-
-// This needs to be added to the result of time_us_64() to get the number of
-// microseconds since the Epoch.
-static uint64_t time_us_64_offset_from_epoch;
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     panic("mp_hal_stdio_poll not implemented");
@@ -75,28 +72,10 @@ void mp_hal_delay_ms(mp_uint_t ms) {
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-void mp_hal_time_ns_set_from_rtc(void) {
-    // Delay at least one RTC clock cycle so it's registers have updated with the most
-    // recent time settings.
-    sleep_us(23);
-
-    // Sample RTC and time_us_64() as close together as possible, so the offset
-    // calculated for the latter can be as accurate as possible.
-    datetime_t t;
-    rtc_get_datetime(&t);
-    uint64_t us = time_us_64();
-
-    // Calculate the difference between the RTC Epoch seconds and time_us_64().
-    uint64_t s = timeutils_seconds_since_epoch(t.year, t.month, t.day, t.hour, t.min, t.sec);
-    time_us_64_offset_from_epoch = (uint64_t)s * 1000000ULL - us;
-}
-
 uint64_t mp_hal_time_ns(void) {
-    // The RTC only has seconds resolution, so instead use time_us_64() to get a more
-    // precise measure of Epoch time.  Both these "clocks" are clocked from the same
-    // source so they remain synchronised, and only differ by a fixed offset (calculated
-    // in mp_hal_time_ns_set_from_rtc).
-    return (time_us_64_offset_from_epoch + time_us_64()) * 1000ULL;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (tv.tv_sec * 1000000 + tv.tv_usec) * 1000;
 }
 
 // Generate a random locally administered MAC address (LAA)
