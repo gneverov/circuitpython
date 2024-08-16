@@ -442,7 +442,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0(usb_config_exists_fun, usb_config_exists);
 static MP_DEFINE_CONST_STATICMETHOD_OBJ(usb_config_exists_obj, MP_ROM_PTR(&usb_config_exists_fun));
 
 static mp_obj_t usb_config_delete(void) {
-    tusb_config_delete();
+    tusb_config_t config = {0};
+    tusb_config_save(&config);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(usb_config_delete_fun, usb_config_delete);

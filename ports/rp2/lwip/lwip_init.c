@@ -8,10 +8,10 @@
 #include "lwip/apps/mdns.h"
 #include "lwip/apps/sntp.h"
 
-static SemaphoreHandle_t lwip_inited;
 
 static void lwip_init_cb(void *arg) {
-    xSemaphoreGive(lwip_inited);
+    SemaphoreHandle_t init_sem = arg;
+    xSemaphoreGive(init_sem);
 
     #if LWIP_MDNS_RESPONDER
     mdns_resp_init();
@@ -22,10 +22,8 @@ static void lwip_init_cb(void *arg) {
 }
 
 void lwip_helper_init(void) {
-    lwip_inited = xSemaphoreCreateBinary();
-    tcpip_init(lwip_init_cb, NULL);
-}
-
-void lwip_wait(void) {
-    xSemaphoreTake(lwip_inited, portMAX_DELAY);
+    SemaphoreHandle_t init_sem = xSemaphoreCreateBinary();
+    tcpip_init(lwip_init_cb, init_sem);
+    xSemaphoreTake(init_sem, portMAX_DELAY);
+    vSemaphoreDelete(init_sem);
 }

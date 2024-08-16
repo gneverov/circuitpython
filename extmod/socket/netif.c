@@ -186,9 +186,9 @@ static void netif_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind
 
 static err_t netif_lwip_configure(struct netif *netif, va_list args) {
     ip_addr_t *address = va_arg(args, ip4_addr_t *);
-    ip_addr_t *gateway = va_arg(args, ip4_addr_t *);
     ip_addr_t *netmask = va_arg(args, ip4_addr_t *);
-    netif_set_addr(netif, address, gateway, netmask);
+    ip_addr_t *gateway = va_arg(args, ip4_addr_t *);
+    netif_set_addr(netif, address, netmask, gateway);
     dhcp_inform(netif);
     return ERR_OK;
 }
@@ -196,12 +196,12 @@ static err_t netif_lwip_configure(struct netif *netif, va_list args) {
 static mp_obj_t netif_configure(size_t n_args, const mp_obj_t *args) {
     netif_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    ip_addr_t address, gateway, netmask;
+    ip_addr_t address, netmask, gateway;
     netutils_parse_ipv4_addr(args[1], (uint8_t *)&address, NETUTILS_BIG);
-    netutils_parse_ipv4_addr(args[2], (uint8_t *)&gateway, NETUTILS_BIG);
-    netutils_parse_ipv4_addr(args[3], (uint8_t *)&netmask, NETUTILS_BIG);
+    netutils_parse_ipv4_addr(args[2], (uint8_t *)&netmask, NETUTILS_BIG);
+    netutils_parse_ipv4_addr(args[3], (uint8_t *)&gateway, NETUTILS_BIG);    
 
-    netif_call_raise(self->index, netif_lwip_configure, &address, &gateway, &netmask);
+    netif_call_raise(self->index, netif_lwip_configure, &address, &netmask, &gateway);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(netif_configure_obj, 4, 4, netif_configure);

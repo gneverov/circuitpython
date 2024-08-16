@@ -14,16 +14,15 @@
 #include "newlib/ioctl.h"
 #include "newlib/vfs.h"
 
-// #ifdef FFCONF
-// #include FFCONF
-// #endif
 #include "ff.h"
 #undef DIR
 
 
-static struct {
+static struct fatfs_volume {
     int fd;
     size_t ssize;
+    struct timespec mtime;
+    FATFS *fs;
 } fatfs_drv_map[FF_VOLUMES];
 
 static int fatfs_alloc_volume(const char *device, int flags, char *path) {
@@ -61,19 +60,19 @@ static void fatfs_free_volume(int vol) {
         close(fatfs_drv_map[vol].fd);
         fatfs_drv_map[vol].ssize = 0;
     }
+    fatfs_drv_map[vol].fs = NULL;
 }
 
-static int fatfs_get_fd(int vol, size_t *ssize) {
+static struct fatfs_volume *fatfs_get_fd(int vol) {
     if ((uint)vol >= FF_VOLUMES) {
         errno = EBADF;
-        return -1;
+        return NULL;
     }
     if (fatfs_drv_map[vol].ssize == 0) {
         errno = EBADF;
-        return -1;
+        return NULL;
     }
-    *ssize = fatfs_drv_map[vol].ssize;
-    return fatfs_drv_map[vol].fd;
+    return &fatfs_drv_map[vol];
 }
 
 // this table converts from FRESULT to POSIX errno
@@ -178,6 +177,8 @@ static void *fatfs_mount(const void *ctx, const char *source, unsigned long moun
     if (fatfs_result(f_mount(&mount->fs, path, 1)) < 0) {
         vfs_release_mount(&mount->base);
         mount = NULL;
+    } else {
+        fatfs_get_fd(vol)->fs = &mount->fs;
     }
     return mount;
 
@@ -471,66 +472,76 @@ DSTATUS disk_initialize(BYTE pdrv) {
 }
 
 DSTATUS disk_status(BYTE pdrv) {
-    size_t ssize;
-    int fd = fatfs_get_fd(pdrv, &ssize);
-    if (fd < 0) {
+    struct fatfs_volume *vol = fatfs_get_fd(pdrv);
+    if (!vol) {
         return STA_NOINIT;
     }
 
+    struct stat buf;
+    if (fstat(vol->fd, &buf) >= 0) {
+        if ((buf.st_mtim.tv_sec > vol->mtime.tv_sec) || ((buf.st_mtim.tv_sec == vol->mtime.tv_sec) && (buf.st_mtim.tv_nsec > vol->mtime.tv_nsec))) {
+            // if someone else modified the disk, invalidate the fat disk cache
+            vol->mtime = buf.st_mtim;
+            vol->fs->winsect = -1;
+        }
+    }
+
     int ro = 0;
-    ioctl(fd, BLKROGET, &ro);
+    ioctl(vol->fd, BLKROGET, &ro);
     return ro ? STA_PROTECT : 0;
 }
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
-    size_t ssize;
-    int fd = fatfs_get_fd(pdrv, &ssize);
-    if (fd < 0) {
+    struct fatfs_volume *vol = fatfs_get_fd(pdrv);
+    if (!vol) {
         return RES_PARERR;
     }
 
-    lseek(fd, sector * ssize, SEEK_SET);
-    if (read(fd, buff, count * ssize) < 0) {
+    lseek(vol->fd, sector * vol->ssize, SEEK_SET);
+    if (read(vol->fd, buff, count * vol->ssize) < 0) {
         return RES_ERROR;
     }
     return RES_OK;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
-    size_t ssize;
-    int fd = fatfs_get_fd(pdrv, &ssize);
-    if (fd < 0) {
+    struct fatfs_volume *vol = fatfs_get_fd(pdrv);
+    if (!vol) {
         return RES_PARERR;
     }
 
-    lseek(fd, sector * ssize, SEEK_SET);
-    if (write(fd, buff, count * ssize) < 0) {
+    lseek(vol->fd, sector * vol->ssize, SEEK_SET);
+    if (write(vol->fd, buff, count * vol->ssize) < 0) {
         return (errno == EROFS) ? RES_WRPRT : RES_ERROR;
+    }
+
+    struct stat buf;
+    if (fstat(vol->fd, &buf) >= 0) {
+        vol->mtime = buf.st_mtim;
     }
     return RES_OK;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
-    size_t ssize;
-    int fd = fatfs_get_fd(pdrv, &ssize);
-    if (fd < 0) {
+    struct fatfs_volume *vol = fatfs_get_fd(pdrv);
+    if (!vol) {
         return RES_PARERR;
     }
     switch (cmd) {
         case CTRL_SYNC: {
-            return ioctl(fd, BLKFLSBUF) >= 0 ? RES_OK : RES_ERROR;
+            return ioctl(vol->fd, BLKFLSBUF) >= 0 ? RES_OK : RES_ERROR;
         }
         case GET_SECTOR_COUNT: {
             unsigned long size;
-            if (ioctl(fd, BLKGETSIZE, &size) < 0) {
+            if (ioctl(vol->fd, BLKGETSIZE, &size) < 0) {
                 return RES_ERROR;
             }
-            *(LBA_t *)buff = (size << 9) / ssize;
+            *(LBA_t *)buff = (size << 9) / vol->ssize;
             return RES_OK;
         }
         #if FF_MAX_SS != FF_MIN_SS
         case GET_SECTOR_SIZE: {
-            *(WORD *)buff = ssize;
+            *(WORD *)buff = vol->ssize;
             return RES_OK;
         }
         #endif
@@ -542,7 +553,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
         case CTRL_TRIM: {
             LBA_t *lba = buff;
             uint64_t range[] = { lba[0], lba[1] - lba[0] };
-            if (ioctl(fd, BLKDISCARD, range) < 0) {
+            if (ioctl(vol->fd, BLKDISCARD, range) < 0) {
                 return RES_ERROR;
             }
             return RES_OK;

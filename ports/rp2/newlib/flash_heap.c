@@ -48,7 +48,7 @@ static void flash_heap_read_page(flash_page_t *ram_page, const flash_page_t *fla
     assert(((uintptr_t)flash_page >= (uintptr_t)&flash_heap_head) && ((uintptr_t)flash_page < (uintptr_t)&__flash_heap_end));
     assert(((uintptr_t)ram_page >= (uintptr_t)&end) && ((uintptr_t)ram_page < (uintptr_t)&__StackLimit));
     vTaskSuspendAll();
-    memcpy(ram_page, flash_page, sizeof(flash_page_t));
+    memcpy(ram_page, ((char *)flash_page) + (XIP_NOCACHE_NOALLOC_BASE - XIP_BASE), sizeof(flash_page_t));
     xTaskResumeAll();
 }
 

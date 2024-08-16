@@ -4,5 +4,3 @@
 #pragma once
 
 void lwip_helper_init(void);
-
-void lwip_wait(void);

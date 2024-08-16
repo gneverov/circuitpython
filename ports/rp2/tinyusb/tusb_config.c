@@ -23,22 +23,6 @@ void tusb_config_load(tusb_config_t *config) {
     }
 }
 
-void tusb_config_delete(void) {
-    tud_disconnect();
-
-    struct flash_env *env = flash_env_open();
-    if (!env) {
-        return;
-    }
-    flash_env_set(env, TUSB_ENV_DEVICE, NULL, 0);
-    for (size_t i = 0; i < TUSB_CONFIG_MAX_CFGS; i++) {
-        flash_env_set(env, TUSB_ENV_CONFIG + i, NULL, 0);
-    }
-    for (size_t i = 0; i < TUSB_CONFIG_MAX_STRS; i++) {
-        flash_env_set(env, TUSB_ENV_STRING + i, NULL, 0);
-    }
-}
-
 bool tusb_config_save(const tusb_config_t *config) {
     struct flash_env *env = flash_env_open();
     if (!env) {
@@ -132,15 +116,16 @@ const uint8_t *tud_descriptor_device_cb(void) {
 
 const uint8_t *tud_descriptor_configuration_cb(uint8_t index) {
     size_t len;
-    const void *config = flash_env_get(TUSB_ENV_CONFIG + index, &len);
-    return config ? config : (uint8_t *)&usbd_desc_cfg;
+    if (flash_env_get(TUSB_ENV_DEVICE, &len)) {
+        return flash_env_get(TUSB_ENV_CONFIG + index, &len);
+    }
+    return (uint8_t *)&usbd_desc_cfg;
 }
 
 const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     size_t len;
-    const void *string = flash_env_get(TUSB_ENV_STRING + index, &len);
-    if (string) {
-        return string;
+    if (flash_env_get(TUSB_ENV_DEVICE, &len)) {
+        return flash_env_get(TUSB_ENV_STRING + index, &len);
     }
     if (index == USBD_STR_SERIAL) {
         char usbd_serial_str[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];

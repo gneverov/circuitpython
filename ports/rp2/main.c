@@ -89,7 +89,7 @@ bi_decl(bi_program_feature_group_with_flags(BINARY_INFO_TAG_MICROPYTHON,
     BINARY_INFO_ID_MP_FROZEN, "frozen modules",
     BI_NAMED_GROUP_SEPARATE_COMMAS | BI_NAMED_GROUP_SORT_ALPHA));
 
-void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, uint8_t *gc_heap_end) {
+static void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, uint8_t *gc_heap_end) {
     #if MICROPY_HW_ENABLE_UART_REPL
     bi_decl(bi_program_feature("UART REPL"))
     #endif
@@ -108,7 +108,7 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
     mp_stack_set_top(stack_top);
     mp_stack_set_limit(stack_top - stack_bottom - 256);
 
-    for (;;) {
+    for (int i = 0;; i++) {
         gc_init(gc_heap_start, gc_heap_end);
 
         // Initialise MicroPython runtime.
@@ -126,9 +126,12 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
         signal_init();
 
         // Execute user scripts.
-        int ret = pyexec_file_if_exists("boot.py");
-        if (ret & PYEXEC_FORCED_EXIT) {
-            goto soft_reset_exit;
+        int ret = 0;
+        if (i == 0) {
+            ret = pyexec_file_if_exists("boot.py");
+            if (ret & PYEXEC_FORCED_EXIT) {
+                goto soft_reset_exit;
+            }
         }
         if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && ret != 0) {
             ret = pyexec_file_if_exists("main.py");
@@ -166,17 +169,17 @@ void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_start, 
 }
 
 thread_t *mp_thread;
-StaticTask_t mp_taskdef;
 
+#define INIT_STACK_SIZE (4 << 10)
+#define DEFAULT_ROOT_DEV "/dev/flash"
+#define DEFAULT_ROOT_FS "fatfs"
 #define DEFAULT_TTY "/dev/ttyUSB0"
 #define DEFAULT_GC_HEAP (96 << 10)
 #define MIN_GC_HEAP (8 << 10)
 #define DEFAULT_MP_STACK (8 << 10)
 #define MIN_MP_STACK (4 << 10)
 
-void mp_task(void *params) {
-    flash_lockout_init();
-
+static void mp_task(void *params) {
     size_t mp_stack_size = (uintptr_t)params;
     const char *gc_heap_str = getenv("GC_HEAP");
     size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;
@@ -185,26 +188,6 @@ void mp_task(void *params) {
     while (!gc_heap) {
         gc_heap_size /= 2;
         gc_heap = malloc(gc_heap_size);
-    }
-
-    #if CFG_TUD_ENABLED
-    while (!tud_inited()) {
-        portYIELD();
-    }
-    #endif
-
-    const char *tty = getenv("TTY");
-    if (!tty) {
-        tty = DEFAULT_TTY;
-    }
-    if (tty) {
-        int fd = open(tty, O_RDWR, 0);
-        if (fd >= 0) {
-            // Success open of tty installs it on stdio fds, so we an close our fd.
-            close(fd);
-        } else {
-            perror("failed up open terminal");
-        }
     }
 
     TaskStatus_t task_status;
@@ -220,17 +203,7 @@ void mp_task_interrupt(void) {
 }
 
 #if CFG_TUD_ENABLED
-void mp_tud_task(void *params) {
-    UBaseType_t save = set_interrupt_core_affinity();
-    tud_init(TUD_OPT_RHPORT);
-    clear_interrupt_core_affinity(save);
-    tud_disconnect();
-
-    #if MICROPY_PY_LWIP && (CFG_TUD_ECM_RNDIS || CFG_TUD_NCM)
-    lwip_wait();
-    tud_network_init();
-    #endif
-
+static void mp_tud_task(void *params) {
     tud_connect();
 
     while (1) {
@@ -241,11 +214,7 @@ void mp_tud_task(void *params) {
 #endif
 
 #if CFG_TUH_ENABLED
-void mp_tuh_task(void *params) {
-    UBaseType_t save = set_interrupt_core_affinity();
-    tuh_init(TUH_OPT_RHPORT);
-    clear_interrupt_core_affinity(save);
-
+static void mp_tuh_task(void *params) {
     while (1) {
         tuh_task();
     }
@@ -267,16 +236,34 @@ static void set_default_time(void) {
     settimeofday(&tv, NULL);
 }
 
-static int mount_root_fs(void) {
-    char *root = getenv("ROOT");
-    if (!root) {
-        return 0;
+static void setup_tty(void) {
+    const char *tty = getenv("TTY");
+    int fd = -1;
+    if (tty) {
+        fd = open(tty, O_RDWR, 0);
     }
-    char device[64], filesystemtype[16];
+    if (fd < 0) {
+        // If the specified tty failed, try opening the default
+        fd = open(DEFAULT_TTY, O_RDWR, 0);
+    }
+    if (fd >= 0) {
+        // Success open of tty installs it on stdio fds, so we an close our fd.
+        close(fd);
+    } else {
+        perror("failed up open terminal");
+    }
+}
+
+static int mount_root_fs(void) {
+    char device[64] = DEFAULT_ROOT_DEV;
+    char filesystemtype[16] = DEFAULT_ROOT_FS;
     unsigned long flags = 0;
-    if (sscanf(root, "%s %s %lu", device, filesystemtype, &flags) < 2) {
-        errno = EINVAL;
-        goto error;
+    char *root = getenv("ROOT");
+    if (root) {
+        if (sscanf(root, "%s %s %lu", device, filesystemtype, &flags) < 2) {
+            errno = EINVAL;
+            goto error;
+        }
     }
     if (mount(device, "/", filesystemtype, flags, NULL) >= 0) {
         return 0;
@@ -297,32 +284,49 @@ error:
     return -1;
 }
 
-int main(int argc, char **argv) {
-    env_init();
-    set_default_time();
-
-    mount(NULL, "/dev", "devfs", 0, NULL);
-
-    mount_root_fs();
+static void init_task(void *params) {
+    flash_lockout_init();
 
     #if MICROPY_PY_LWIP
     lwip_helper_init();
     #endif
 
     #if CFG_TUD_ENABLED
+    UBaseType_t save = set_interrupt_core_affinity();
+    tud_init(TUD_OPT_RHPORT);
+    clear_interrupt_core_affinity(save);
+    tud_disconnect();
+    #if MICROPY_PY_LWIP && (CFG_TUD_ECM_RNDIS || CFG_TUD_NCM)
+    tud_network_init();
+    #endif
     xTaskCreate(mp_tud_task, "tud", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
 
     #if CFG_TUH_ENABLED
+    UBaseType_t save = set_interrupt_core_affinity();
+    tuh_init(TUH_OPT_RHPORT);
+    clear_interrupt_core_affinity(save);
     xTaskCreate(mp_tuh_task, "tuh", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
     #endif
+
+    mount(NULL, "/dev", "devfs", 0, NULL);
+    setup_tty();
+    mount_root_fs();
 
     const char *mp_stack_str = getenv("MP_STACK");
     size_t mp_stack_size = mp_stack_str ? atoi(mp_stack_str) : DEFAULT_MP_STACK;
     mp_stack_size = MAX(mp_stack_size, MIN_MP_STACK);
     mp_thread = thread_create(mp_task, "mp", mp_stack_size / sizeof(StackType_t), (void *)mp_stack_size, 1);
+
+    vTaskDelete(NULL);
+}
+
+int main(int argc, char **argv) {
+    env_init();
+    set_default_time();
+    xTaskCreate(init_task, "init", INIT_STACK_SIZE / sizeof(StackType_t), NULL, 3, NULL);
     vTaskStartScheduler();
-    return 0;
+    return 1;
 }
 
 void gc_collect(void) {
@@ -345,13 +349,6 @@ void nlr_jump_fail(void *val) {
         __breakpoint();
     }
 }
-
-#ifndef NDEBUG
-void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
-    printf("Assertion '%s' failed, at file %s:%d\n", expr, file, line);
-    panic("Assertion failed");
-}
-#endif
 
 #define POLY (0xD5)
 

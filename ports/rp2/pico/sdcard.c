@@ -194,7 +194,7 @@ static const struct vfs_file_vtable sdcard_vtable = {
 
 void *sdcard_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
     uint cs_pin = 14;
-    if (fragment && (sscanf(fragment, "?cs_pin=%d", &cs_pin) < 0)) {
+    if (fragment && (sscanf(fragment, "?cs=%d", &cs_pin) < 0)) {
         errno = EINVAL;
         return NULL;
     }
@@ -316,10 +316,19 @@ static uint sdcard_cmd(struct sdcard_file *file, uint cmd, uint32_t arg, uint32_
     buf[5] = (sdcard_crc7(buf, 5, 0) << 1) | 0x01;
     spi_write_blocking(file->spi->inst, buf, 6);
 
-    do {
+    TickType_t xTicksToWait = pdMS_TO_TICKS(100);
+    TimeOut_t xTimeOut;
+    vTaskSetTimeOutState(&xTimeOut);
+    for (;;) {
         spi_read_blocking(file->spi->inst, 0xff, buf, 1);
+        if ((buf[0] & 0x80) == 0) {
+            break;
+        } else if (xTaskCheckForTimeOut(&xTimeOut, &xTicksToWait)) {
+            errno = EIO;
+            return buf[0];
+        }
+        portYIELD();
     }
-    while (buf[0] & 0x80);
 
     if (buf[0] & 0xfe) {
         errno = EIO;

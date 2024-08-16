@@ -259,13 +259,24 @@ int mount(const char *source, const char *target, const char *filesystemtype, un
 
     vfs_lock();
     struct vfs_mount **pentry;
-    if (vfs_mount_lookup(mount->path, &pentry)) {
-        errno = EEXIST;
-    } else {
+    if (!vfs_mount_lookup(mount->path, &pentry)) {
+        // mount point does not exist: insert it
         mount->next = *pentry;
         *pentry = mount;
         mount = NULL;
         ret = 0;
+    } else if (mountflags & MS_REMOUNT) {
+        // mount point already exists and remounting allowed: replace it
+        struct vfs_mount *old_mount = *pentry;
+        mount->next = old_mount->next;
+        old_mount->next = NULL;
+        *pentry = mount;
+        // set mount to the old mount so that it is released in cleanup
+        mount = old_mount;
+        ret = 0;
+    } else {
+        // mount point already exists and remounting not allowed: error
+        errno = EEXIST;
     }
     vfs_unlock();
 

@@ -6,7 +6,7 @@ Concurrency means multiple programs running at the same time. MicroPythonRT achi
 Interoperability means the ease at which non-Python (e.g., C) code can be integrated into a MicroPython project to expand functionality either in cooperation with or independently of the MicroPython runtime. MicroPythonRT does this in several ways by: dynamically loading C libraries on-device, partitioning software components into independent tasks, and providing a common C runtime library.
 
 ## Support
-If you are interested in using MicroPythonRT, please open an [issue](https://github.com/gneverov/micropythonrt/issues) to let me know how MicroPythonRT helps your application, or what additional functionality you need, or to simply report bugs. Your feedback will help to direct future development efforts.
+If you are interested in using MicroPythonRT, please open an [issue](https://github.com/gneverov/micropythonrt/issues) or [discussion](https://github.com/gneverov/micropythonrt/discussions) to let me know how MicroPythonRT helps your application, or what additional functionality you need, or to simply report bugs. Your feedback will help to direct future development efforts.
 
 ## Highlights
 - Support for [dynamic linking](/examples/dynlink/README.md) (i.e., DLLs or shared libraries). Native code libraries can be built, distributed, and installed without recompiling or reinstalling the firmware. This allows users to add new native code to their application, with similar ease to which Python code can be added by copying files to the device.
@@ -71,9 +71,9 @@ pin.value = 1     # output high
 
 - `machine.PioStateMachine`: Replaces the `rp2.StateMachine` for accessing the RP2040's PIO hardware. The class is redesigned to better support asynchronous operations. The ability to implement all PIO applications in Python is a goal for this redesigned class.
 
-- `network`: This module from MicroPython has been removed. Networking is now hard-coded to only support lwIP.
+- `network`: Networking is now hard-coded to only support lwIP. This module has been repurposed to access LwIP functionality that's not already in the `socket` module, such as managing network interfaces. See network configuration [guide](/network.md) for more details.
 
-- `network_cyw43`: This subcomponent of the network module still exists as a way to configure the cyw43 network device (e.g., tell it which wifi network to connect to). The wifi scan method has be updated to use FreeRTOS instead of polling.
+- `network_cyw43`: This subcomponent of the network module still exists as a way to configure the cyw43 network device (e.g., tell it which wifi network to connect to). It is called the `cyw43` module and is available as a dynamically loadable extension module. The wifi scan method has be updated to use FreeRTOS instead of polling.
 
 - `os`: The MicroPython VFS implementation is moved to the C layer as an add-on [library](/ports/rp2/newlib/README.md) to Picolibc. This allows interoperation of the filesystem between MicroPython and C, including the mounting of block devices, and redirecting stdio through character devices. This module also contains the dynamic linking API and other functionality from the base C library.
 
@@ -84,31 +84,21 @@ The selector is a crucial part of any asyncio implementation. At its heart, an a
 
 - `socket`: The socket module is rewritten to interact with lwIP through FreeRTOS while maintaining a CPython-compatible API. The `settimeout` method on socket objects is used to control whether the socket is blocking or non-blocking. A blocking socket will block the caller's task but allow other system tasks to run, including other MicroPython threads.
 
-- `socket.netif`: The socket module contains a new global object `netif` that allows Python code to interact with the lwIP netif API for controlling network interfaces. Some example uses:
-```
-list(socket.netif)          # List all network interfaces
-socket.netif['wl0']         # Access a network interface by name
-socket.netif['wl0'].wait()  # Wait/blocks until the network interface has an IP address
-```
-
 - `time`: Module refactored to be more consistent with CPython and to use Picolibc for time functions, including timezone information.
 
 - `_thread` and `threading`: The `_thread` module is implemented using FreeRTOS tasks. Python code can create any number of threads (limited by available RAM). The implementation relies on a GIL, do just as in CPython, there is no automatic compute parallelism advantage to using multiple threads. `_thread` is a low-level module you don't use directly. The higher-level `threading` module in MicroPython is currently minimal. Much work remains to fully implement this module.
 
-- `usb`: A new module that allows Python code to interact with TinyUSB. Support is somewhat limited and currently only exposes CDC and MSC devices, in addition to network devices through `socket.netif`.
+- `usb`: A new module that allows Python code to interact with TinyUSB. Support is somewhat limited and currently only exposes CDC and MSC devices, in addition to network devices through `network`.
 
-- `usb.UsbConfig`: Typically the USB configuration of a board is fixed in firmware. However this class allows you to reconfigure the USB configuration at runtime (e.g., change which device classes the board exposes to a USB host). To use this class some prior understanding of the [USB descriptors](https://www.beyondlogic.org/usbnutshell/usb5.shtml) is required. For example, to set the board to have a MSC (storage) device and 5 CDC (serial) devices, you could run:
+- `usb.UsbConfig`: Typically the USB configuration of a board is fixed in firmware. However this class allows you to reconfigure the USB configuration at runtime (e.g., change which device classes the board exposes to a USB host). To use this class some prior understanding of the [USB descriptors](https://www.beyondlogic.org/usbnutshell/usb5.shtml) is required. For example, to set the board to have 5 CDC (serial) devices, you could run:
 ```
 usb_config = usb.UsbConfig()
 usb_config.device()
 usb_config.configuration()
-usb_config.msc()
 for _ in range(5):
   usb_config.cdc()
 usb_config.save()
 ```
-
-This class's methods can also take keyword arguments to define values for various USB metadata such as VID:PID and name strings. See the source [code](/extmod/usb/usb_config.c) for details.
 
 ### Framework
 - **blocking**: Functions such as sleep, blocking I/O, and select will block the calling task using a FreeRTOS API, thus allowing the CPU to continue executing other tasks. Additionally the GIL is released before the blocking call to give other MicroPython threads a chance to run. The macro `MICROPY_EVENT_POLL_HOOK` is not needed anymore.
@@ -128,9 +118,6 @@ This class's methods can also take keyword arguments to define values for variou
 >>> await coro()
 ```
 This functionality requires that the expression "asyncio.repl_runner" evaluates to an asyncio `Runner` object.
-
-- **USB networking**: TinyUSB provides 3 kinds of USB network devices: RNDIS, ECM, and NCM. Only RNDIS works for me on Windows, and I haven't tried anything on Linux. All 3 kinds can be enabled through the `UsbConfig` class. However TinyUSB only compiles with NCM only or both ECM and RNDIS support. It doesn't compile with all three. Overall I wouldn't say this support is easy to use because of configuration issues on the host side.
-Additionally lwIP supports SLIP network interfaces, and running SLIP over a USB CDC is possibly a more reliable way to get networking over USB. However I don't know how to set up a SLIP interface on Windows.
 
 ## Acknowledgements
 Thanks to the authors of MicroPython, CircuitPython, Picolibc, and FreeRTOS for their awesome projects I was able to build upon.

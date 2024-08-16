@@ -6,6 +6,7 @@
 #include <malloc.h>
 #include <memory.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #include "hardware/flash.h"
 
@@ -27,9 +28,20 @@ struct flash_file {
 extern uint8_t __flash_storage_start[];
 extern uint8_t __flash_storage_end[];
 
+static struct timespec flash_mtime;
+
 static int flash_close(void *ctx) {
     struct flash_file *file = ctx;
     free(file);
+    return 0;
+}
+
+static int flash_fstat(void *ctx, struct stat *pstat) {
+    pstat->st_size = __flash_storage_end - __flash_storage_start;
+    pstat->st_blksize = FLASH_SECTOR_SIZE;
+    vTaskSuspendAll();
+    pstat->st_mtim = flash_mtime;
+    xTaskResumeAll();
     return 0;
 }
 
@@ -105,7 +117,7 @@ static int flash_read(void *ctx, void *buf, size_t size) {
     struct flash_file *file = ctx;
     size = MIN(size, __flash_storage_end - file->ptr);
     vTaskSuspendAll();
-    memcpy(buf, file->ptr, size);
+    memcpy(buf, file->ptr + (XIP_NOCACHE_NOALLOC_BASE - XIP_BASE), size);
     xTaskResumeAll();
     file->ptr += (size + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1);
     return size;
@@ -126,9 +138,13 @@ static int flash_write(void *ctx, const void *buf, size_t size) {
     size_t sector_size = (size + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1);
     size_t page_size = (size + FLASH_PAGE_SIZE - 1) & ~(FLASH_PAGE_SIZE - 1);
 
+    struct timeval t;
+    gettimeofday(&t, NULL);
     flash_lockout_start();
     flash_range_erase(flash_offs, sector_size);
     flash_range_program(flash_offs, buf, page_size);
+    flash_mtime.tv_sec = t.tv_sec;
+    flash_mtime.tv_nsec = t.tv_usec * 1000;
     flash_lockout_end();
 
     file->ptr += sector_size;
@@ -137,6 +153,7 @@ static int flash_write(void *ctx, const void *buf, size_t size) {
 
 static const struct vfs_file_vtable flash_vtable = {
     .close = flash_close,
+    .fstat = flash_fstat,
     .ioctl = flash_ioctl,
     .lseek = flash_lseek,
     .read = flash_read,

@@ -18,6 +18,4 @@ typedef struct {
 
 void tusb_config_load(tusb_config_t *config);
 
-void tusb_config_delete(void);
-
 bool tusb_config_save(const tusb_config_t *config);
