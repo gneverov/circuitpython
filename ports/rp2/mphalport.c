@@ -35,7 +35,6 @@
 #include "py/runtime.h"
 #include "py/mphal.h"
 #include "shared/timeutils/timeutils.h"
-#include "hardware/rtc.h"
 #include "pico/time.h"
 #include "pico/unique_id.h"
 

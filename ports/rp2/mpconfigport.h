@@ -109,6 +109,7 @@
 #define MICROPY_USE_INTERNAL_PRINTF             (0)
 
 // Fine control over Python builtins, classes, modules, etc
+#define MICROPY_BANNER_MACHINE                  ""
 #define MICROPY_PY_BUILTINS_HELP_TEXT           rp2_help_text
 #define MICROPY_PY_SYS_PLATFORM                 "rp2"
 #ifndef MICROPY_PY_THREAD
@@ -138,7 +139,7 @@
 #define MICROPY_PY_MACHINE_ADC                  (1)
 #define MICROPY_PY_MACHINE_ADC_INCLUDEFILE      "ports/rp2/machine_adc.c"
 #define MICROPY_PY_MACHINE_PIN_MAKE_NEW         mp_pin_make_new
-#define MICROPY_PY_MACHINE_BITSTREAM            (1)
+#define MICROPY_PY_MACHINE_BITSTREAM            (0)
 #define MICROPY_PY_MACHINE_DHT_READINTO         (1)
 #define MICROPY_PY_MACHINE_PULSE                (1)
 #define MICROPY_PY_MACHINE_PWM                  (1)

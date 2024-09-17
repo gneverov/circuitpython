@@ -29,8 +29,6 @@
 #include "py/ringbuf.h"
 #include "pico/time.h"
 #include "hardware/clocks.h"
-#include "hardware/structs/systick.h"
-#include "RP2040.h" // cmsis, for __WFI
 
 #define SYSTICK_MAX (0xffffff)
 #define MICROPY_HW_USB_CDC_TX_TIMEOUT (500)

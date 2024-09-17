@@ -293,6 +293,15 @@ class PhdrsSection(Section):
         super().__init__(name, sh_addralign=alignment(elf32.Phdr), **kwargs)
 
 
+class ArmAttributesSection(Section):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tags = {}
+
+
+Section.sh_types[elf32.SHT_ARM_ATTRIBUTES] = ArmAttributesSection
+
+
 class Segment(Node):
     c_type = elf32.Phdr
 
@@ -714,6 +723,36 @@ class ReadData(Visitor):
     def visit_StrtabSection(self, section, *args):
         self.visit_Section(section)
         section.strings = collections.OrderedDict()
+
+    def visit_ArmAttributesSection(self, section, *args):
+        self.visit_Section(section)
+        section.tags = {}
+        data = bytes(section.data)
+        if len(data) == 0 or data[0] != 0x41:
+            return
+        data = data[1:]
+
+        size = int.from_bytes(data[:4], "little")
+        data = data[4:size]
+
+        size = data.index(0)
+        if data[:size] != b"aeabi":
+            return
+        data = data[size + 1 :]
+
+        if data[0] != 1:
+            return
+        data = data[1:]
+
+        size = int.from_bytes(data[:4], "little")
+        data = data[4:size]
+
+        if data[0] != 5:
+            return
+        data = data[1:]
+
+        size = data.index(0)
+        section.tags["CPU_name"] = data[:size].decode()
 
 
 class Dereference(Visitor):

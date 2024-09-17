@@ -102,11 +102,11 @@ static const uint8_t usbd_desc_cfg[USBD_DESC_LEN] = {
 };
 
 static const uint16_t usbd_desc_str0[] = { 4 | (TUSB_DESC_STRING << 8), 0x0409 };
-static const uint16_t usbd_desc_str_manuf[] = { 26, (TUSB_DESC_STRING << 8), 'R', 'a', 's', 'p', 'b', 'e', 'r', 'r', 'y', ' ', 'P', 'i' };
-static const uint16_t usbd_desc_str_product[] = { 10, (TUSB_DESC_STRING << 8), 'P', 'i', 'c', 'o' };
-static uint16_t usbd_desc_str_serial[] = { 34, (TUSB_DESC_STRING << 8), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-static const uint16_t usbd_desc_str_cdc[] = { 20, (TUSB_DESC_STRING << 8), 'B', 'o', 'a', 'r', 'd', ' ', 'C', 'D', 'C' };
-static const uint16_t usbd_desc_str_msc[] = { 20, (TUSB_DESC_STRING << 8), 'B', 'o', 'a', 'r', 'd', ' ', 'M', 'S', 'C' };
+static const uint16_t usbd_desc_str_manuf[] = { 26 | (TUSB_DESC_STRING << 8), 'R', 'a', 's', 'p', 'b', 'e', 'r', 'r', 'y', ' ', 'P', 'i' };
+static const uint16_t usbd_desc_str_product[] = { 10 | (TUSB_DESC_STRING << 8), 'P', 'i', 'c', 'o' };
+static uint16_t usbd_desc_str_serial[] = { 34 | (TUSB_DESC_STRING << 8), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static const uint16_t usbd_desc_str_cdc[] = { 20 | (TUSB_DESC_STRING << 8), 'B', 'o', 'a', 'r', 'd', ' ', 'C', 'D', 'C' };
+static const uint16_t usbd_desc_str_msc[] = { 20 | (TUSB_DESC_STRING << 8), 'B', 'o', 'a', 'r', 'd', ' ', 'M', 'S', 'C' };
 
 const uint8_t *tud_descriptor_device_cb(void) {
     size_t len;
@@ -119,7 +119,7 @@ const uint8_t *tud_descriptor_configuration_cb(uint8_t index) {
     if (flash_env_get(TUSB_ENV_DEVICE, &len)) {
         return flash_env_get(TUSB_ENV_CONFIG + index, &len);
     }
-    return (uint8_t *)&usbd_desc_cfg;
+    return usbd_desc_cfg;
 }
 
 const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
@@ -131,22 +131,22 @@ const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         char usbd_serial_str[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
         pico_get_unique_board_id_string(usbd_serial_str, sizeof(usbd_serial_str));
         for (int i = 0; i < PICO_UNIQUE_BOARD_ID_SIZE_BYTES; i++) {
-            usbd_desc_str_serial[2 + i] = usbd_serial_str[i];
+            usbd_desc_str_serial[1 + i] = usbd_serial_str[i];
         }
     }
     switch (index) {
         case USBD_STR_0:
-            return (uint16_t *)&usbd_desc_str0;
+            return usbd_desc_str0;
         case USBD_STR_MANUF:
-            return (uint16_t *)&usbd_desc_str_manuf;
+            return usbd_desc_str_manuf;
         case USBD_STR_PRODUCT:
-            return (uint16_t *)&usbd_desc_str_product;
+            return usbd_desc_str_product;
         case USBD_STR_SERIAL:
-            return (uint16_t *)&usbd_desc_str_serial;
+            return usbd_desc_str_serial;
         case USBD_STR_CDC:
-            return (uint16_t *)&usbd_desc_str_cdc;
+            return usbd_desc_str_cdc;
         case USBD_STR_MSC:
-            return (uint16_t *)&usbd_desc_str_msc;
+            return usbd_desc_str_msc;
         default:
             return NULL;
     }

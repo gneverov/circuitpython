@@ -20,19 +20,32 @@ parser.add_argument(
     action="append",
     help="add symbol as dynamic entry",
 )
+parser.add_argument("--strip", action="store_true", help="strip debug info")
 args = parser.parse_args()
 
 module_name = args.input
 elffile = open_elffile(module_name)
+cpu = None
 
 for section in elffile.sections:
-    # if section.name.startswith(".debug"):
-    #     section.delete()
+    if args.strip and section.name.startswith(".debug"):
+        section.delete()
     if section.name.startswith(".data"):
         section.struct.sh_flags |= elf32.SHF_WRITE
     if section.name.startswith(".uninitialized_data"):
         section.struct.sh_flags |= elf32.SHF_ALLOC
+    if section.name.startswith(".ARM.attributes"):
+        cpu_name = section.tags.get("CPU_name")
 PurgeDeleted().visit(elffile)
+
+if cpu_name is None:
+    raise ValueError("CPU not found")
+cpu_config = {
+    "6S-M": {"veneer_symbol_offset": 12},
+    "8-M.MAIN": {"veneer_symbol_offset": 4},
+}.get(cpu_name)
+if cpu_config is None:
+    raise ValueError(f"CPU '{cpu_name}' not supported")
 
 dynstr = StrtabSection(".dynstr", sh_flags=elf32.SHF_ALLOC)
 dynsym = SymtabSection(".dynsym", link=dynstr, sh_type=elf32.SHT_DYNSYM, sh_flags=elf32.SHF_ALLOC)
@@ -85,11 +98,15 @@ for section in elffile.iter_sections(elf32.SHT_SYMTAB):
             mk_dyn(sym)
         if sym.name.startswith("__") and sym.name.endswith("_veneer"):
             # GCC with -q does not emit relocations within generated veneer functions. Therefore we
-            # create our own such relocations here. The symbol for the real function is assumed to
-            # be at offset 12 within the veneer.
-            r_offset = (sym.struct.st_value & 0xFFFFFFFE) + 12
-            offset = r_offset - sym.section.struct.sh_addr
-            real_sym_value = int.from_bytes(sym.section.data[offset : offset + 4], "little")
+            # create our own such relocations here. The offset within the veneer of the symbol for
+            # the real function is dependent on the CPU.
+            sym_offset = cpu_config["veneer_symbol_offset"]
+            assert sym_offset + 4 <= sym.struct.st_size
+            r_offset = (sym.struct.st_value & 0xFFFFFFFE) + sym_offset
+            file_offset = r_offset - sym.section.struct.sh_addr
+            real_sym_value = int.from_bytes(
+                sym.section.data[file_offset : file_offset + 4], "little"
+            )
 
             real_sym_name = sym.name[2:-7]
             real_sym = [
@@ -123,7 +140,7 @@ def decode_addend(r_type, insn):
         if insn & 0x40000000:
             insn -= 0x80000000
 
-    elif r_type == elf32.R_ARM.R_ARM_THM_PC22:
+    elif r_type in (elf32.R_ARM.R_ARM_THM_PC22, elf32.R_ARM.R_ARM_THM_JUMP24):
         # extract imm22 operand
         insn = ((insn & 0x7FF) << 11) | ((insn & 0x7FF0000) >> 16)
         # sign extend
@@ -141,7 +158,11 @@ def decode_addend(r_type, insn):
 def undo_relocation(r_type, S, P, A):
     if r_type in (elf32.R_ARM.R_ARM_ABS32, elf32.R_ARM.R_ARM_TARGET1):
         return A - S
-    elif r_type in (elf32.R_ARM.R_ARM_THM_PC22, elf32.R_ARM.R_ARM_PREL31):
+    elif r_type in (
+        elf32.R_ARM.R_ARM_THM_PC22,
+        elf32.R_ARM.R_ARM_THM_JUMP24,
+        elf32.R_ARM.R_ARM_PREL31,
+    ):
         S &= -2
         return A - (S - P)
     else:
@@ -156,9 +177,9 @@ for section in elffile.iter_sections(elf32.SHT_REL):
         sym = rel.symbol
         if sym.struct.st_shndx == elf32.STN_UNDEF:
             continue
-        if (rel.struct.r_type == elf32.R_ARM.R_ARM_THM_PC22) and (sym.struct.st_value >> 28) != (
-            rel.struct.r_offset >> 28
-        ):
+        if (rel.struct.r_type in (elf32.R_ARM.R_ARM_THM_PC22, elf32.R_ARM.R_ARM_THM_JUMP24)) and (
+            sym.struct.st_value >> 28
+        ) != (rel.struct.r_offset >> 28):
             veneer_sym = [st for st in section.link.symbols if st.name == f"__{sym.name}_veneer"]
             if not veneer_sym:
                 raise ValueError(f"missing veneer for '{sym.name}'")
@@ -168,6 +189,7 @@ for section in elffile.iter_sections(elf32.SHT_REL):
             elf32.R_ARM.R_ARM_ABS32,
             elf32.R_ARM.R_ARM_TARGET1,
             elf32.R_ARM.R_ARM_THM_PC22,
+            elf32.R_ARM.R_ARM_THM_JUMP24,
             elf32.R_ARM.R_ARM_PREL31,
         ):
             sym_name = sym.section.name if sym.struct.st_type == elf32.STT_SECTION else sym.name
@@ -175,8 +197,8 @@ for section in elffile.iter_sections(elf32.SHT_REL):
                 f"unsupported relocation type {elf32.R_ARM(rel.struct.r_type)._name_} of symbol '{sym_name}' in section '{section.name}'"
             )
 
-        offset = rel.struct.r_offset - section.info.struct.sh_addr
-        insn = int.from_bytes(section.info.data[offset : offset + 4], "little")
+        file_offset = rel.struct.r_offset - section.info.struct.sh_addr
+        insn = int.from_bytes(section.info.data[file_offset : file_offset + 4], "little")
         addend = decode_addend(rel.struct.r_type, insn)
         addend = undo_relocation(
             rel.struct.r_type, sym.struct.st_value, rel.struct.r_offset, addend
@@ -191,13 +213,17 @@ for section in elffile.iter_sections(elf32.SHT_REL):
                         r_addend=addend,
                     )
                 )
-            elif rel.struct.r_type in (elf32.R_ARM.R_ARM_THM_PC22, elf32.R_ARM.R_ARM_PREL31):
+            elif rel.struct.r_type in (
+                elf32.R_ARM.R_ARM_THM_PC22,
+                elf32.R_ARM.R_ARM_THM_JUMP24,
+                elf32.R_ARM.R_ARM_PREL31,
+            ):
                 assert (sym.struct.st_value >> 28) == (rel.struct.r_offset >> 28)
                 pass
             else:
                 raise ValueError()
         else:
-            if rel.struct.r_type == elf32.R_ARM.R_ARM_THM_PC22:
+            if rel.struct.r_type in (elf32.R_ARM.R_ARM_THM_PC22, elf32.R_ARM.R_ARM_THM_JUMP24):
                 assert abs(addend) < 0x00400000
             dynrela.relocs.append(
                 RelocationWithAddend(

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -84,6 +85,16 @@ static mp_obj_t mp_time_asctime(size_t n_args, const mp_obj_t *args) {
     return mp_obj_new_str_copy(&mp_type_str, (byte *)str, strlen(str) - 1);
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_asctime_obj, 0, 1, mp_time_asctime);
+
+static mp_obj_t mp_time_clock_settime_ns(mp_obj_t clk_id, mp_obj_t time_in) {
+    time_t time;
+    mp_time_obj_to_time(time_in, &time);
+    lldiv_t div = lldiv(time / 1000, 1000000);
+    struct timeval tv = { div.quot, div.rem };
+    settimeofday(&tv, NULL);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_time_clock_settime_ns_obj, mp_time_clock_settime_ns);
 
 static mp_obj_t mp_time_ctime(size_t n_args, const mp_obj_t *args) {
     time_t t;
@@ -203,15 +214,16 @@ static mp_obj_t mp_time_strptime(size_t n_args, const mp_obj_t *args) {
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_time_strptime_obj, 1, 2, mp_time_strptime);
 
 static mp_obj_t mp_time_time(void) {
-    time_t t = time(NULL);
-    return mp_obj_new_float(t);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return mp_obj_new_float(tv.tv_sec + tv.tv_usec * 1e-6f);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_obj, mp_time_time);
 
 static mp_obj_t mp_time_time_ns(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    return mp_obj_new_int_from_ll((tv.tv_sec * 1000000 + tv.tv_usec) * 1000);
+    return mp_obj_new_int_from_ll((tv.tv_sec * 1000000ll + tv.tv_usec) * 1000ll);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_time_ns_obj, mp_time_time_ns);
 
@@ -246,6 +258,7 @@ static const mp_rom_map_elem_t mp_module_time_globals_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_asctime),         MP_ROM_PTR(&mp_time_asctime_obj) },
     { MP_ROM_QSTR(MP_QSTR_ctime),           MP_ROM_PTR(&mp_time_ctime_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_settime_ns), MP_ROM_PTR(&mp_time_clock_settime_ns_obj) },
     { MP_ROM_QSTR(MP_QSTR_gmtime),          MP_ROM_PTR(&mp_time_gmtime_obj) },
     { MP_ROM_QSTR(MP_QSTR_localtime),       MP_ROM_PTR(&mp_time_localtime_obj) },
     { MP_ROM_QSTR(MP_QSTR_mktime),          MP_ROM_PTR(&mp_time_mktime_obj) },

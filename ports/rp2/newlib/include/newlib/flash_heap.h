@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <stdbool.h>
 #include <stdlib.h>
-
-#include "hardware/flash.h"
+#include "newlib/flash.h"
 
 
 typedef uint8_t flash_page_t[FLASH_SECTOR_SIZE];
@@ -41,7 +41,13 @@ typedef struct {
 
 const flash_heap_header_t *flash_heap_next_header(void);
 
-int flash_heap_open(flash_heap_t *file, uint32_t type);
+int flash_heap_open(flash_heap_t *file, uint32_t type, uintptr_t base);
+
+int flash_heap_open_flash(flash_heap_t *file, uint32_t type);
+
+#if PSRAM_BASE
+int flash_heap_open_psram(flash_heap_t *file, uint32_t type);
+#endif
 
 void flash_heap_free(flash_heap_t *file);
 
@@ -77,4 +83,4 @@ bool flash_heap_iterate(const flash_heap_header_t **pheader);
 
 int flash_heap_truncate(const flash_heap_header_t *header);
 
-void flash_heap_stats(size_t *flash_size, size_t *ram_size);
+void flash_heap_stats(size_t *flash_size, size_t *ram_size, size_t *psram_size);

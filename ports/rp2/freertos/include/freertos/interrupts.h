@@ -17,7 +17,9 @@
 
 #define INTERRUPT_CORE_NUM                0
 #define INTERRUPT_CORE_AFFINITY_MASK      (1u << INTERRUPT_CORE_NUM)
-
+#if (INTERRUPT_CORE_NUM < 0) || (INTERRUPT_CORE_NUM >= configNUMBER_OF_CORES)
+#error interrupt core num is invalid
+#endif
 
 UBaseType_t set_interrupt_core_affinity(void);
 

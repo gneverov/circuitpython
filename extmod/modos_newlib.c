@@ -1,5 +1,4 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
-// SPDX-FileCopyrightText: 2016-2022 Damien P. George
 // SPDX-License-Identifier: MIT
 
 #include "py/builtin.h"
@@ -19,25 +18,12 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/times.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #include "newlib/dlfcn.h"
 #include "newlib/ioctl.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
-
-#if MICROPY_PY_OS_UNAME
-#include "genhdr/mpversion.h"
-#endif
-
-#ifdef MICROPY_PY_OS_INCLUDEFILE
-#include MICROPY_PY_OS_INCLUDEFILE
-#endif
-
-#ifdef MICROPY_BUILD_TYPE
-#define MICROPY_BUILD_TYPE_PAREN " (" MICROPY_BUILD_TYPE ")"
-#else
-#define MICROPY_BUILD_TYPE_PAREN
-#endif
 
 #define MP_OS_CALL(ret, func, ...) for (;;) { \
         MP_THREAD_GIL_EXIT(); \
@@ -71,50 +57,7 @@ static mp_obj_t mp_os_check_ret(int ret) {
     }
 }
 
-
-#if MICROPY_PY_OS_UNAME
-
-#if MICROPY_PY_OS_UNAME_RELEASE_DYNAMIC
-#define CONST_RELEASE
-#else
-#define CONST_RELEASE const
-#endif
-
-static const qstr mp_os_uname_info_fields[] = {
-    MP_QSTR_sysname,
-    MP_QSTR_nodename,
-    MP_QSTR_release,
-    MP_QSTR_version,
-    MP_QSTR_machine
-};
-static const MP_DEFINE_STR_OBJ(mp_os_uname_info_sysname_obj, MICROPY_PY_SYS_PLATFORM);
-static const MP_DEFINE_STR_OBJ(mp_os_uname_info_nodename_obj, MICROPY_PY_SYS_PLATFORM);
-static CONST_RELEASE MP_DEFINE_STR_OBJ(mp_os_uname_info_release_obj, MICROPY_VERSION_STRING);
-static const MP_DEFINE_STR_OBJ(mp_os_uname_info_version_obj, MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE MICROPY_BUILD_TYPE_PAREN);
-static const MP_DEFINE_STR_OBJ(mp_os_uname_info_machine_obj, MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME);
-
-static MP_DEFINE_ATTRTUPLE(
-    mp_os_uname_info_obj,
-    mp_os_uname_info_fields,
-    5,
-    MP_ROM_PTR(&mp_os_uname_info_sysname_obj),
-    MP_ROM_PTR(&mp_os_uname_info_nodename_obj),
-    MP_ROM_PTR(&mp_os_uname_info_release_obj),
-    MP_ROM_PTR(&mp_os_uname_info_version_obj),
-    MP_ROM_PTR(&mp_os_uname_info_machine_obj)
-    );
-
-static mp_obj_t mp_os_uname(void) {
-    #if MICROPY_PY_OS_UNAME_RELEASE_DYNAMIC
-    const char *release = mp_os_uname_release();
-    mp_os_uname_info_release_obj.len = strlen(release);
-    mp_os_uname_info_release_obj.data = (const byte *)release;
-    #endif
-    return MP_OBJ_FROM_PTR(&mp_os_uname_info_obj);
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_uname_obj, mp_os_uname);
-
-#endif
+static const MP_DEFINE_STR_OBJ(mp_os_name_obj, "posix");
 
 // Process Parameters
 // ------------------
@@ -126,7 +69,7 @@ static mp_obj_t mp_os_environ(void) {
         char *equal = strchr(*env, '=');
         if (equal) {
             mp_obj_t key = mp_obj_new_str(*env, equal - *env);
-            mp_obj_t value = mp_obj_new_str(equal + 1, strlen(equal) - 1);
+            mp_obj_t value = mp_obj_new_str_copy(&mp_type_str, (byte *)equal + 1, strlen(equal) - 1);
             mp_obj_dict_store(dict, key, value);
         }
         env++;
@@ -142,7 +85,7 @@ static mp_obj_t mp_os_getenv(mp_obj_t key_in) {
         return mp_const_none;
     }
     size_t len = strlen(value);
-    return mp_obj_new_str(value, len);
+    return mp_obj_new_str_copy(&mp_type_str, (byte *)value, len);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_getenv_obj, mp_os_getenv);
 
@@ -167,9 +110,33 @@ static mp_obj_t mp_os_strerror(mp_obj_t code_in) {
     if (!s) {
         mp_raise_ValueError(NULL);
     }
-    return mp_obj_new_str(s, strlen(s));
+    return mp_obj_new_str_copy(&mp_type_str, (byte *)s, strlen(s));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_strerror_obj, mp_os_strerror);
+
+static mp_obj_t mp_os_uname(void) {
+    // Allocate potentially large struct on heap
+    struct utsname *name = m_malloc(sizeof(struct utsname));
+    int ret = uname(name);
+    mp_os_check_ret(ret);
+
+    static const qstr mp_os_uname_attrs[] = {
+        MP_QSTR_sysname,
+        MP_QSTR_nodename,
+        MP_QSTR_release,
+        MP_QSTR_version,
+        MP_QSTR_machine,
+    };
+    mp_obj_t items[] = {
+        mp_obj_new_str_copy(&mp_type_str, (byte *)name->sysname, strnlen(name->sysname, UTSNAME_LENGTH)),
+        mp_obj_new_str_copy(&mp_type_str, (byte *)name->nodename, strnlen(name->nodename, UTSNAME_LENGTH)),
+        mp_obj_new_str_copy(&mp_type_str, (byte *)name->release, strnlen(name->release, UTSNAME_LENGTH)),
+        mp_obj_new_str_copy(&mp_type_str, (byte *)name->version, strnlen(name->version, UTSNAME_LENGTH)),
+        mp_obj_new_str_copy(&mp_type_str, (byte *)name->machine, strnlen(name->machine, UTSNAME_LENGTH)),
+    };
+    return mp_obj_new_attrtuple(mp_os_uname_attrs, 5, items);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_uname_obj, mp_os_uname);
 
 static mp_obj_t mp_os_unsetenv(mp_obj_t key_in) {
     const char *key = mp_obj_str_get_str(key_in);
@@ -597,11 +564,21 @@ static mp_obj_t mp_os_dlerror(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dlerror_obj, mp_os_dlerror);
 
+static mp_obj_t mp_os_dlflash(mp_obj_t file_in) {
+    const char *file = mp_obj_str_get_str(file_in);
+    void *result = dl_flash(file);
+    if (!result) {
+        mp_raise_OSError(errno);
+    }
+    return mp_obj_new_int((intptr_t)result);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlflash_obj, mp_os_dlflash);
+
 static mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
     const char *file = mp_obj_str_get_str(file_in);
-    const void *result = dlopen(file, 0);
+    void *result = dlopen(file, 0);
     if (!result) {
-        mp_raise_OSError(ENOENT);
+        mp_raise_OSError(errno);
     }
     return mp_obj_new_int((intptr_t)result);
 }
@@ -738,6 +715,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_umount_obj, mp_os_umount);
 
 static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),   MP_ROM_QSTR(MP_QSTR_os) },
+    { MP_ROM_QSTR(MP_QSTR_error),      MP_ROM_PTR(&mp_type_OSError) },
+    { MP_ROM_QSTR(MP_QSTR_name),       MP_ROM_PTR(&mp_os_name_obj) },
 
     // Process Parameters
     { MP_ROM_QSTR(MP_QSTR_environ),    MP_ROM_PTR(&mp_os_environ_obj) },
@@ -745,9 +724,7 @@ static const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_getpid),     MP_ROM_PTR(&mp_os_getpid_obj) },
     { MP_ROM_QSTR(MP_QSTR_putenv),     MP_ROM_PTR(&mp_os_putenv_obj) },
     { MP_ROM_QSTR(MP_QSTR_strerror),   MP_ROM_PTR(&mp_os_strerror_obj) },
-    #if MICROPY_PY_OS_UNAME
     { MP_ROM_QSTR(MP_QSTR_uname),      MP_ROM_PTR(&mp_os_uname_obj) },
-    #endif
     { MP_ROM_QSTR(MP_QSTR_unsetenv),    MP_ROM_PTR(&mp_os_unsetenv_obj) },
 
     // File Descriptor Operations
@@ -797,6 +774,7 @@ static const mp_rom_map_elem_t os_module_globals_table[] = {
 
     // The following are MicroPython extensions.
     { MP_ROM_QSTR(MP_QSTR_dlerror),    MP_ROM_PTR(&mp_os_dlerror_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dlflash),    MP_ROM_PTR(&mp_os_dlflash_obj) },
     { MP_ROM_QSTR(MP_QSTR_dllist),     MP_ROM_PTR(&mp_os_dllist_obj) },
     { MP_ROM_QSTR(MP_QSTR_dlopen),     MP_ROM_PTR(&mp_os_dlopen_obj) },
     { MP_ROM_QSTR(MP_QSTR_dlsym),      MP_ROM_PTR(&mp_os_dlsym_obj) },

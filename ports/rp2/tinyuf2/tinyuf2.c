@@ -160,7 +160,7 @@ void *tinyuf2_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
     vfs_file_init(&file->base, &tinyuf2_vtable, mode);
     file->ptr = 0;
     memset(&file->wr_state, 0, sizeof(file->wr_state));
-    if (dl_loader_open(&file->loader) < 0) {
+    if (dl_loader_open(&file->loader, FLASH_BASE) < 0) {
         vfs_release_file(&file->base);
         return NULL;
     }

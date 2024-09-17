@@ -74,6 +74,7 @@
 #include "mpbthciport.h"
 #include "genhdr/mpversion.h"
 
+#include "pico/aon_timer.h"
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/unique_id.h"
@@ -173,7 +174,11 @@ thread_t *mp_thread;
 #define INIT_STACK_SIZE (4 << 10)
 #define DEFAULT_ROOT_DEV "/dev/flash"
 #define DEFAULT_ROOT_FS "fatfs"
+#ifdef NDEBUG
 #define DEFAULT_TTY "/dev/ttyUSB0"
+#else
+#define DEFAULT_TTY "/dev/ttyS0"
+#endif
 #define DEFAULT_GC_HEAP (96 << 10)
 #define MIN_GC_HEAP (8 << 10)
 #define DEFAULT_MP_STACK (8 << 10)
@@ -222,18 +227,26 @@ static void mp_tuh_task(void *params) {
 }
 #endif
 
-static void set_default_time(void) {
+static void set_time(void) {
     tzset();
-    struct tm tm = {
-        .tm_year = 124,
-        .tm_mon = 0,
-        .tm_mday = 1,
-    };
-    struct timeval tv = {
-        mktime(&tm),
-        0,
-    };
-    settimeofday(&tv, NULL);
+
+    struct timespec ts;
+    if (aon_timer_is_running()) {
+        aon_timer_get_time(&ts);
+    } else {
+        struct tm tm = {
+            .tm_year = 124,
+            .tm_mon = 0,
+            .tm_mday = 1,
+        };
+        ts.tv_sec = mktime(&tm);
+        ts.tv_nsec = 0;
+    }
+
+    struct timeval tv;
+    TIMESPEC_TO_TIMEVAL(&tv, &ts);
+    int __real_settimeofday(const struct timeval *tv, const struct timezone *tz);
+    __real_settimeofday(&tv, NULL);
 }
 
 static void setup_tty(void) {
@@ -286,6 +299,8 @@ error:
 
 static void init_task(void *params) {
     flash_lockout_init();
+    extern void flash_init(void);
+    flash_init();
 
     #if MICROPY_PY_LWIP
     lwip_helper_init();
@@ -323,7 +338,7 @@ static void init_task(void *params) {
 
 int main(int argc, char **argv) {
     env_init();
-    set_default_time();
+    set_time();
     xTaskCreate(init_task, "init", INIT_STACK_SIZE / sizeof(StackType_t), NULL, 3, NULL);
     vTaskStartScheduler();
     return 1;

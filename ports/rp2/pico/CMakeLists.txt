@@ -13,6 +13,7 @@ target_sources(pico_helper INTERFACE
     terminal.c
     terminal_boot.c
     terminal_uart.c
+    time.c
     uart.c
 )
 
@@ -21,6 +22,11 @@ target_include_directories(pico_helper INTERFACE include)
 target_link_libraries(pico_helper INTERFACE
     FreeRTOS-Kernel 
     hardware_uart
+    pico_aon_timer
+)
+
+target_link_options(pico_helper INTERFACE
+    LINKER:--wrap=settimeofday
 )
 
 if(PICO_CYW43_SUPPORTED)

@@ -50,7 +50,6 @@
 
 #define MICROPY_PY_MACHINE_EXTRA_GLOBALS \
     { MP_ROM_QSTR(MP_QSTR_Pin),                 MP_ROM_PTR(&machine_pin_type) }, \
-    { MP_ROM_QSTR(MP_QSTR_RTC),                 MP_ROM_PTR(&machine_rtc_type) }, \
     { MP_ROM_QSTR(MP_QSTR_Timer),               MP_ROM_PTR(&machine_timer_type) }, \
     \
     { MP_ROM_QSTR(MP_QSTR_APin),                MP_ROM_PTR(&pin_type) }, \
@@ -112,6 +111,7 @@ static void mp_machine_idle(void) {
 }
 
 static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
+    #if PICO_RP2040
     mp_int_t delay_ms = 0;
     bool use_timer_alarm = false;
 
@@ -199,6 +199,9 @@ static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
     // Will be fixed upstream
     assert(0);
     mp_thread_end_atomic_section(my_interrupts);
+    #else
+    assert(0);
+    #endif
 }
 
 NORETURN static void mp_machine_deepsleep(size_t n_args, const mp_obj_t *args) {

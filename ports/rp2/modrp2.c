@@ -35,7 +35,9 @@
 #include "hardware/gpio.h"
 #include "hardware/structs/ioqspi.h"
 #include "hardware/structs/sio.h"
-
+#if !PICO_RP2040
+#include "pico/bootrom.h"
+#endif
 
 // Improved version of
 // https://github.com/raspberrypi/pico-examples/blob/master/picoboard/button/button.c
@@ -96,11 +98,28 @@ static mp_obj_t rp2_flash_do_cmd(mp_obj_t txbuf) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(rp2_flash_do_cmd_obj, rp2_flash_do_cmd);
 
+#if !PICO_RP2040
+static mp_obj_t rp2_get_sys_info(mp_obj_t flag_in) {
+    uint32_t flag = mp_obj_get_int(flag_in);
+    rom_get_sys_info_fn get_sys_info = rom_func_lookup(ROM_FUNC_GET_SYS_INFO);
+    uint32_t buffer[5];
+    int result = get_sys_info(buffer, 5, 1ul << flag);
+    if (result <= 0) {
+        mp_raise_ValueError(NULL);
+    }
+    return mp_obj_new_bytes((void *)(buffer + 1), (result - 1) * sizeof(uint32_t));
+}
+MP_DEFINE_CONST_FUN_OBJ_1(rp2_get_sys_info_obj, rp2_get_sys_info);
+#endif
+
 static const mp_rom_map_elem_t rp2_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),            MP_ROM_QSTR(MP_QSTR_rp2) },
     { MP_ROM_QSTR(MP_QSTR_bootsel_button),      MP_ROM_PTR(&rp2_bootsel_button_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_core_num),        MP_ROM_PTR(&rp2_get_core_num_obj) },
     { MP_ROM_QSTR(MP_QSTR_flash_do_cmd),        MP_ROM_PTR(&rp2_flash_do_cmd_obj) },
+    #if !PICO_RP2040
+    { MP_ROM_QSTR(MP_QSTR_get_sys_info),        MP_ROM_PTR(&rp2_get_sys_info_obj) },
+    #endif
 };
 static MP_DEFINE_CONST_DICT(rp2_module_globals, rp2_module_globals_table);
 

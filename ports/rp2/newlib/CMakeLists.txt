@@ -6,7 +6,7 @@ target_sources(newlib_helper INTERFACE
     devfs.c
     dlfcn.c
     env.c
-    flash.c
+    flash_dev.c
     flash_env.c
     flash_heap.c
     flash_lockout.c
@@ -74,7 +74,7 @@ function(add_import_library TARGET EXE)
     add_library(${TARGET} INTERFACE)
     target_link_options(${TARGET} INTERFACE
         "LINKER:-R$<TARGET_FILE:${EXE}>"
-        $<LIST:FILTER,$<TARGET_PROPERTY:${MICROPY_TARGET},LINK_OPTIONS>,INCLUDE,LINKER:--wrap>
+        $<LIST:FILTER,$<TARGET_PROPERTY:${EXE},LINK_OPTIONS>,INCLUDE,LINKER:--wrap>
     )
     target_include_directories(${TARGET} INTERFACE
         $<TARGET_PROPERTY:${EXE},INCLUDE_DIRECTORIES>

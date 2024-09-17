@@ -49,10 +49,20 @@ def mk_dyn(sym):
 
 
 for section in elffile.iter_sections(elf32.SHT_SYMTAB):
+    # __aeabi_* functions are defined in libgcc.a with hidden visibility, however they need to have
+    # default visibility so that extension modules can reference them. In some cases, pico-sdk
+    # wraps these functions and the wrapper function already has default visibility and we want the
+    # real function to remain hidden. So only change the visibility of __aeabi_* functions to
+    # default if they are not wrapped.
+    wrap_aeabi = frozenset(
+        (sym.name for sym in section.symbols if sym.name.startswith("__wrap___aeabi_"))
+    )
     for sym in section.symbols:
-        if not sym.section:
+        if not sym.section or sym.struct.st_bind == elf32.STB_LOCAL:
             continue
-        if sym.struct.st_bind != elf32.STB_LOCAL and sym.struct.st_visibility == elf32.STV_DEFAULT:
+        if sym.name.startswith("__aeabi_") and f"__wrap_{sym.name}" not in wrap_aeabi:
+            sym.struct.st_visibility = elf32.STV_DEFAULT
+        if sym.struct.st_visibility == elf32.STV_DEFAULT:
             mk_dyn(sym)
 
 

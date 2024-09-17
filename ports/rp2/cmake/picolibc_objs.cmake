@@ -251,7 +251,7 @@ set(LIBC_OBJECTS
     # libc_stdlib_getsubopt.c.o
     libc_stdlib_imaxabs.c.o
     libc_stdlib_imaxdiv.c.o
-    libc_stdlib_itoa.c.o
+    # libc_stdlib_itoa.c.o
     # libc_stdlib_jrand48.c.o
     # libc_stdlib_l64a.c.o
     libc_stdlib_labs.c.o

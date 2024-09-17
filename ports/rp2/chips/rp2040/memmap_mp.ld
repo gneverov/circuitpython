@@ -21,13 +21,9 @@
     __stack (== StackTop)
 */
 
-FLASH_SIZE = 2048k;
-FLASH_STORAGE_SIZE = 720k;
-FLASH_ENV_SIZE = 4k;
-
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = FLASH_SIZE
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 16M
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -42,11 +38,8 @@ SECTIONS
        in the Raspberry Pi Pico SDK
     */
 
-    .flash_begin : {
-        HIDDEN(__flash_binary_start = .);
-    } > FLASH
-
     .boot2 : {
+        HIDDEN(__flash_binary_start = .);
         HIDDEN(__boot2_start__ = .);
         KEEP (*(.boot2))
         HIDDEN(__boot2_end__ = .);
@@ -62,7 +55,7 @@ SECTIONS
        launches only, to perform proper flash setup.
     */
 
-    .text : {
+    .init : {
         HIDDEN(__logical_binary_start = .);
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
@@ -70,7 +63,13 @@ SECTIONS
         KEEP (*(.embedded_block))
         HIDDEN(__embedded_block_end = .);
         KEEP (*(.reset))
+    }
 
+    .flash_env 0x10001000 (NOLOAD) : { 
+        *(.flash_env*)
+    } > FLASH =0xff
+
+    .text : ALIGN(4k) {
         KEEP (*(.init .init.*))
         *(.text .text.*)
         KEEP (*(.fini .fini.*))
@@ -78,7 +77,7 @@ SECTIONS
         /* preinit data */
         . = ALIGN(4);        
         PROVIDE_HIDDEN (__preinit_array_start = .);
-		KEEP (*(SORT_BY_INIT_PRIORITY(.preinit_array.*)))
+		KEEP (*(SORT_BY_NAME(.preinit_array.*)))
 		KEEP (*(.preinit_array))
         PROVIDE_HIDDEN (__preinit_array_end = .);
 
@@ -163,10 +162,6 @@ SECTIONS
 		HIDDEN(__tdata_end = .);
 	} > RAM AT> FLASH
 
-    .flash_end : {
-        HIDDEN(__flash_binary_end = .);
-    } > FLASH
-
 	.tbss (NOLOAD) : {
         HIDDEN(__bss_start__ = .);
         HIDDEN(__tbss_start = .);
@@ -203,43 +198,65 @@ SECTIONS
         HIDDEN(end = __end__);
     } > RAM
 
-    /* Scratch regions are used as MSP stack and are thus not initialized.
-     * These symbols are needed by pico sdk's crt0, but result in a no-op.
-     */
-    HIDDEN(__scratch_x_start__ = ORIGIN(SCRATCH_X));
-    HIDDEN(__scratch_x_end__ = ORIGIN(SCRATCH_X));
-    HIDDEN(__scratch_x_source__ = ORIGIN(SCRATCH_X));
-    HIDDEN(__scratch_y_start__ = ORIGIN(SCRATCH_Y));
-    HIDDEN(__scratch_y_end__ = ORIGIN(SCRATCH_Y));
-    HIDDEN(__scratch_y_source__ = ORIGIN(SCRATCH_Y));
+   /* Start and end symbols must be word-aligned */
+    .scratch_x : {
+        __scratch_x_start__ = .;
+        *(.scratch_x.*)
+        . = ALIGN(4);
+        __scratch_x_end__ = .;
+    } > SCRATCH_X AT > FLASH
+    __scratch_x_source__ = LOADADDR(.scratch_x);
 
-    /* These symbols define the MSP stacks (one per core). The MSP stack is 
-     * only used for "main" before the FreeRTOS scheduler starts, and for 
-     * interrupts.
+    .scratch_y : {
+        __scratch_y_start__ = .;
+        *(.scratch_y.*)
+        . = ALIGN(4);
+        __scratch_y_end__ = .;
+    } > SCRATCH_Y AT > FLASH
+    __scratch_y_source__ = LOADADDR(.scratch_y);
+
+    /* .stack*_dummy section doesn't contains any symbols. It is only
+     * used for linker to calculate size of stack sections, and assign
+     * values to stack symbols later
+     *
+     * stack1 section may be empty/missing if platform_launch_core1 is not used */
+
+    /* by default we put core 0 stack at the end of scratch Y, so that if core 1
+     * stack is not used then all of SCRATCH_X is free.
      */
+    .stack1_dummy (NOLOAD):
+    {
+        *(.stack1*)
+    } > SCRATCH_X
+    .stack_dummy (NOLOAD):
+    {
+        KEEP(*(.stack*))
+    } > SCRATCH_Y
+
+    .flash_end : {
+        KEEP(*(.embedded_end_block*))
+        PROVIDE_HIDDEN(__flash_binary_end = .);
+    } > FLASH
+
+        /* stack limit is poorly named, but historically is maximum heap ptr */
     HIDDEN(__StackLimit = ORIGIN(RAM) + LENGTH(RAM));
-    HIDDEN(__HeapLimit = __StackLimit);    
     HIDDEN(__StackOneTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X));
     HIDDEN(__StackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y));
-    HIDDEN(__StackOneBottom = ORIGIN(SCRATCH_X));
-    HIDDEN(__StackBottom = ORIGIN(SCRATCH_Y));
+    HIDDEN(__StackOneBottom = __StackOneTop - SIZEOF(.stack1_dummy));
+    HIDDEN(__StackBottom = __StackTop - SIZEOF(.stack_dummy));
     PROVIDE_HIDDEN(__stack = __StackTop);
+
+    HIDDEN(__HeapLimit = __StackLimit);    
     PROVIDE_HIDDEN(__heap_start = __end__);
     PROVIDE_HIDDEN(__heap_end = __HeapLimit);
 
     .flash_heap (READONLY) : ALIGN(4k) {
         HIDDEN(__flash_heap_start = .);
         *(.flash_heap*)
-        HIDDEN(__flash_heap_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_STORAGE_SIZE - FLASH_ENV_SIZE);
     } > FLASH
-    
-    HIDDEN(__flash_storage_end = ORIGIN(FLASH) + LENGTH(FLASH) - FLASH_ENV_SIZE);
-    HIDDEN(__flash_storage_start = __flash_storage_end - FLASH_STORAGE_SIZE);
-    ASSERT(__flash_storage_start >= ., "flash region overflowed")
 
-    .flash_env __flash_storage_end (COPY) : ALIGN(4k) {
-        *(.flash_env*)
-    } > FLASH
+    /* Check if data + heap + stack exceeds RAM limit */
+    ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
 
     ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
     /* todo assert on extra code */

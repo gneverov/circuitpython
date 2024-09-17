@@ -15,7 +15,7 @@ typedef struct dl_loader_state {
     flash_ptr_t ram_base;
 } dl_loader_t;
 
-int dl_loader_open(dl_loader_t *loader);
+int dl_loader_open(dl_loader_t *loader, uintptr_t base);
 void dl_loader_free(dl_loader_t *loader);
 flash_ptr_t dl_loader_relocate(const dl_loader_t *loader, flash_ptr_t addr);
 int dl_loader_read(dl_loader_t *loader, void *buffer, size_t length, flash_ptr_t addr);
@@ -36,9 +36,9 @@ void *dl_realloc(const dl_linker_t *linker, void *ptr, size_t size);
 
 
 // Runtime API
-int dl_flash(const char *file);
+void *dl_flash(const char *file);
 bool dl_iterate(const flash_heap_header_t **header);
 int dlclose(const void *handle);
 char *dlerror(void);
-const void *dlopen(const char *file, int mode);
+void *dlopen(const char *file, int mode);
 void *dlsym(const void *handle, const char *name);

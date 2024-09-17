@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "hardware/flash.h"
+#include "newlib/flash.h"
 
 
 struct flash_env_item {

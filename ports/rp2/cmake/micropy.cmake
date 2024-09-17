@@ -31,7 +31,7 @@ function(add_micropy_extension_library target lib)
         add_dynamic_library(${target} ${ARGN})
         target_link_libraries(${target} micropython_import ${lib})
         target_link_options(${target} PRIVATE
-            LINKER:--script=${MICROPY_PORT_DIR}/memmap_ext.ld
+            LINKER:--script=${MICROPY_PORT_DIR}/chips/${PICO_CHIP}/memmap_ext.ld
             # LINKER:--no-warn-rwx-segments
             LINKER:-Map=$<TARGET_FILE:${target}>.map
         )
@@ -121,11 +121,10 @@ set(MICROPY_SOURCE_DRIVERS
 )
 
 set(MICROPY_SOURCE_PORT
+    flash.c
     help.c
-    machine_bitstream.c
     machine_i2c.c
     machine_pin.c
-    machine_rtc.c
     machine_spi.c
     machine_timer.c
     machine/audio_out_pwm.c
@@ -137,9 +136,7 @@ set(MICROPY_SOURCE_PORT
     mphalport.c
     mpthreadport.c
     newlib_drv.c
-    rp2_flash.c
     usbd.c
-    mbedtls/mbedtls_port.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
 
@@ -149,7 +146,6 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_PORT_DIR}/machine_adc.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
     ${MICROPY_PORT_DIR}/machine_pin.c
-    ${MICROPY_PORT_DIR}/machine_rtc.c
     ${MICROPY_PORT_DIR}/machine_spi.c
     ${MICROPY_PORT_DIR}/machine_timer.c
     ${MICROPY_PORT_DIR}/machine_wdt.c
@@ -177,7 +173,6 @@ set(PICO_SDK_COMPONENTS
     hardware_pll
     hardware_pwm
     hardware_regs
-    hardware_rtc
     hardware_spi
     hardware_structs
     hardware_sync
@@ -431,7 +426,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
 )
 
 if(MICROPY_SSL_MBEDTLS)
-    target_link_libraries(${MICROPY_TARGET} micropy_lib_mbedtls)
+    target_link_libraries(${MICROPY_TARGET} pico_mbedtls)
 endif()
 
 target_link_libraries(${MICROPY_TARGET} usermod)
@@ -469,8 +464,9 @@ set_source_files_properties(
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_FLOAT_PROPAGATE_NANS=1
     PICO_HEAP_SIZE=0
-    PICO_STACK_SIZE=0
-    PICO_CORE1_STACK_SIZE=0
+    PICO_STACK_SIZE=4096
+    PICO_CORE1_STACK_SIZE=4096
+    PICO_FLASH_SIZE_BYTES=16777216
     PICO_MAX_SHARED_IRQ_HANDLERS=8 # we need more than the default
     PICO_PROGRAM_NAME="MicroPythonRT"
     PICO_NO_PROGRAM_VERSION_STRING=1 # do it ourselves in main.c
@@ -478,6 +474,7 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_NO_BI_STDIO_UART=1 # we call it UART REPL
     PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
     PICO_INT64_OPS_IN_RAM=1
+    $<$<NOT:$<STREQUAL:${PICO_CHIP},rp2040>>:PSRAM_BASE=0x11000000u>
 )
 
 target_link_libraries(${MICROPY_TARGET}
@@ -502,7 +499,7 @@ endif()
 #  a linker script modification) until we explicitly add  macro calls around the function
 #  defs to move them into RAM.
 if (PICO_ON_DEVICE AND NOT PICO_NO_FLASH AND NOT PICO_COPY_TO_RAM)
-    pico_set_linker_script(${MICROPY_TARGET} ${MICROPY_PORT_DIR}/memmap_mp.ld)
+    pico_set_linker_script(${MICROPY_TARGET} ${MICROPY_PORT_DIR}/chips/${PICO_CHIP}/memmap_mp.ld)
 endif()
 
 pico_add_extra_outputs(${MICROPY_TARGET})

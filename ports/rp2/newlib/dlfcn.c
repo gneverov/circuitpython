@@ -15,11 +15,15 @@
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 
+#ifndef MIN
+#define MIN(a, b) ((b) > (a)?(a):(b))
+#endif
+
 
 typedef char elf_str_t[256];
 
 // Variable is properly initialized in dl_init.
-static const flash_heap_header_t *last_loaded = (void *)-1;
+static const flash_heap_header_t *dl_last_loaded = (void *)-1;
 
 static int dl_error;
 static char dl_error_msg[256];
@@ -52,11 +56,11 @@ static void dl_seterror() {
     dl_error = errno;
 }
 
-int dl_loader_open(dl_loader_t *loader) {
-    if (flash_heap_open(&loader->heap, DL_FLASH_HEAP_TYPE) < 0) {
+int dl_loader_open(dl_loader_t *loader, uintptr_t base) {
+    if (flash_heap_open(&loader->heap, DL_FLASH_HEAP_TYPE, base) < 0) {
         return -1;
     }
-    if (loader->heap.flash_start < (flash_ptr_t)last_loaded) {
+    if (loader->heap.flash_start < (flash_ptr_t)dl_last_loaded) {
         strcpy(dl_error_msg, "reset needed");
         errno = EPERM;
         return -1;
@@ -76,9 +80,9 @@ void dl_loader_free(dl_loader_t *loader) {
 flash_ptr_t dl_loader_relocate(const dl_loader_t *loader, flash_ptr_t addr) {
     switch (addr >> 28) {
         case 1:
-            return (addr - XIP_BASE) + loader->flash_base;
+            return (addr & 0x0fffffff) + loader->flash_base;
         case 2:
-            return (addr - SRAM_BASE) + loader->ram_base;
+            return (addr & 0x0fffffff) + loader->ram_base;
         default:
             errno = EFAULT;
             dl_seterror();
@@ -111,11 +115,9 @@ int dl_loader_write(dl_loader_t *loader, const void *buffer, size_t length, flas
 }
 
 static int dl_loader_phdr(dl_loader_t *loader, Elf32_Phdr *phdr) {
-    flash_ptr_t footer_addr = XIP_BASE + (loader->heap.flash_end - loader->flash_base);
-    footer_addr = (footer_addr - 8) & ~255;
-    footer_addr = dl_loader_relocate(loader, footer_addr);
+    flash_ptr_t footer_addr = (loader->heap.flash_end - 8 - loader->flash_base) & ~255;
     uint32_t footer[2];
-    if (flash_heap_pread(&loader->heap, footer, 8, footer_addr) < 0) {
+    if (flash_heap_pread(&loader->heap, footer, 8, loader->flash_base + footer_addr) < 0) {
         return -1;
     }
     if (~footer[0] != footer[1]) {
@@ -282,14 +284,18 @@ error:
     return -1;
 }
 
-int dl_flash(const char *file) {
+void *dl_load(const char *file, uintptr_t base) {
     dl_loader_t loader = { 0 };
     int fd = open(file, O_RDONLY, 0);
     if (fd < 0) {
+        strcpy(dl_error_msg, "file error");
         goto cleanup;
     }
 
-    if (dl_loader_open(&loader) < 0) {
+    size_t start_flash_size, start_ram_size, start_psram_size;
+    flash_heap_stats(&start_flash_size, &start_ram_size, &start_psram_size);
+
+    if (dl_loader_open(&loader, base) < 0) {
         goto cleanup;
     }
 
@@ -331,7 +337,14 @@ int dl_flash(const char *file) {
     }
 
     dl_loader_free(&loader);
-    return 0;
+    size_t end_flash_size, end_ram_size, end_psram_size;
+    flash_heap_stats(&end_flash_size, &end_ram_size, &end_psram_size);
+    printf(
+        "loaded %u flash bytes, %u ram bytes, %u psram bytes\n",
+        end_flash_size - start_flash_size,
+        end_ram_size - start_ram_size,
+        end_psram_size - start_psram_size);
+    return (void *)loader.flash_base;
 
 cleanup:
     dl_seterror();
@@ -339,7 +352,7 @@ cleanup:
         close(fd);
     }
     dl_loader_free(&loader);
-    return -1;
+    return NULL;
 }
 
 static int do_phdrs(dl_linker_t *linker) {
@@ -535,6 +548,7 @@ static int do_rel(dl_linker_t *state, flash_ptr_t rel_addr, Elf32_Word relent, E
             case R_ARM_ABS32:
             case R_ARM_TARGET1:
             case R_ARM_THM_PC22:
+            case R_ARM_THM_JUMP24:
                 break;
             default:
                 snprintf(dl_error_msg, sizeof(dl_error_msg), "unsupported reloc type %ld", ELF32_R_TYPE(rel.r_info));
@@ -548,6 +562,7 @@ static int do_rel(dl_linker_t *state, flash_ptr_t rel_addr, Elf32_Word relent, E
                     rel.r_addend = insn;
                     break;
                 case R_ARM_THM_PC22:
+                case R_ARM_THM_JUMP24:
                     // extract imm22 operand
                     rel.r_addend = ((insn & 0x7FF) << 11) | ((insn & 0x7FF0000) >> 16);
                     // sign extend
@@ -565,6 +580,7 @@ static int do_rel(dl_linker_t *state, flash_ptr_t rel_addr, Elf32_Word relent, E
                 result = S + rel.r_addend;
                 break;
             case R_ARM_THM_PC22:
+            case R_ARM_THM_JUMP24:
                 result = S - P + rel.r_addend;
                 break;
         }
@@ -575,6 +591,7 @@ static int do_rel(dl_linker_t *state, flash_ptr_t rel_addr, Elf32_Word relent, E
                 insn = result;
                 break;
             case R_ARM_THM_PC22:
+            case R_ARM_THM_JUMP24:
                 // convert unit to half words
                 result >>= 1;
                 // check for overflow
@@ -645,10 +662,14 @@ bool dl_iterate(const flash_heap_header_t **header) {
     while (result && ((*header)->type != DL_FLASH_HEAP_TYPE)) {
         result = flash_heap_iterate(header);
     }
-    return result && (*header < last_loaded);
+    return result && (*header < dl_last_loaded);
 }
 
-const void *dlopen(const char *file, int mode) {
+void *dl_flash(const char *file) {
+    return dl_load(file, FLASH_BASE);
+}
+
+void *dlopen(const char *file, int mode) {
     const flash_heap_header_t *header = NULL;
     while (dl_iterate(&header)) {
         const char *str = NULL;
@@ -664,9 +685,12 @@ const void *dlopen(const char *file, int mode) {
             }
         }
         if (str && (soname != -1) && strcmp(file, str + soname) == 0) {
-            return header;
+            return (void *)header;
         }
     }
+    strcpy(dl_error_msg, "file error");
+    errno = ENOENT;
+    dl_seterror();
     return NULL;
 }
 
@@ -743,11 +767,11 @@ static const flash_heap_header_t *dl_finit(Elf32_Sword tag) {
 
 __attribute__((constructor, visibility("hidden")))
 void dl_init(void) {
-    last_loaded = dl_finit(DT_INIT);
+    dl_last_loaded = dl_finit(DT_INIT);
 }
 
 __attribute__((destructor, visibility("hidden")))
 void dl_fini(void) {
-    last_loaded = dl_finit(DT_FINI);
-    last_loaded = NULL;
+    dl_last_loaded = dl_finit(DT_FINI);
+    dl_last_loaded = NULL;
 }

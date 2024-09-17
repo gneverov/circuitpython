@@ -202,6 +202,10 @@ class SHT(IntEnum):
     # End of application-specific
     SHT_HIUSER = 0x8FFFFFFF
 
+    SHT_ARM_EXIDX = SHT_LOPROC + 1
+    SHT_ARM_PREEMPTMAP = SHT_LOPROC + 2
+    SHT_ARM_ATTRIBUTES = SHT_LOPROC + 3
+
 
 # Legal values for sh_flags (section flags).
 @global_enum
@@ -300,6 +304,10 @@ class Sym(Structure):
     @property
     def st_visibility(self):
         return ST_VISIBILITY(self.st_other)
+
+    @st_visibility.setter
+    def st_visibility(self, value):
+        self.st_other = c_ubyte(value)
 
 
 # Legal values for ST_BIND subfield of st_info (symbol binding).
@@ -885,6 +893,8 @@ class PT(IntEnum):
 
     # End of processor-specific
     PT_HIPROC = 0x7FFFFFFF
+
+    PT_ARM_EXIDX = PT_LOPROC + 1
 
 
 # Legal values for p_flags (segment flags).

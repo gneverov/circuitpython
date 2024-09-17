@@ -21,10 +21,9 @@ typedef struct {
     mp_map_t obj_map;
 } freeze_writer_t;
 
-bool freeze_clear();
 void freeze_init();
 void freeze_gc();
-void freeze_flash(const char *file);
 
-mp_obj_t freeze_import(size_t n_args, const mp_obj_t *args);
-mp_obj_t freeze_modules(void);
+mp_obj_t freeze_clear(void);
+mp_obj_t freeze_import_modules(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs);
+mp_obj_t freeze_get_modules(void);

@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2024 Gregory Neverov
+// SPDX-License-Identifier: MIT
+
 #include "newlib/devfs.h"
 // #include "newlib/dhara.h"
 #include "newlib/fatfs.h"
-#include "newlib/flash.h"
+#include "newlib/flash_dev.h"
 #include "pico/sdcard.h"
 #include "pico/terminal.h"
 #include "tinyuf2/tinyuf2.h"

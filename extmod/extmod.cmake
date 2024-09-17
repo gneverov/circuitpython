@@ -249,7 +249,7 @@ endif()
 
 # Library for mbedtls
 
-if(MICROPY_SSL_MBEDTLS)
+if(MICROPY_SSL_MBEDTLS AND !MICROPY_FREERTOS)
     add_library(micropy_lib_mbedtls INTERFACE)
 
     set(MICROPY_LIB_MBEDTLS_DIR "${MICROPY_DIR}/lib/mbedtls")

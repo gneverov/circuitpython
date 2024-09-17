@@ -19,7 +19,7 @@ __attribute__((section(".flash_env")))
 static struct flash_env flash_env;
 
 static inline struct flash_env_item *flash_env_next(const struct flash_env_item *item) {
-    return (struct flash_env_item *)(((uintptr_t)item + item->len + __alignof(struct flash_env) - 1) & ~(__alignof(struct flash_env) - 1));
+    return (struct flash_env_item *)(((uintptr_t)item + item->len + __alignof(struct flash_env_item) - 1) & ~(__alignof(struct flash_env_item) - 1));
 }
 
 const void *flash_env_get(int key, size_t *len) {
@@ -88,8 +88,7 @@ void flash_env_close(struct flash_env *env) {
     assert((flash_offset & (FLASH_SECTOR_SIZE - 1)) == 0);
 
     flash_lockout_start();
-    flash_range_erase(flash_offset, FLASH_SECTOR_SIZE);
-    flash_range_program(flash_offset, (const uint8_t *)env, FLASH_SECTOR_SIZE);
+    flash_memwrite(flash_offset, env, FLASH_SECTOR_SIZE);
     assert(memcmp(&flash_env, env, FLASH_SECTOR_SIZE) == 0);
     flash_lockout_end();
 

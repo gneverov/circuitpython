@@ -7,7 +7,6 @@
 
 #include "newlib/dlfcn.h"
 #include "newlib/flash_heap.h"
-#include "pico/platform.h"
 
 #include "./freeze.h"
 #include "./extmod.h"
@@ -32,8 +31,8 @@ static void freeze_writer_nlr_callback(void *ctx) {
     flash_heap_free(&self->heap);
 }
 
-static void freeze_writer_init(freeze_writer_t *self, uint32_t type) {
-    if (flash_heap_open(&self->heap, type) < 0) {
+static void freeze_writer_init(freeze_writer_t *self, uint32_t type, uintptr_t base) {
+    if (flash_heap_open(&self->heap, type, base) < 0) {
         mp_raise_OSError(errno);
     }
     self->ram_start = ram_data + freeze_last_ram_size;
@@ -156,7 +155,7 @@ static void freeze_write_intptr(freeze_writer_t *self, uintptr_t value) {
     freeze_write(self, (uint8_t *)&value, sizeof(uintptr_t));
 }
 
-static bool freeze_is_freezable_ptr(freeze_writer_t *self, const void *ptr) {
+static bool freeze_is_frozen_ptr(freeze_writer_t *self, const void *ptr) {
     extern uint8_t end;
     return (ptr == 0) || 
         ((ptr >= (void *)XIP_BASE) && (ptr <= (void *)self->heap.flash_end)) || 
@@ -164,7 +163,7 @@ static bool freeze_is_freezable_ptr(freeze_writer_t *self, const void *ptr) {
 }
 
 static void freeze_write_fptr(freeze_writer_t *self, flash_ptr_t fptr) {
-    assert(freeze_is_valid_ptr(self, fptr) || freeze_is_freezable_ptr(self, (void *)fptr));
+    assert(freeze_is_valid_ptr(self, fptr) || freeze_is_frozen_ptr(self, (void *)fptr));
     freeze_write_intptr(self, (uintptr_t)fptr);
 }
 
@@ -191,7 +190,7 @@ static flash_ptr_t freeze_allocate(freeze_writer_t *self, size_t size, size_t al
 
 static void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *ptr) {
     assert(freeze_is_valid_ptr(self, fptr));
-    assert(!freeze_is_freezable_ptr(self, ptr));
+    assert(!freeze_is_frozen_ptr(self, ptr));
 
     mp_map_elem_t *elem = mp_map_lookup(
         &self->obj_map,
@@ -202,7 +201,7 @@ static void freeze_add_ptr(freeze_writer_t *self, flash_ptr_t fptr, const void *
 }
 
 static bool freeze_lookup_ptr(freeze_writer_t *self, flash_ptr_t *fptr, const void *ptr) {
-    if (freeze_is_freezable_ptr(self, ptr)) {
+    if (freeze_is_frozen_ptr(self, ptr)) {
         *fptr = (flash_ptr_t)ptr;
         return true;
     }
@@ -224,7 +223,7 @@ typedef void (*freeze_write_t)(freeze_writer_t *self, const void *value);
 typedef size_t (*freeze_sizeof_t)(const void *value);
 
 static void freeze_write_ptr(freeze_writer_t *self, const void *ptr, size_t size, size_t align, bool ram) {
-    if (freeze_is_freezable_ptr(self, ptr)) {
+    if (freeze_is_frozen_ptr(self, ptr)) {
         freeze_write_fptr(self, (flash_ptr_t)ptr);
         return;
     }
@@ -824,7 +823,7 @@ enum qstr_pool_field {
 };
 
 static void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *pool, enum qstr_pool_field field) {
-    if (freeze_is_freezable_ptr(self, pool)) {
+    if (freeze_is_frozen_ptr(self, pool)) {
         return;
     }
     if (pool->prev != NULL) {
@@ -853,7 +852,7 @@ static void freeze_write_qstr_pool(freeze_writer_t *self, const qstr_pool_t *poo
 
 static flash_ptr_t freeze_new_qstr_pool(freeze_writer_t *self, const qstr_pool_t *last_pool) {
     const qstr_pool_t *first_pool = last_pool;
-    while (!freeze_is_freezable_ptr(self, first_pool) && first_pool->prev != NULL) {
+    while (!freeze_is_frozen_ptr(self, first_pool) && first_pool->prev != NULL) {
         first_pool = first_pool->prev;
     }
 
@@ -895,15 +894,18 @@ typedef struct {
     size_t ram_len;
 } freeze_header_t;
 
-bool freeze_clear() {
+__attribute__((visibility("hidden")))
+mp_obj_t freeze_clear(void) {
     if (freeze_mode > 0) {
-        return false;
+        mp_raise_msg(&mp_type_RuntimeError, "Freezing in progress");
     }
     if (flash_heap_truncate(NULL) < 0) {
         mp_raise_OSError(errno);
     }
     freeze_mode = -1;
-    return true;
+    // Restart for changes to take effect
+    exit(0);
+    return mp_const_none;
 }
 
 void freeze_gc() {
@@ -989,7 +991,7 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     }
 
     freeze_writer_t freezer;
-    freeze_writer_init(&freezer, FREEZE_MODULE_FLASH_HEAP_TYPE);
+    freeze_writer_init(&freezer, FREEZE_MODULE_FLASH_HEAP_TYPE, (uintptr_t)freeze_checkpoint);
     flash_ptr_t fmodule = freeze_new_module(&freezer, module_obj);
     
     size_t ram_size = freezer.ram_end - freezer.ram_start;
@@ -1015,12 +1017,16 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     return module_obj;
 }
 
-static void freeze_qstrs(void) {
+static void freeze_qstrs(uintptr_t base) {
+    const qstr_pool_t *last_pool = MP_STATE_VM(last_pool);
+    if (freeze_is_frozen_ptr(NULL, last_pool)) {
+        return;
+    }
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         freeze_writer_t freezer;
-        freeze_writer_init(&freezer, FREEZE_QSTR_POOL_FLASH_HEAP_TYPE);
-        flash_ptr_t fpool = freeze_new_qstr_pool(&freezer, MP_STATE_VM(last_pool));
+        freeze_writer_init(&freezer, FREEZE_QSTR_POOL_FLASH_HEAP_TYPE, base);
+        flash_ptr_t fpool = freeze_new_qstr_pool(&freezer, last_pool);
         if (fpool) {
             freezer.heap.entry = fpool;
             freeze_writer_commit(&freezer);
@@ -1039,12 +1045,34 @@ static void freeze_qstrs(void) {
 }
 
 static void freeze_mode_nlr_callback(void *ctx) {
+        freeze_qstrs((uintptr_t)freeze_checkpoint);
         freeze_mode--;
 }
 
-mp_obj_t freeze_import(size_t n_args, const mp_obj_t *args) {
+__attribute__((visibility("hidden")))
+mp_obj_t freeze_import_modules(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
     if (freeze_mode < 0) {
-        return MP_OBJ_NULL;
+        mp_raise_msg(&mp_type_RuntimeError, "Reboot pending");
+    }
+
+    // Check to see if the 'flash' kwarg was specified and is not None
+    const mp_map_elem_t *elem = mp_map_lookup(kwargs, MP_OBJ_NEW_QSTR(MP_QSTR_flash), MP_MAP_LOOKUP);
+    if (elem && (elem->value != mp_const_none)) {
+#if PSRAM_BASE
+        // If flash is requested but we've already started using psram, then a reboot is needed
+        if (mp_obj_is_true(elem->value) && ((uintptr_t)freeze_checkpoint >= PSRAM_BASE)) {
+            mp_raise_msg(&mp_type_RuntimeError, "Reboot pending");
+        }
+        // If psram is requested, move checkpoint pointer to psram
+        if (!mp_obj_is_true(elem->value) && ((uintptr_t)freeze_checkpoint < PSRAM_BASE)) {
+            freeze_checkpoint = (void *)PSRAM_BASE;
+        }
+#else
+        // psram is requested but there is not psram!
+        if (!mp_obj_is_true(elem->value)) {
+            mp_raise_msg(&mp_type_RuntimeError, NULL);
+        }
+#endif
     }
 
     mp_obj_t result = mp_obj_new_tuple(n_args, NULL);
@@ -1053,27 +1081,25 @@ mp_obj_t freeze_import(size_t n_args, const mp_obj_t *args) {
     mp_obj_tuple_get(result, &len, &items);
 
     freeze_mode++;
-    size_t start_flash_size;
-    size_t start_ram_size;
+    size_t start_flash_size, start_ram_size, start_psram_size;
     size_t start_ram_size2 = freeze_last_ram_size;
-    flash_heap_stats(&start_flash_size, &start_ram_size);
+    flash_heap_stats(&start_flash_size, &start_ram_size, &start_psram_size);
     nlr_jump_callback_node_t nlr_callback;
     nlr_push_jump_callback(&nlr_callback, freeze_mode_nlr_callback);
     for (size_t i = 0; i <n_args; i++) {
         items[i] = mp_builtin___import__(1, &args[i]);
     }
-    freeze_qstrs();
     nlr_pop_jump_callback(true);
 
-    size_t end_flash_size;
-    size_t end_ram_size;
-    flash_heap_stats(&end_flash_size, &end_ram_size);
+    size_t end_flash_size, end_ram_size, end_psram_size;
+    flash_heap_stats(&end_flash_size, &end_ram_size, &end_psram_size);
     size_t end_ram_size2 = freeze_last_ram_size;
-    mp_printf(&mp_plat_print, "froze %u flash bytes, %u ram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size + end_ram_size2 - start_ram_size2);
+    mp_printf(&mp_plat_print, "loaded %u flash bytes, %u ram bytes, %u psram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size + end_ram_size2 - start_ram_size2, end_psram_size - start_psram_size);
     return result;
 }
 
-mp_obj_t freeze_modules(void) {
+__attribute__((visibility("hidden")))
+mp_obj_t freeze_get_modules(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
     const flash_heap_header_t *header = NULL;
     while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
@@ -1137,12 +1163,13 @@ static int freeze_schedule(freeze_schedule_fun_t fun, ...) {
 }
 
 static int vfreeze_qstrs(va_list args) {
-    freeze_qstrs();
+    uintptr_t base = va_arg(args, uintptr_t);
+    freeze_qstrs(base);
     return 0;
 }
 
 static int freeze_post_link(const flash_heap_header_t *header) {
-    return freeze_schedule(vfreeze_qstrs);
+    return freeze_schedule(vfreeze_qstrs, (uintptr_t)header);
 }
 
 static int vqstr_from_strn(va_list args) {
@@ -1222,22 +1249,6 @@ cleanup:
     free(state.qstr_table);
     return result;
 }
-
-void freeze_flash(const char *file) {
-    size_t start_flash_size;
-    size_t start_ram_size;
-    flash_heap_stats(&start_flash_size, &start_ram_size);    
-    if (dl_flash(file) < 0) {
-        mp_raise_OSError(errno);
-    }
-    freeze_qstrs();
-
-    size_t end_flash_size;
-    size_t end_ram_size;
-    flash_heap_stats(&end_flash_size, &end_ram_size);
-    mp_printf(&mp_plat_print, "froze %u flash bytes, %u ram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size);
-}
-
 
 // ### dict ###
 static int freeze_rewrite_map(freeze_link_state_t *state, const mp_map_t *map) {
