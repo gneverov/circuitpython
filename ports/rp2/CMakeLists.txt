@@ -51,6 +51,12 @@ function(target_remove_property_value target property)
     set_target_properties(${target} PROPERTIES ${property} "${props}")
 endfunction()
 
+# Helper function to compile a project with hidden visibility.
+function(set_target_visibility_hidden TARGET)
+    get_target_property(SRCS ${TARGET} INTERFACE_SOURCES)
+    set_source_files_properties(${SRCS} PROPERTIES COMPILE_OPTIONS -fvisibility=hidden)
+endfunction()
+
 # Define the top-level project
 project(${MICROPY_TARGET})
 

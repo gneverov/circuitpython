@@ -29,7 +29,11 @@
 // #define BOARD_UF2_FAMILY_ID 0x75293fd6
 
 // Use RP2040 ID for compatibility with Pico SDK elf2uf2 tool
+#if PICO_RP2040
 #define BOARD_UF2_FAMILY_ID 0xe48bff56
+#else
+#define BOARD_UF2_FAMILY_ID 0xe48bff59
+#endif
 
 // --------------------------------------------------------------------+
 // USB UF2

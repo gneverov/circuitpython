@@ -18,6 +18,12 @@ target_sources(newlib_helper INTERFACE
     vfs.c
 )
 
+set_source_files_properties(
+    flash_env.c
+    flash_heap.c
+    PROPERTIES COMPILE_OPTIONS -fvisibility=hidden
+)
+
 add_library(newlib_helper_headers INTERFACE)
 target_include_directories(newlib_helper_headers INTERFACE include)
 

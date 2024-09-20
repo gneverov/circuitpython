@@ -101,9 +101,9 @@ SECTIONS
     */
 
     .boot2 : {
-        __boot2_start__ = .;
+        HIDDEN(__boot2_start__ = .);
         *(.boot2)
-        __boot2_end__ = .;
+        HIDDEN(__boot2_end__ = .);
     } > FLASH
 
     ASSERT(__boot2_end__ - __boot2_start__ <= 256,
@@ -211,20 +211,20 @@ SECTIONS
 
     /* Start and end symbols must be word-aligned */
     .scratch_x : {
-        __scratch_x_start__ = .;
+        HIDDEN(__scratch_x_start__ = .);
         *(.scratch_x.*)
         . = ALIGN(4);
-        __scratch_x_end__ = .;
+        HIDDEN(__scratch_x_end__ = .);
     } > SCRATCH_X AT > FLASH
-    __scratch_x_source__ = LOADADDR(.scratch_x);
+    HIDDEN(__scratch_x_source__ = LOADADDR(.scratch_x));
 
     .scratch_y : {
-        __scratch_y_start__ = .;
+        HIDDEN(__scratch_y_start__ = .);
         *(.scratch_y.*)
         . = ALIGN(4);
-        __scratch_y_end__ = .;
+        HIDDEN(__scratch_y_end__ = .);
     } > SCRATCH_Y AT > FLASH
-    __scratch_y_source__ = LOADADDR(.scratch_y);
+    HIDDEN(__scratch_y_source__ = LOADADDR(.scratch_y));
 
     /* .stack*_dummy section doesn't contains any symbols. It is only
      * used for linker to calculate size of stack sections, and assign

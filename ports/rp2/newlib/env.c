@@ -14,6 +14,7 @@ extern char **environ;
 int __real_setenv(const char *name, const char *value, int rewrite);
 int __real_unsetenv(const char *name);
 
+__attribute__((visibility("hidden")))
 void env_init(void) {
     int i = 0;
     size_t len;

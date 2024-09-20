@@ -56,6 +56,7 @@ static void dl_seterror() {
     dl_error = errno;
 }
 
+__attribute__((visibility("hidden")))
 int dl_loader_open(dl_loader_t *loader, uintptr_t base) {
     if (flash_heap_open(&loader->heap, DL_FLASH_HEAP_TYPE, base) < 0) {
         return -1;
@@ -73,10 +74,12 @@ int dl_loader_open(dl_loader_t *loader, uintptr_t base) {
     return 0;
 }
 
+__attribute__((visibility("hidden")))
 void dl_loader_free(dl_loader_t *loader) {
     flash_heap_free(&loader->heap);
 }
 
+__attribute__((visibility("hidden")))
 flash_ptr_t dl_loader_relocate(const dl_loader_t *loader, flash_ptr_t addr) {
     switch (addr >> 28) {
         case 1:
@@ -90,6 +93,7 @@ flash_ptr_t dl_loader_relocate(const dl_loader_t *loader, flash_ptr_t addr) {
     }
 }
 
+__attribute__((visibility("hidden")))
 int dl_loader_read(dl_loader_t *loader, void *buffer, size_t length, flash_ptr_t addr) {
     addr = dl_loader_relocate(loader, addr);
     if (!addr) {
@@ -102,6 +106,7 @@ int dl_loader_read(dl_loader_t *loader, void *buffer, size_t length, flash_ptr_t
     return ret;
 }
 
+__attribute__((visibility("hidden")))
 int dl_loader_write(dl_loader_t *loader, const void *buffer, size_t length, flash_ptr_t addr) {
     addr = dl_loader_relocate(loader, addr);
     if (!addr) {
@@ -176,6 +181,7 @@ static int dl_linker_iterate_phdr(const dl_linker_t *linker, flash_ptr_t *phdr_a
     return 1;
 }
 
+__attribute__((visibility("hidden")))
 flash_ptr_t dl_linker_map(const dl_linker_t *linker, flash_ptr_t addr) {
     flash_ptr_t phdr_addr = 0;
     Elf32_Phdr phdr;
@@ -201,6 +207,7 @@ error:
     return 0;
 }
 
+__attribute__((visibility("hidden")))
 int dl_iterate_dynamic(const dl_linker_t *linker, flash_ptr_t *dyn_addr, Elf32_Dyn *dyn) {
     assert(linker->pt_dynamic.p_type == PT_DYNAMIC);
     if (*dyn_addr == 0) {
@@ -223,6 +230,7 @@ static int do_symtab(dl_linker_t *linker, size_t num_symbols);
 static int do_rel(dl_linker_t *linker, flash_ptr_t rel, Elf32_Word relent, Elf32_Word relsz, bool a);
 static int do_interp(dl_linker_t *linker);
 
+__attribute__((visibility("hidden")))
 int dl_link(dl_loader_t *loader) {
     dl_linker_t linker = { 0 };
     linker.loader = loader;
@@ -284,6 +292,7 @@ error:
     return -1;
 }
 
+__attribute__((visibility("hidden")))
 void *dl_load(const char *file, uintptr_t base) {
     dl_loader_t loader = { 0 };
     int fd = open(file, O_RDONLY, 0);
@@ -628,6 +637,7 @@ static int do_interp(dl_linker_t *linker) {
     return interp_fun(linker, &linker->post_link);
 }
 
+__attribute__((visibility("hidden")))
 int dl_linker_read(const dl_linker_t *linker, void *buffer, size_t length, flash_ptr_t addr) {
     addr = dl_linker_map(linker, addr);
     if (!addr) {
@@ -640,6 +650,7 @@ int dl_linker_read(const dl_linker_t *linker, void *buffer, size_t length, flash
     return ret;
 }
 
+__attribute__((visibility("hidden")))
 int dl_linker_write(const dl_linker_t *linker, const void *buffer, size_t length, flash_ptr_t addr) {
     addr = dl_linker_map(linker, addr);
     if (!addr) {
@@ -652,6 +663,7 @@ int dl_linker_write(const dl_linker_t *linker, const void *buffer, size_t length
     return ret;
 }
 
+__attribute__((visibility("hidden")))
 void *dl_realloc(const dl_linker_t *linker, void *ptr, size_t size) {
     return flash_heap_realloc_with_evict(&linker->loader->heap, ptr, size);
 }

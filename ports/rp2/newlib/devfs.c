@@ -124,7 +124,7 @@ static int devfs_closedir(void *ctx) {
     return 0;
 }
 
-struct dirent *devfs_readdir(void *ctx) {
+static struct dirent *devfs_readdir(void *ctx) {
     struct devfs_dir *dir = ctx;
     while (dir->index < devfs_num_drvs) {
         const struct devfs_driver *drv = &devfs_drvs[dir->index++];

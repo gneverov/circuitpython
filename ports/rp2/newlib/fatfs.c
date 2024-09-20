@@ -253,7 +253,7 @@ static void *fatfs_open(void *ctx, const char *path, int flags, mode_t mode) {
     return file;
 }
 
-void *fatfs_opendir(void *ctx, const char *dirname) {
+static void *fatfs_opendir(void *ctx, const char *dirname) {
     struct fatfs_mount *vfs = ctx;
     dirname = fatfs_path(vfs, dirname);
     struct fatfs_dir *dir = malloc(sizeof(struct fatfs_dir));
@@ -423,7 +423,7 @@ static int fatfs_read(void *ctx, void *buf, size_t cnt) {
     return result;
 }
 
-struct dirent *fatfs_readdir(void *ctx) {
+static struct dirent *fatfs_readdir(void *ctx) {
     struct fatfs_dir *dir = ctx;
     int orig_errno = errno;
     if (fatfs_result(f_readdir(&dir->dp, &dir->fno))) {
@@ -436,7 +436,7 @@ struct dirent *fatfs_readdir(void *ctx) {
     return strlen(dir->dirent.d_name) ? &dir->dirent : NULL;
 }
 
-void fatfs_rewinddir(void *ctx) {
+static void fatfs_rewinddir(void *ctx) {
     struct fatfs_dir *dir = ctx;
     fatfs_result(f_rewinddir(&dir->dp));
 }
@@ -467,10 +467,12 @@ static const struct vfs_file_vtable fatfs_dir_vtable = {
 
 #include "diskio.h"
 
+__attribute__((visibility("hidden")))
 DSTATUS disk_initialize(BYTE pdrv) {
     return disk_status(pdrv);
 }
 
+__attribute__((visibility("hidden")))
 DSTATUS disk_status(BYTE pdrv) {
     struct fatfs_volume *vol = fatfs_get_fd(pdrv);
     if (!vol) {
@@ -491,6 +493,7 @@ DSTATUS disk_status(BYTE pdrv) {
     return ro ? STA_PROTECT : 0;
 }
 
+__attribute__((visibility("hidden")))
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     struct fatfs_volume *vol = fatfs_get_fd(pdrv);
     if (!vol) {
@@ -504,6 +507,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     return RES_OK;
 }
 
+__attribute__((visibility("hidden")))
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     struct fatfs_volume *vol = fatfs_get_fd(pdrv);
     if (!vol) {
@@ -522,6 +526,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     return RES_OK;
 }
 
+__attribute__((visibility("hidden")))
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
     struct fatfs_volume *vol = fatfs_get_fd(pdrv);
     if (!vol) {
@@ -565,6 +570,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
     }
 }
 
+__attribute__((visibility("hidden")))
 DWORD get_fattime(void) {
     time_t t = time(0);
     struct tm *stm = localtime(&t);

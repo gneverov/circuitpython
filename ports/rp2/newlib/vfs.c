@@ -49,6 +49,7 @@ void vfs_getcwd(char *buf, size_t size) {
     vfs_unlock();
 }
 
+__attribute__((visibility("hidden")))
 void vfs_setcwd(char *value) {
     size_t len = strlen(value);
     vfs_lock();

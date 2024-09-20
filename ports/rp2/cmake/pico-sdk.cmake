@@ -19,3 +19,8 @@ target_remove_property_value(pico_runtime INTERFACE_LINK_OPTIONS --specs=nosys.s
 # We use the the standard FreeRTOS mode of TinyUSB, not the specialized Pico mode.
 target_remove_property_value(tinyusb_common_base INTERFACE_COMPILE_DEFINITIONS CFG_TUSB_OS=OPT_OS_PICO)
 target_compile_definitions(tinyusb_common_base INTERFACE CFG_TUSB_OS=OPT_OS_FREERTOS)
+
+# Make certain projects hidden as it does not make sense to export them.
+set_target_visibility_hidden(pico_crt0)
+set_target_visibility_hidden(pico_runtime)
+set_target_visibility_hidden(pico_runtime_init)
