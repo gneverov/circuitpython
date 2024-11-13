@@ -8,80 +8,98 @@
 
 
 static const char *parse_arg(const mp_obj_t arg, const char *format, qstr name, va_list *vals) {
-    if (*format == 's') {
-        format++;
-        if (*format == '*') {
+    switch (*format) {
+        case 's':
+        case 'z': {
+            bool optional = *format == 'z';
             format++;
-            mp_buffer_info_t *val = va_arg(*vals, mp_buffer_info_t *);
+            if (*format == '*') {
+                format++;
+                mp_buffer_info_t *val = va_arg(*vals, mp_buffer_info_t *);
 
-            if (arg != MP_OBJ_NULL) {
-                mp_buffer_info_t bufinfo;
-                mp_get_buffer_raise(arg, &bufinfo, MP_BUFFER_READ);
-                if (val) {
-                    *val = bufinfo;
+                if (arg != MP_OBJ_NULL) {
+                    mp_buffer_info_t bufinfo;
+                    mp_get_buffer_raise(arg, &bufinfo, MP_BUFFER_READ);
+                    if (val) {
+                        *val = bufinfo;
+                    }
+                }
+            } else {
+                const char **val = va_arg(*vals, const char **);
+
+                if (arg != MP_OBJ_NULL) {
+                    const char *s = NULL;
+                    if (!optional || (arg != mp_const_none)) {
+                        s = mp_obj_str_get_str(arg);
+                    }
+                    if (val) {
+                        *val = s;
+                    }
                 }
             }
-        } else {
-            const char **val = va_arg(*vals, const char **);
-
-            if (arg != MP_OBJ_NULL) {
-                const char *s = mp_obj_str_get_str(arg);
-                if (val) {
-                    *val = s;
-                }
-            }
+            break;
         }
-    } else if (*format == 'i') {
-        format++;
-        mp_int_t *val = va_arg(*vals, mp_int_t *);
-
-        if (arg != MP_OBJ_NULL) {
-            mp_int_t i = mp_obj_get_int(arg);
-            if (val) {
-                *val = i;
-            }
-        }
-    } else if (*format == 'p') {
-        format++;
-        mp_int_t *val = va_arg(*vals, mp_int_t *);
-
-        if (arg != MP_OBJ_NULL) {
-            mp_int_t i = mp_obj_is_true(arg);
-            if (val) {
-                *val = i;
-            }
-        }
-    } else if (*format == 'O') {
-        format++;
-        if (*format == '!') {
+        case 'i': {
             format++;
-            const mp_obj_type_t *expected_type = va_arg(*vals, const mp_obj_type_t *);
-            mp_obj_t *val = va_arg(*vals, mp_obj_t *);
+            mp_int_t *val = va_arg(*vals, mp_int_t *);
 
             if (arg != MP_OBJ_NULL) {
-                const mp_obj_type_t *actual_type = mp_obj_get_type(arg);
-                if (!mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(actual_type), MP_OBJ_FROM_PTR(expected_type))) {
-                    mp_raise_msg_varg(&mp_type_TypeError, "%q: must be %q, not %q", name, actual_type->name, expected_type->name);
-                }
+                mp_int_t i = mp_obj_get_int(arg);
                 if (val) {
+                    *val = i;
+                }
+            }
+            break;
+        }
+        case 'p': {
+            format++;
+            mp_int_t *val = va_arg(*vals, mp_int_t *);
+
+            if (arg != MP_OBJ_NULL) {
+                mp_int_t i = mp_obj_is_true(arg);
+                if (val) {
+                    *val = i;
+                }
+            }
+            break;
+        }
+        case 'O': {
+            format++;
+            if (*format == '!') {
+                format++;
+                const mp_obj_type_t *expected_type = va_arg(*vals, const mp_obj_type_t *);
+                mp_obj_t *val = va_arg(*vals, mp_obj_t *);
+
+                if (arg != MP_OBJ_NULL) {
+                    const mp_obj_type_t *actual_type = mp_obj_get_type(arg);
+                    if (!mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(actual_type), MP_OBJ_FROM_PTR(expected_type))) {
+                        mp_raise_msg_varg(&mp_type_TypeError, "%q: must be %q, not %q", name, actual_type->name, expected_type->name);
+                    }
+                    if (val) {
+                        *val = arg;
+                    }
+                }
+            } else if (*format == '&') {
+                format++;
+                void *(*converter)(mp_obj_t) = va_arg(*vals, void *(*)(mp_obj_t));
+                void **val = va_arg(*vals, void **);
+
+                if (arg != MP_OBJ_NULL) {
+                    if (val) {
+                        *val = converter(arg);
+                    }
+                }
+            } else {
+                mp_obj_t *val = va_arg(*vals, mp_obj_t *);
+                if (val && arg != MP_OBJ_NULL) {
                     *val = arg;
                 }
             }
-        } else if (*format == '&') {
+            break;
+        }
+        default: {
             format++;
-            void *(*converter)(mp_obj_t) = va_arg(*vals, void *(*)(mp_obj_t));
-            void **val = va_arg(*vals, void **);
-
-            if (arg != MP_OBJ_NULL) {
-                if (val) {
-                    *val = converter(arg);
-                }
-            }
-        } else {
-            mp_obj_t *val = va_arg(*vals, mp_obj_t *);
-            if (val && arg != MP_OBJ_NULL) {
-                *val = arg;
-            }
+            assert(0); // invalid format specifier
         }
     }
     return format;

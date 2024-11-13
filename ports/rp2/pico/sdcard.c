@@ -7,18 +7,19 @@
 #include <memory.h>
 #include <stdio.h>
 #include <unistd.h>
+#include "newlib/ioctl.h"
+#include "newlib/newlib.h"
+#include "newlib/vfs.h"
 
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
 
-#include "newlib/ioctl.h"
-#include "newlib/newlib.h"
-#include "newlib/vfs.h"
-
 #include "hardware/gpio.h"
 
+#include "pico/sdcard.h"
 #include "pico/spi.h"
+
 
 static struct sdcard_file {
     struct vfs_file base;
@@ -59,12 +60,13 @@ static int sdcard_close(void *ctx) {
         sdcard_cmd(file, 0, 0, NULL);
         sdcard_resume(file);
     }
-
     gpio_deinit(file->cs_pin);
+
+    dev_lock();
+    assert(sdcard_file == file);
+    sdcard_file = NULL;
+    dev_unlock();
     free(file);
-    if (sdcard_file == file) {
-        sdcard_file = NULL;
-    }
     return 0;
 }
 
@@ -111,7 +113,7 @@ static int sdcard_ioctl(void *ctx, unsigned long request, va_list args) {
             return 0;
         }
 
-        case 0x100: {
+        case MMC_IOC_CMD: {
             struct sdcard_ioctl *ioctl = va_arg(args, struct sdcard_ioctl *);
             return sdcard_send_cmd(file, ioctl);
         }
@@ -123,34 +125,30 @@ static int sdcard_ioctl(void *ctx, unsigned long request, va_list args) {
     }
 }
 
-static off_t sdcard_lseek(void *ctx, off_t pos, int whence) {
+static off_t sdcard_lseek(void *ctx, off_t offset, int whence) {
     struct sdcard_file *file = ctx;
-    off_t ptr;
     switch (whence) {
         case SEEK_SET:
-            ptr = 0;
             break;
         case SEEK_CUR:
-            ptr = file->ptr;
+            offset += file->ptr;
             break;
         case SEEK_END:
-            ptr = file->num_blocks << 9;
+            offset += file->num_blocks << 9;
             break;
         default:
             errno = EINVAL;
             return -1;
     }
-    ptr += pos;
-    if (ptr < 0) {
+    if (offset < 0) {
         errno = EINVAL;
         return -1;
     }
-    if (ptr > file->num_blocks << 9) {
+    if (offset > (file->num_blocks << 9)) {
         errno = EFBIG;
         return -1;
     }
-    file->ptr = (ptr + 511) & ~511;
-    return file->ptr;
+    return file->ptr = offset;
 }
 
 static int sdcard_read(void *ctx, void *buf, size_t size) {
@@ -192,40 +190,52 @@ static const struct vfs_file_vtable sdcard_vtable = {
     // .write = sdcard_write,
 };
 
-void *sdcard_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
-    uint cs_pin = 14;
-    if (fragment && (sscanf(fragment, "?cs=%d", &cs_pin) < 0)) {
+static void *sdcard_open(const void *ctx, dev_t dev, int flags, mode_t mode) {
+    uint spi_num = minor(dev) >> 7;
+    uint cs_pin = minor(dev) & 0x7f;
+    if ((spi_num >= NUM_SPIS) || (cs_pin >= NUM_BANK0_GPIOS)) {
         errno = EINVAL;
         return NULL;
     }
+
+    dev_lock();
     if (sdcard_file) {
+        dev_unlock();
         errno = EBUSY;
         return NULL;
     }
-    struct sdcard_file *file = malloc(sizeof(struct sdcard_file));
+    struct sdcard_file *file = calloc(1, sizeof(struct sdcard_file));
     if (!file) {
-        errno = ENOMEM;
+        dev_unlock();
         return NULL;
     }
-    vfs_file_init(&file->base, &sdcard_vtable, mode);
-    file->ptr = 0;
-    file->spi = &pico_spis_ll[(dev & 0xff) / 8];
+    vfs_file_init(&file->base, &sdcard_vtable, mode | S_IFBLK);
+    file->spi = &pico_spis_ll[spi_num];
     file->cs_pin = cs_pin;
     file->baudrate = 400000;
     gpio_init(file->cs_pin);
     gpio_put(file->cs_pin, true);
     gpio_set_dir(file->cs_pin, true);
+    sdcard_file = file;
+    dev_unlock();
 
+    bool success = false;
     if (sdcard_wait(file, pdMS_TO_TICKS(500))) {
-        if (sdcard_init(file)) {
-            vfs_copy_file(&file->base);
-            sdcard_file = file;
-        }
+        success = sdcard_init(file);
         sdcard_resume(file);
     }
-    vfs_release_file(&file->base);
-    return sdcard_file;
+    if (!success) {
+        vfs_release_file(&file->base);
+        file = NULL;
+    }
+    return file;
 }
+
+const struct dev_driver sdcard_drv = {
+    .dev = DEV_MMCBLK0,
+    .open = sdcard_open,
+};
+
 
 static void sdcard_log(const char *format, ...) {
     va_list args;

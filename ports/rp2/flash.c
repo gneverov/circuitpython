@@ -1,45 +1,47 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include <memory.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include "newlib/flash.h"
 
 #include "hardware/flash.h"
 #include "hardware/gpio.h"
 #if !PICO_RP2040
+#include "freertos/interrupts.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/xip.h"
 #include "hardware/sync.h"
 #endif
 
-#define MIN_FLASH_SIZE (2u << 20)
-#define DEFAULT_FLASH_SIZE (16u << 20)
+#include "flash.h"
+#include "flash_lockout.h"
 
 
-size_t flash_size;
-size_t psram_size;
-size_t flash_storage_offset;
-size_t flash_storage_size;
+__attribute__((visibility("hidden")))
+void mtd_flash_probe(struct mtd_device *device) {
+    device->info.type = MTD_NORFLASH;
+    device->info.flags = MTD_CAP_NORFLASH;
+    device->info.size = PICO_FLASH_SIZE_BYTES;
+    device->info.erasesize = FLASH_SECTOR_SIZE;
+    device->info.writesize = FLASH_PAGE_SIZE;
+    device->info.oobsize = 0;
+    device->mmap_addr = XIP_BASE;
+    device->rw_addr = XIP_NOCACHE_NOALLOC_BASE;
 
-static void read_flash_size(void) {
     char *flash_size_str = getenv("FLASH_SIZE");
     if (flash_size_str) {
         char *end;
-        flash_size = strtoul(flash_size_str, &end, 0);
+        uint32_t flash_size = strtoul(flash_size_str, &end, 0);
         if (!*end) {
+            device->info.size = flash_size;
             return;
         }
-        flash_size = 0;
     }
 
     uint8_t jedec_id[4] = { 0x9f, 0x00 };
     flash_do_cmd(jedec_id, jedec_id, 4);
     if (jedec_id[1] == 0xef) {
-        flash_size = 1u << jedec_id[3];
-        return;
+        device->info.size = 1u << jedec_id[3];
     }
 }
 
@@ -114,7 +116,7 @@ static size_t __no_inline_not_in_flash_func(probe_psram)(uint csn) {
     return _psram_size;
 }
 
-static void __no_inline_not_in_flash_func(setup_psram)(void) {
+static bool __no_inline_not_in_flash_func(setup_psram)(void) {
     uint32_t status = save_and_disable_interrupts();
 
     // Enable quad mode.
@@ -183,105 +185,61 @@ static void __no_inline_not_in_flash_func(setup_psram)(void) {
 
     // Test write to the PSRAM.
     volatile uint32_t *psram_nocache = (volatile uint32_t *)0x15000000;
+    uint32_t original = psram_nocache[0];
     psram_nocache[0] = 0x12345678;
     volatile uint32_t readback = psram_nocache[0];
-    if (readback != 0x12345678) {
-        psram_size = 0;
-    }
+    psram_nocache[0] = original;
+    return readback == 0x12345678;
 }
 // SPDX-SnippetEnd
 
-static int read_psram_cs(void) {
+static int scan_psram_cs(size_t *size) {
     uint psram_cs;
     char *psram_cs_str = getenv("PSRAM_CS");
     if (psram_cs_str) {
         char *end;
         psram_cs = strtoul(psram_cs_str, &end, 10);
-        if (*end || (psram_cs >= NUM_BANK0_GPIOS)) {
-            return -1;
+        if (!*end && (psram_cs < NUM_BANK0_GPIOS)) {
+            gpio_set_function(psram_cs, GPIO_FUNC_XIP_CS1);
+            return psram_cs;
         }
-        gpio_set_function(psram_cs, GPIO_FUNC_XIP_CS1);
-        return psram_cs;
     }
 
     const uint csn[] = { 0, 8, 19, 47 };
     for (size_t i = 0; i < 4; i++) {
         gpio_set_function(csn[i], GPIO_FUNC_XIP_CS1);
-        if (probe_psram(csn[i])) {
+        *size = probe_psram(csn[i]);
+        if (*size) {
             psram_cs = csn[i];
-            char psram_cs_str[4];
-            sprintf(psram_cs_str, "%u", psram_cs);
-            setenv("PSRAM_CS", psram_cs_str, 0);
             return psram_cs;
         }
         gpio_init(csn[i]);
     }
-    setenv("PSRAM_CS", "", 0);
     return -1;
 }
 
-static void read_psram_size(uint psram_cs) {
-    char *psram_size_str = getenv("PSRAM_SIZE");
-    if (psram_size_str) {
-        char *end;
-        psram_size = strtoul(psram_size_str, &end, 0);
-        if (!*end) {
-            return;
-        }
-        psram_size = 0;
+__attribute__((visibility("hidden")))
+void mtd_psram_probe(struct mtd_device *device) {
+    UBaseType_t save = set_interrupt_core_affinity();
+    size_t psram_size;
+    int psram_cs = scan_psram_cs(&psram_size);
+    if (psram_cs < 0) {
+        goto exit;
+    }
+    if (!setup_psram()) {
+        goto exit;
     }
 
-    psram_size = probe_psram(psram_cs);
+    device->info.type = MTD_RAM;
+    device->info.flags = MTD_CAP_RAM;
+    device->info.size = psram_size;
+    device->info.erasesize = 1;
+    device->info.writesize = 1;
+    device->info.oobsize = 0;
+    device->mmap_addr = PSRAM_BASE;
+    device->rw_addr = PSRAM_BASE;
+
+exit:
+    clear_interrupt_core_affinity(save);
 }
 #endif
-
-static void read_storage_size(void) {
-    char *disk_size_str = getenv("DISK_SIZE");
-    size_t disk_size = flash_size / 4;
-    if (disk_size_str) {
-        char *end;
-        disk_size = strtoul(disk_size_str, &end, 0);
-        if (*end) {
-            disk_size = flash_size / 4;
-        }
-    }
-
-    extern uint8_t __flash_heap_start[];
-    while ((flash_size - disk_size) < ((uintptr_t)__flash_heap_start - XIP_BASE)) {
-        disk_size /= 2;
-    }
-
-    flash_storage_offset = flash_size - disk_size;
-    flash_storage_size = disk_size;
-}
-
-__attribute__((visibility("hidden")))
-void flash_init(void) {
-    read_flash_size();
-    if (flash_size) {
-        flash_size = MAX(flash_size, MIN_FLASH_SIZE);
-    } else {
-        flash_size = DEFAULT_FLASH_SIZE;
-    }
-
-    #if !PICO_RP2040
-    int psram_cs = read_psram_cs();
-    if (psram_cs >= 0) {
-        read_psram_size(psram_cs);
-        setup_psram();
-    }
-    #endif
-
-    read_storage_size();
-}
-
-void flash_memread(uint32_t flash_offs, void *mem, size_t size) {
-    hard_assert(flash_offs + size < flash_size);
-    memcpy(mem, (void *)(flash_offs + XIP_NOCACHE_NOALLOC_BASE), size);
-}
-
-void flash_memwrite(uint32_t flash_offs, const void *mem, size_t size) {
-    hard_assert(flash_offs + size < flash_size);
-    flash_range_erase(flash_offs, size & -FLASH_SECTOR_SIZE);
-    flash_range_program(flash_offs, mem, size & -FLASH_PAGE_SIZE);
-}

@@ -70,7 +70,7 @@ static void __isr __not_in_flash_func(flash_lockout_handler)(void) {
 __attribute__((visibility("hidden")))
 void flash_lockout_init(void) {
     flash_lockout_irq_num = user_irq_claim_unused(true);
-    irq_add_shared_handler(flash_lockout_irq_num, flash_lockout_handler, PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
+    irq_set_exclusive_handler(flash_lockout_irq_num, flash_lockout_handler);
     UBaseType_t uxCoreAffinityMask = vTaskCoreAffinityGet(NULL);
     for (uint i = 0; i < configNUMBER_OF_CORES; i++) {
         vTaskCoreAffinitySet(NULL, 1u << i);

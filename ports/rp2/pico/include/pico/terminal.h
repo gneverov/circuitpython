@@ -3,10 +3,7 @@
 
 #pragma once
 
+#include "newlib/dev.h"
 
-enum {
-    DEV_TTYS0 = 0x0440,
-    DEV_TTYS1 = 0x0441,
-};
 
-void *terminal_open(const char *fragment, int flags, mode_t mode, dev_t dev);
+extern const struct dev_driver uart_drv;

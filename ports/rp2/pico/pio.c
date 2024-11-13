@@ -8,23 +8,22 @@
 #include "freertos/interrupts.h"
 
 
-PIO pios[NUM_PIOS] = { pio0, pio1 };
-
 static pico_pio_handler_t pico_pio_handlers[NUM_PIOS][NUM_PIO_INTERRUPT_SOURCES];
 static void *pico_pio_contexts[NUM_PIOS][NUM_PIO_INTERRUPT_SOURCES];
 
 
 PIO pico_pio(uint pio_index) {
     valid_params_if(HARDWARE_PIO, pio_index < NUM_PIOS);
-    return pio_index == 1 ? pio1 : pio0;
+    return PIO_INSTANCE(pio_index);
 }
 
 static void pico_pio_irq_handler(uint pio_index, uint irq) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     PIO pio = pico_pio(pio_index);
     for (int i = 0; i < NUM_PIO_INTERRUPT_SOURCES; i++) {
         if (pio->ints0 & (1 << i)) {
             assert(pico_pio_handlers[pio_index][i]);
-            pico_pio_handlers[pio_index][i](pio, i, pico_pio_contexts[pio_index][i]);
+            pico_pio_handlers[pio_index][i](pio, i, pico_pio_contexts[pio_index][i], &xHigherPriorityTaskWoken);
         }
     }
 }
@@ -52,16 +51,21 @@ void pico_pio_init(void) {
 
 void pico_pio_set_irq(PIO pio, enum pio_interrupt_source source, pico_pio_handler_t handler, void *context) {
     uint pio_index = pio_get_index(pio);
+    UBaseType_t save = set_interrupt_core_affinity();
+    pio_set_irq0_source_enabled(pio, source, false);
     pico_pio_handlers[pio_index][source] = handler;
     pico_pio_contexts[pio_index][source] = context;
     pio_set_irq0_source_enabled(pio, source, true);
+    clear_interrupt_core_affinity(save);
 }
 
 void pico_pio_clear_irq(PIO pio, enum pio_interrupt_source source) {
-    pio_set_irq0_source_enabled(pio, source, false);
     uint pio_index = pio_get_index(pio);
+    UBaseType_t save = set_interrupt_core_affinity();
+    pio_set_irq0_source_enabled(pio, source, false);
     pico_pio_handlers[pio_index][ source] = NULL;
     pico_pio_contexts[pio_index][source] = NULL;
+    clear_interrupt_core_affinity(save);
 }
 
 #ifndef NDEBUG

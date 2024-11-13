@@ -396,9 +396,14 @@ static mp_obj_t mp_builtin_print(size_t n_args, const mp_obj_t *pos_args, mp_map
     } u;
     mp_arg_parse_all(0, NULL, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, u.args);
 
-    #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+    #if MICROPY_NEWLIB
+    void mp_io_print(void *data, const char *str, size_t len);
+    mp_print_t print = {MP_OBJ_TO_PTR(u.args[ARG_file].u_obj), mp_io_print};
+    #elif MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
     mp_get_stream_raise(u.args[ARG_file].u_obj, MP_STREAM_OP_WRITE);
     mp_print_t print = {MP_OBJ_TO_PTR(u.args[ARG_file].u_obj), mp_stream_write_adaptor};
+    #else
+    mp_print_t print = mp_plat_print;
     #endif
 
     // extract the objects first because we are going to use the other part of the union
@@ -409,23 +414,11 @@ static mp_obj_t mp_builtin_print(size_t n_args, const mp_obj_t *pos_args, mp_map
 
     for (size_t i = 0; i < n_args; i++) {
         if (i > 0) {
-            #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
-            mp_stream_write_adaptor(print.data, sep_data, u.len[0]);
-            #else
-            mp_print_strn(&mp_plat_print, sep_data, u.len[0], 0, 0, 0);
-            #endif
+            mp_print_strn(&print, sep_data, u.len[0], 0, 0, 0);
         }
-        #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
         mp_obj_print_helper(&print, pos_args[i], PRINT_STR);
-        #else
-        mp_obj_print_helper(&mp_plat_print, pos_args[i], PRINT_STR);
-        #endif
     }
-    #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
-    mp_stream_write_adaptor(print.data, end_data, u.len[1]);
-    #else
-    mp_print_strn(&mp_plat_print, end_data, u.len[1], 0, 0, 0);
-    #endif
+    mp_print_strn(&print, end_data, u.len[1], 0, 0, 0);
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_print_obj, 0, mp_builtin_print);

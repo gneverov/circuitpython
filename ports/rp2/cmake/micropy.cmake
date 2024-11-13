@@ -122,20 +122,23 @@ set(MICROPY_SOURCE_DRIVERS
 
 set(MICROPY_SOURCE_PORT
     flash.c
+    flash_lockout.c
+    mtd.c
     help.c
     machine_i2c.c
     machine_pin.c
     machine_spi.c
     machine_timer.c
     machine/audio_out_pwm.c
-    machine/pin.c
+    # machine/pin.c
     machine/pio_sm.c
-    machine/uart.c
+    # machine/uart.c
     main.c
     modrp2.c
     mphalport.c
     mpthreadport.c
     newlib_drv.c
+    random.c
     usbd.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
@@ -482,6 +485,7 @@ target_link_libraries(${MICROPY_TARGET}
     # newlib_dhara
     newlib_fatfs
     newlib_helper 
+    newlib_littlefs
     tinyuf2
     pico_helper 
     tinyusb_helper

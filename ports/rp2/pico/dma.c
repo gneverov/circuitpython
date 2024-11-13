@@ -12,12 +12,14 @@ static pico_dma_handler_t pico_dma_handlers[NUM_DMA_CHANNELS];
 static void *pico_dma_contexts[NUM_DMA_CHANNELS];
 
 static void pico_dma_irq_handler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     for (uint channel = 0; channel < NUM_DMA_CHANNELS; channel++) {
         if (dma_channel_get_irq1_status(channel)) {
             assert(pico_dma_handlers[channel]);
-            pico_dma_handlers[channel](channel, pico_dma_contexts[channel]);
+            pico_dma_handlers[channel](channel, pico_dma_contexts[channel], &xHigherPriorityTaskWoken);
         }
     }
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 __attribute__((constructor, visibility("hidden")))
@@ -28,15 +30,20 @@ void pico_dma_init(void) {
 }
 
 void pico_dma_set_irq(uint channel, pico_dma_handler_t handler, void *context) {
+    UBaseType_t save = set_interrupt_core_affinity();
+    dma_channel_set_irq1_enabled(channel, false);
     pico_dma_handlers[channel] = handler;
     pico_dma_contexts[channel] = context;
     dma_channel_set_irq1_enabled(channel, true);
+    clear_interrupt_core_affinity(save);
 }
 
 void pico_dma_clear_irq(uint channel) {
+    UBaseType_t save = set_interrupt_core_affinity();
     dma_channel_set_irq1_enabled(channel, false);
     pico_dma_handlers[channel] = NULL;
     pico_dma_contexts[channel] = NULL;
+    clear_interrupt_core_affinity(save);
 }
 
 void pico_dma_acknowledge_irq(uint channel) {

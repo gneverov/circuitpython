@@ -1,48 +1,45 @@
-// SPDX-FileCopyrightText: 2023 Gregory Neverov
+// SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
 #include <errno.h>
 #include <malloc.h>
 #include <memory.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "hardware/timer.h"
 
 #include "pico/dma.h"
 #include "pico/fifo.h"
 
-static void pico_fifo_irq_handler(uint channel, void *context);
+static void pico_fifo_irq_handler(uint channel, void *context, BaseType_t *pxHigherPriorityTaskWoken);
 
-void pico_fifo_init(pico_fifo_t *fifo, bool tx) {
-    fifo->channel = -1u;
-    fifo->size = 0;
-    fifo->buffer = NULL;
-    fifo->next_read = 0;
-    fifo->next_write = 0;
-    fifo->trans_count = 0;
+static void pico_fifo_start_dma(pico_fifo_t *fifo, bool enabled);
+
+void pico_fifo_init(pico_fifo_t *fifo, bool tx, pico_fifo_handler_t handler) {
+    memset(fifo, 0, sizeof(pico_fifo_t));
+    fifo->channel = -1;
     fifo->tx = tx;
-    fifo->threshold = 0;
-    fifo->dma_transfer_size = DMA_SIZE_8;
-    fifo->int_count = 0;
+    fifo->handler = handler;
 }
 
-bool pico_fifo_alloc(pico_fifo_t *fifo, uint fifo_size, uint dreq, uint threshold, enum dma_channel_transfer_size dma_transfer_size, bool bswap, volatile void *target_addr) {
-    uint channel = dma_claim_unused_channel(false);
-    if (channel == -1u) {
+bool pico_fifo_alloc(pico_fifo_t *fifo, uint fifo_size, uint dreq, enum dma_channel_transfer_size dma_transfer_size, bool bswap, volatile void *target_addr) {
+    uint log2_size = -1u;
+    while (fifo_size) {
+        log2_size++;
+        fifo_size >>= 1;
+    }
+    void *buffer = ring_alloc(&fifo->ring, log2_size);
+    if (!buffer) {
+        return false;
+    }
+
+    int channel = dma_claim_unused_channel(false);
+    if (channel < 0) {
         errno = EBUSY;
         return false;
     }
-
-    void *buffer = malloc(fifo_size);
-    if (!buffer) {
-        errno = ENOMEM;
-        return false;
-    }
-
-    fifo->channel = channel;
-    fifo->size = fifo_size;
-    fifo->buffer = buffer;
-    fifo->threshold = threshold ? threshold : fifo_size >> 2;
-    fifo->dma_transfer_size = dma_transfer_size;
 
     dma_channel_config c = dma_channel_get_default_config(channel);
     channel_config_set_read_increment(&c, fifo->tx);
@@ -52,236 +49,150 @@ bool pico_fifo_alloc(pico_fifo_t *fifo, uint fifo_size, uint dreq, uint threshol
     channel_config_set_bswap(&c, bswap);
     dma_channel_set_config(channel, &c, false);
 
-    dma_channel_set_trans_count(channel, 0, false);
     if (fifo->tx) {
-        dma_channel_set_read_addr(channel, fifo->buffer, false);
         dma_channel_set_write_addr(channel, target_addr, false);
     } else {
         dma_channel_set_read_addr(channel, target_addr, false);
-        dma_channel_set_write_addr(channel, fifo->buffer, false);
     }
-    pico_fifo_release(fifo);
-    pico_fifo_flush(fifo);
+
+    fifo->channel = channel;
+    fifo->transfer_size = dma_transfer_size;
+
+    pico_fifo_start_dma(fifo, true);
     return true;
 }
 
 void pico_fifo_deinit(pico_fifo_t *fifo) {
-    if (fifo->channel != -1u) {
-        // pico_fifo_set_enabled(fifo, false);
-        pico_fifo_acquire(fifo);
-        dma_channel_abort(fifo->channel);
-        // busy_wait_us(1000);
-        pico_dma_acknowledge_irq(fifo->channel);
+    pico_fifo_start_dma(fifo, false);
+    if (fifo->channel >= 0) {
         dma_channel_unclaim(fifo->channel);
-        fifo->channel = -1u;
+        fifo->channel = -1;
     }
-    if (fifo->buffer) {
-        free(fifo->buffer);
-        fifo->buffer = NULL;
-    }
+    ring_free(&fifo->ring);
 }
 
-void pico_fifo_acquire(pico_fifo_t *fifo) {
-    pico_dma_clear_irq(fifo->channel);
-}
-
-void pico_fifo_release(pico_fifo_t *fifo) {
-    pico_dma_set_irq(fifo->channel, pico_fifo_irq_handler, fifo);
-}
-
-static uint pico_dma_read_trans_count(pico_fifo_t *fifo) {
-    uint count = fifo->next_write - fifo->next_read;
-    if (fifo->tx) {
-        count = fifo->size - count;
-    }
-
-    uint trans_count = dma_channel_hw_addr(fifo->channel)->transfer_count;
-    uint delta = (fifo->trans_count - trans_count) << fifo->dma_transfer_size;
-    if (fifo->tx) {
-        fifo->next_read += delta;
-        if ((fifo->next_read % fifo->size) == 0) {
-            dma_channel_set_read_addr(fifo->channel, fifo->buffer, false);
-        }
-    } else {
-        fifo->next_write += delta;
-        if ((fifo->next_write % fifo->size) == 0) {
-            dma_channel_set_write_addr(fifo->channel, fifo->buffer, false);
-        }
-    }
-    fifo->trans_count = trans_count;
-    return fifo->threshold - count <= delta;
-}
-
-static uint pico_dma_write_trans_count(pico_fifo_t *fifo) {
-    uint index = fifo->next_read;
-    uint count = fifo->next_write - fifo->next_read;
-    if (!fifo->tx) {
-        index = fifo->next_write;
-        count = fifo->size - count;
-    }
-    index %= fifo->size;
-    count = MIN(count, fifo->size - index);
-
-    uint trans_count = MIN(count, fifo->threshold) >> fifo->dma_transfer_size;
-    fifo->trans_count = trans_count;
-    if (trans_count) {
-        dma_channel_set_trans_count(fifo->channel, trans_count, true);
-    }
-    return count;
-}
-
-static void pico_fifo_irq_handler(uint channel, void *context) {
+static void pico_fifo_irq_handler(uint channel, void *context, BaseType_t *pxHigherPriorityTaskWoken) {
     pico_fifo_t *fifo = context;
-    pico_dma_acknowledge_irq(fifo->channel);
     fifo->int_count++;
+    pico_dma_acknowledge_irq(channel);
 
-    uint available = pico_dma_read_trans_count(fifo);
-    uint ready = pico_dma_write_trans_count(fifo);
+    ring_t ring;
+    pico_fifo_exchange_from_isr(fifo, &ring, 0);
+
     if (fifo->handler) {
-        if (available) {
-            fifo->handler(fifo, false);
-        }
-        if (!ready) {
-            fifo->handler(fifo, true);
-        }
+        fifo->handler(fifo, &ring, pxHigherPriorityTaskWoken);
     }
 }
 
-void pico_fifo_sync(pico_fifo_t *fifo) {
-    pico_fifo_acquire(fifo);
-    if (fifo->trans_count) {
-        pico_dma_read_trans_count(fifo);
+static void pico_fifo_do_exchange(pico_fifo_t *fifo, ring_t *ring, size_t usr_count) {
+    size_t dma_count = 0;
+    if ((fifo->channel >= 0) && fifo->trans_count) {
+        uint trans_count = dma_channel_hw_addr(fifo->channel)->transfer_count;
+        dma_count = (fifo->trans_count - trans_count) << fifo->transfer_size;
+        fifo->trans_count = trans_count;
     }
-    pico_fifo_release(fifo);
-}
-
-void pico_fifo_flush(pico_fifo_t *fifo) {
-    pico_fifo_acquire(fifo);
-    if (!fifo->trans_count) {
-        pico_dma_write_trans_count(fifo);
-    }
-    pico_fifo_release(fifo);
-}
-
-size_t pico_fifo_available(pico_fifo_t *fifo) {
-    uint count = fifo->next_write - fifo->next_read;
     if (fifo->tx) {
-        count = fifo->size - count;
+        fifo->ring.read_index += dma_count;
+        fifo->ring.write_index += usr_count;
+    } else {
+        fifo->ring.read_index += usr_count;
+        fifo->ring.write_index += dma_count;
+    }
+
+    *ring = fifo->ring;
+
+    if ((fifo->channel >= 0) && !fifo->trans_count) {
+        size_t begin_index = fifo->tx ? ring->read_index : ring->write_index;
+        size_t end_index = fifo->tx ? ring->write_index : ring->read_index + ring->size;
+        void *ptr = ring_at(ring, begin_index, &dma_count);
+        dma_count = MIN(dma_count, end_index - begin_index);
+        fifo->trans_count = dma_count >> fifo->transfer_size;
+        if (!fifo->trans_count) {
+            return;
+        }
+        if (fifo->tx) {
+            dma_channel_transfer_from_buffer_now(fifo->channel, ptr, fifo->trans_count);
+        } else {
+            dma_channel_transfer_to_buffer_now(fifo->channel, ptr, fifo->trans_count);
+        }
+    }
+}
+
+void pico_fifo_exchange(pico_fifo_t *fifo, ring_t *ring, size_t usr_count) {
+    taskENTER_CRITICAL();
+    pico_fifo_do_exchange(fifo, ring, usr_count);
+    taskEXIT_CRITICAL();
+}
+
+void pico_fifo_exchange_from_isr(pico_fifo_t *fifo, ring_t *ring, size_t usr_count) {
+    UBaseType_t uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+    pico_fifo_do_exchange(fifo, ring, usr_count);
+    taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+}
+
+size_t pico_fifo_transfer(pico_fifo_t *fifo, void *buffer, size_t size) {
+    ring_t ring;
+    pico_fifo_exchange(fifo, &ring, 0);
+    size_t count = fifo->tx ? ring_write(&ring, buffer, size) : ring_read(&ring, buffer, size);
+    if (count) {
+        pico_fifo_exchange(fifo, &ring, count);
     }
     return count;
 }
 
-size_t pico_fifo_empty(pico_fifo_t *fifo) {
-    return fifo->next_write == fifo->next_read;
-}
-
-size_t pico_fifo_get_buffer(pico_fifo_t *fifo, void **buf) {
-    uint next_read = fifo->next_read;
-    uint next_write = fifo->next_write;
-    uint index = next_read;
-    uint count = next_write - next_read;
-    if (fifo->tx) {
-        index = next_write;
-        count = fifo->size - count;
+static void pico_fifo_start_dma(pico_fifo_t *fifo, bool enabled) {
+    if (fifo->channel < 0) {
+        return;
     }
-    index %= fifo->size;
-    *buf = fifo->buffer + index;
-    return MIN(count, fifo->size - index);
-}
-
-void pico_fifo_put_buffer(pico_fifo_t *fifo, size_t bufsize) {
-    pico_fifo_acquire(fifo);
-    if (fifo->tx) {
-        fifo->next_write += bufsize;
+    if (enabled) {
+        pico_dma_set_irq(fifo->channel, pico_fifo_irq_handler, fifo);
+        pico_fifo_set_enabled(fifo, true);
     } else {
-        fifo->next_read += bufsize;
+        pico_dma_set_irq(fifo->channel, NULL, NULL);
+        dma_channel_cleanup(fifo->channel);
     }
-    uint count = fifo->next_write - fifo->next_read;
-    if (!fifo->tx) {
-        count = fifo->size - count;
-    }
-    if ((count >= fifo->threshold) && !fifo->trans_count) {
-        pico_dma_write_trans_count(fifo);
-    }
-    pico_fifo_release(fifo);
-}
-
-size_t pico_fifo_transfer(pico_fifo_t *fifo, void *buffer, size_t size, bool flush) {
-    void *ring;
-    void **dst = fifo->tx ? &ring : &buffer;
-    void **src = fifo->tx ? &buffer : &ring;
-
-    pico_fifo_acquire(fifo);
-    if (flush && !fifo->tx && fifo->trans_count) {
-        pico_dma_read_trans_count(fifo);
-    }
-    size_t total = 0;
-    while (total < size) {
-        size_t count = MIN(size - total, pico_fifo_get_buffer(fifo, &ring));
-        if (!count) {
-            break;
-        }
-        memcpy(*dst, *src, count);
-        pico_fifo_put_buffer(fifo, count);
-        buffer += count;
-        total += count;
-    }
-    if (flush && fifo->tx && !fifo->trans_count) {
-        pico_dma_write_trans_count(fifo);
-    }
-    pico_fifo_release(fifo);
-    return total;
+    ring_t ring;
+    pico_fifo_exchange(fifo, &ring, 0);
 }
 
 void pico_fifo_clear(pico_fifo_t *fifo) {
-    pico_fifo_acquire(fifo);
-    dma_channel_abort(fifo->channel);
-    pico_dma_acknowledge_irq(fifo->channel);
-
-    fifo->next_read = 0;
-    fifo->next_write = 0;
-    if (fifo->tx) {
-        dma_channel_set_read_addr(fifo->channel, fifo->buffer, false);
-    } else {
-        dma_channel_set_write_addr(fifo->channel, fifo->buffer, false);
-    }
+    pico_fifo_start_dma(fifo, false);
+    taskENTER_CRITICAL();
+    ring_clear(&fifo->ring);
     fifo->trans_count = 0;
-    dma_channel_set_trans_count(fifo->channel, 0, false);
-
-    pico_fifo_release(fifo);
-
-    pico_fifo_flush(fifo);
+    taskEXIT_CRITICAL();
+    pico_fifo_start_dma(fifo, true);
 }
 
 void pico_fifo_set_enabled(pico_fifo_t *fifo, bool enable) {
+    if (fifo->channel < 0) {
+        return;
+    }
     dma_channel_config c = dma_get_channel_config(fifo->channel);
     channel_config_set_enable(&c, enable);
-    dma_channel_set_config(fifo->channel, &c, enable);
+    dma_channel_set_config(fifo->channel, &c, false);
 }
 
-bool pico_fifo_get_enabled(pico_fifo_t *fifo) {
-    dma_channel_config c = dma_get_channel_config(fifo->channel);
-    return channel_config_get_ctrl_value(&c) & DMA_CH0_CTRL_TRIG_EN_BITS;
-}
-
-void pico_fifo_set_handler(pico_fifo_t *fifo, pico_fifo_handler_t handler) {
-    pico_fifo_acquire(fifo);
-    fifo->handler = handler;
-    pico_fifo_release(fifo);
-}
+// bool pico_fifo_get_enabled(pico_fifo_t *fifo) {
+//     dma_channel_config c = dma_get_channel_config(fifo->channel);
+//     return channel_config_get_ctrl_value(&c) & DMA_CH0_CTRL_TRIG_EN_BITS;
+// }
 
 #ifndef NDEBUG
 #include <stdio.h>
 
 void pico_fifo_debug(const pico_fifo_t *fifo) {
+    taskENTER_CRITICAL();
+    ring_t ring = fifo->ring;
+    taskEXIT_CRITICAL();
+
     printf("pico_fifo %p\n", fifo);
     printf("  tx:          %d\n", fifo->tx);
-    printf("  buffer       %p\n", fifo->buffer);
-    printf("  size:        %u\n", fifo->size);
-    printf("  next_read:   %u (0x%04x)\n", fifo->next_read, fifo->next_read % fifo->size);
-    printf("  next_write:  %u (0x%04x)\n", fifo->next_write, fifo->next_write % fifo->size);
+    printf("  buffer       %p\n", ring.buffer);
+    printf("  size:        %u\n", ring.size);
+    printf("  next_read:   %u (0x%04x)\n", ring.read_index, ring.read_index % ring.size);
+    printf("  next_write:  %u (0x%04x)\n", ring.write_index, ring.write_index % ring.size);
     printf("  trans_count: %u\n", fifo->trans_count);
-    printf("  threshold:   %u\n", fifo->threshold);
     printf("  int_count:   %u\n", fifo->int_count);
 
     if (fifo->channel != -1u) {

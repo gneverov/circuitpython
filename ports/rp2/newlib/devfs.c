@@ -3,10 +3,12 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <malloc.h>
 #include <string.h>
-#include <sys/types.h>
+#include <unistd.h>
 
+#include "newlib/dev.h"
 #include "newlib/devfs.h"
 #include "newlib/vfs.h"
 
@@ -33,68 +35,75 @@ const struct vfs_filesystem devfs_fs = {
 // -----
 struct devfs_dir {
     struct vfs_file base;
-    const struct devfs_driver *dir;
+    const struct devfs_entry *entry;
     size_t index;
     struct dirent dirent;
 };
 
 static const struct vfs_file_vtable devfs_dir_vtable;
 
-static const struct devfs_driver *devfs_lookup(void *ctx, const char *file, const char **pfragment) {
-    const char *fragment = strchrnul(file, '?');
-    for (int i = 0; i < devfs_num_drvs; i++) {
-        const struct devfs_driver *drv = &devfs_drvs[i];
-        if (strncmp(drv->path, file, fragment - file) == 0) {
-            if (pfragment) {
-                *pfragment = *fragment ? fragment : NULL;
-            }
-            return drv;
+static const struct devfs_entry *devfs_lookup(void *ctx, const char *path) {
+    for (int i = 0; i < devfs_num_entries; i++) {
+        const struct devfs_entry *entry = &devfs_entries[i];
+        if (strcmp(entry->path, path) == 0) {
+            return entry;
         }
     }
     errno = ENOENT;
     return NULL;
 }
 
-static void *devfs_open(void *ctx, const char *file, int flags, mode_t mode) {
-    const char *fragment;
-    const struct devfs_driver *drv = devfs_lookup(ctx, file, &fragment);
-    if (!drv) {
+static void *devfs_open(void *ctx, const char *path, int flags, mode_t mode) {
+    const struct devfs_entry *entry = devfs_lookup(ctx, path);
+    if (!entry) {
         return NULL;
     }
-    if (S_ISDIR(drv->mode)) {
+    if (S_ISDIR(entry->mode)) {
         errno = EISDIR;
         return NULL;
     }
-    return drv->open(fragment, flags, drv->mode, drv->dev);
+    int fd = opendev(entry->dev, flags, entry->mode);
+    if (fd < 0) {
+        return NULL;
+    }
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
+    close(fd);
+    return file;
 }
 
 static void *devfs_opendir(void *ctx, const char *dirname) {
-    const struct devfs_driver *drv = devfs_lookup(ctx, dirname, NULL);
-    if (!drv) {
+    const struct devfs_entry *entry = devfs_lookup(ctx, dirname);
+    if (!entry) {
         return NULL;
     }
-    if (!S_ISDIR(drv->mode)) {
+    if (!S_ISDIR(entry->mode)) {
         errno = ENOTDIR;
         return NULL;
     }
+    if (entry->dev) {
+        int fd = opendev(entry->dev, O_SEARCH, entry->mode);
+        if (fd < 0) {
+            return NULL;
+        }
+        return fdopendir(fd);
+    }
     struct devfs_dir *dir = malloc(sizeof(struct devfs_dir));
     if (!dir) {
-        errno = ENOMEM;
         return NULL;
     }
-    vfs_file_init(&dir->base, &devfs_dir_vtable, drv->mode);
-    dir->dir = drv;
+    vfs_file_init(&dir->base, &devfs_dir_vtable, entry->mode);
+    dir->entry = entry;
     dir->index = 0;
     return dir;
 }
 
 static int devfs_stat(void *ctx, const char *file, struct stat *pstat) {
-    const struct devfs_driver *drv = devfs_lookup(ctx, file, NULL);
-    if (!drv) {
+    const struct devfs_entry *entry = devfs_lookup(ctx, file);
+    if (!entry) {
         return -1;
     }
-    pstat->st_mode = drv->mode;
-    pstat->st_rdev = drv->dev;
+    pstat->st_mode = entry->mode;
+    pstat->st_rdev = entry->dev;
     return 0;
 }
 
@@ -104,7 +113,7 @@ static int devfs_umount(void *ctx) {
     return 0;
 }
 
-static const struct vfs_vtable devfs_vtable = {
+static const struct vfs_mount_vtable devfs_vtable = {
     .open = devfs_open,
     .opendir = devfs_opendir,
     .stat = devfs_stat,
@@ -126,12 +135,12 @@ static int devfs_closedir(void *ctx) {
 
 static struct dirent *devfs_readdir(void *ctx) {
     struct devfs_dir *dir = ctx;
-    while (dir->index < devfs_num_drvs) {
-        const struct devfs_driver *drv = &devfs_drvs[dir->index++];
-        char *next = vfs_compare_path(dir->dir->path, drv->path);
+    while (dir->index < devfs_num_entries) {
+        const struct devfs_entry *entry = &devfs_entries[dir->index++];
+        char *next = vfs_compare_path(dir->entry->path, entry->path);
         if ((next != NULL) && (strlen(next) > 1) && (strchr(next + 1, '/') == NULL)) {
             dir->dirent.d_ino = 0;
-            dir->dirent.d_type = drv->mode & S_IFMT;
+            dir->dirent.d_type = entry->mode & S_IFMT;
             dir->dirent.d_name = (next + 1);
             return &dir->dirent;
         }
@@ -148,74 +157,4 @@ static const struct vfs_file_vtable devfs_dir_vtable = {
     .close = devfs_closedir,
     .readdir = devfs_readdir,
     .rewinddir = devfs_rewinddir,
-};
-
-
-// File
-// ----
-struct dev_file {
-    struct vfs_file base;
-    dev_t dev;
-};
-
-static const struct vfs_file_vtable dev_file_vtable;
-
-static int dev_fstat(void *ctx, struct stat *pstat) {
-    struct dev_file *file = ctx;
-    pstat->st_rdev = file->dev;
-    return 0;
-}
-
-void *dev_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
-    struct dev_file *file = malloc(sizeof(struct dev_file));
-    if (!file) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    vfs_file_init(&file->base, &dev_file_vtable, mode);
-    file->dev = dev;
-    return file;
-}
-
-static int dev_close(void *ctx) {
-    struct dev_file *file = ctx;
-    free(file);
-    return 0;
-}
-
-static int dev_read(void *ctx, void *buf, size_t cnt) {
-    struct dev_file *file = ctx;
-    switch (file->dev) {
-        case DEV_NULL:
-            return 0;
-        case DEV_ZERO:
-        case DEV_FULL:
-            memset(buf, 0, cnt);
-            return cnt;
-        default:
-            errno = ENODEV;
-            return -1;
-    }
-}
-
-static int dev_write(void *ctx, const void *buf, size_t cnt) {
-    struct dev_file *file = ctx;
-    switch (file->dev) {
-        case DEV_NULL:
-        case DEV_ZERO:
-            return cnt;
-        case DEV_FULL:
-            errno = ENOSPC;
-            return -1;
-        default:
-            errno = ENODEV;
-            return -1;
-    }
-}
-
-static const struct vfs_file_vtable dev_file_vtable = {
-    .close = dev_close,
-    .fstat = dev_fstat,
-    .read = dev_read,
-    .write = dev_write,
 };

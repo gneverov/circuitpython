@@ -10,7 +10,10 @@
 
 #include "newlib/mount.h"
 
-#define VFS_FD_MAX 8
+#ifndef VFS_FD_MAX
+#define VFS_FD_MAX 16
+#endif
+
 
 struct vfs_filesystem {
     const char *type;
@@ -18,7 +21,7 @@ struct vfs_filesystem {
     void *(*mount)(const void *ctx, const char *source, unsigned long mountflags, const char *data);
 };
 
-struct vfs_vtable {
+struct vfs_mount_vtable {
     int (*mkdir)(void *ctx, const char *path, mode_t mode);
     void *(*open)(void *ctx, const char *file, int flags, mode_t mode);
     int (*rename)(void *ctx, const char *old, const char *new);
@@ -39,9 +42,11 @@ struct vfs_file_vtable {
     int (*close)(void *ctx);
     int (*fstat)(void *ctx, struct stat *pstat);
     int isatty;
-    off_t (*lseek)(void *ctx, off_t pos, int whence);
-    int (*read)(void *ctx, void *buf, size_t nbyte);
-    int (*write)(void *ctx, const void *buf, size_t nbyte);
+    off_t (*lseek)(void *ctx, off_t offset, int whence);
+    int (*read)(void *ctx, void *buffer, size_t size);
+    int (*write)(void *ctx, const void *buffer, size_t size);
+    int (*pread)(void *ctx, void *buffer, size_t size, off_t offset);
+    int (*pwrite)(void *ctx, const void *buffer, size_t size, off_t offset);
 
     struct dirent *(*readdir)(void *ctx);
     void (*rewinddir)(void *ctx);
@@ -50,11 +55,13 @@ struct vfs_file_vtable {
     int (*fsync)(void *ctx);
     int (*ftruncate)(void *ctx, off_t length);
 
+    uint (*poll)(void *ctx);
+    void *(*mmap)(void *ctx, void *addr, size_t len, int prot, int flags, off_t off);
     int (*ioctl)(void *ctx, unsigned long request, va_list args);
 };
 
 struct vfs_mount {
-    const struct vfs_vtable *func;
+    const struct vfs_mount_vtable *func;
     int ref_count;
     char *path;
     size_t path_len;
@@ -65,6 +72,7 @@ struct vfs_file {
     const struct vfs_file_vtable *func;
     int ref_count;
     mode_t mode;
+    struct poll_event *event;
 };
 
 typedef struct {
@@ -84,7 +92,7 @@ char *vfs_compare_path(const char *path1, const char *path2);
 
 int vfs_expand_path(vfs_path_buffer_t *vfs_path, const char *path);
 
-void vfs_mount_init(struct vfs_mount *vfs, const struct vfs_vtable *func);
+void vfs_mount_init(struct vfs_mount *vfs, const struct vfs_mount_vtable *func);
 
 bool vfs_iterate_mount(struct vfs_mount **entry);
 
@@ -96,16 +104,22 @@ int vfs_mount(struct vfs_mount *vfs, int mountflags);
 
 void vfs_file_init(struct vfs_file *file, const struct vfs_file_vtable *func, mode_t mode);
 
-struct vfs_file *vfs_acquire_file(int fd);
+struct vfs_file *vfs_acquire_file(int fd, int *flags);
 
 void vfs_release_file(struct vfs_file *file);
 
+int vfs_set_flags(int fd, int flags);
+
 struct vfs_file *vfs_copy_file(struct vfs_file *file);
 
-int vfs_replace(int fd, struct vfs_file *file);
+int vfs_replace(int fd, struct vfs_file *file, int flags);
 
 int vfs_close(int fd);
 
 void vfs_getcwd(char *buf, size_t size);
 
 void vfs_setcwd(char *value);
+
+struct vfs_file *vfs_gettty(void);
+
+void vfs_settty(struct vfs_file *file);

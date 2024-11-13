@@ -27,10 +27,9 @@
 #include <malloc.h>
 #include <memory.h>
 
-#include "newlib/flash.h"
-#include "newlib/flash_lockout.h"
 #include "py/mphal.h"
 #include "py/runtime.h"
+#include "flash_lockout.h"
 #include "modrp2.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/ioqspi.h"

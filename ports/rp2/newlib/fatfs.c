@@ -6,15 +6,17 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <malloc.h>
-#include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/unistd.h>
 
 #include "newlib/ioctl.h"
 #include "newlib/vfs.h"
 
 #include "ff.h"
+#include "diskio.h"
 #undef DIR
 
 
@@ -118,6 +120,7 @@ struct fatfs_mount {
 struct fatfs_file {
     struct vfs_file base;
     FIL fp;
+    off_t pos;
 };
 
 struct fatfs_dir {
@@ -127,7 +130,7 @@ struct fatfs_dir {
     struct dirent dirent;
 };
 
-static const struct vfs_vtable fatfs_vtable;
+static const struct vfs_mount_vtable fatfs_vtable;
 
 static const struct vfs_file_vtable fatfs_file_vtable;
 
@@ -160,12 +163,17 @@ cleanup:
 
 static void *fatfs_mount(const void *ctx, const char *source, unsigned long mountflags, const char *data) {
     char path[4];
-    int vol = fatfs_alloc_volume(source, mountflags & MS_RDONLY ? O_RDONLY : O_RDWR, path);
+    int vol = fatfs_alloc_volume(source, O_RDWR, path);
     if (vol < 0) {
         return NULL;
     }
+    struct fatfs_mount *mount = NULL;
+    mountflags &= MS_RDONLY;
+    if (ioctl(fatfs_get_fd(vol)->fd, BLKROSET, &mountflags) < 0) {
+        goto cleanup;
+    }
 
-    struct fatfs_mount *mount = malloc(sizeof(struct fatfs_mount));
+    mount = malloc(sizeof(struct fatfs_mount));
     if (!mount) {
         errno = ENOMEM;
         goto cleanup;
@@ -243,10 +251,9 @@ static void *fatfs_open(void *ctx, const char *path, int flags, mode_t mode) {
             return NULL;
     }
 
-    struct fatfs_file *file = malloc(sizeof(struct fatfs_file));
+    struct fatfs_file *file = calloc(1, sizeof(struct fatfs_file));
     vfs_file_init(&file->base, &fatfs_file_vtable, (mode & ~S_IFMT) | S_IFREG);
-    int result = fatfs_result(f_open(&file->fp, path, fatfs_mode));
-    if (result < 0) {
+    if (fatfs_result(f_open(&file->fp, path, fatfs_mode)) < 0) {
         free(file);
         file = NULL;
     }
@@ -258,8 +265,7 @@ static void *fatfs_opendir(void *ctx, const char *dirname) {
     dirname = fatfs_path(vfs, dirname);
     struct fatfs_dir *dir = malloc(sizeof(struct fatfs_dir));
     vfs_file_init(&dir->base, &fatfs_dir_vtable, S_IFDIR);
-    int result = fatfs_result(f_opendir(&dir->dp, dirname));
-    if (result < 0) {
+    if (fatfs_result(f_opendir(&dir->dp, dirname)) < 0) {
         free(dir);
         dir = NULL;
     }
@@ -305,19 +311,24 @@ static int fatfs_stat(void *ctx, const char *file, struct stat *pstat) {
     struct fatfs_mount *vfs = ctx;
     file = fatfs_path(vfs, file);
     FILINFO fno;
-    int result = fatfs_result(f_stat(file, &fno));
-    if (result >= 0) {
-        time_t time = fatfs_init_time(&fno);
-        fatfs_init_stat(vfs, fno.fattrib & AM_DIR ? S_IFDIR : S_IFREG, fno.fsize, time, pstat);
+    if (fatfs_result(f_stat(file, &fno)) < 0) {
+        return -1;
     }
-    return result;
+    time_t time = fatfs_init_time(&fno);
+    fatfs_init_stat(vfs, fno.fattrib & AM_DIR ? S_IFDIR : S_IFREG, fno.fsize, time, pstat);
+    return 0;
+}
+
+static int fatfs_syncfs(void *ctx) {
+    struct fatfs_mount *vfs = ctx;
+    return fatfs_result(disk_ioctl(vfs->vol, CTRL_SYNC, NULL));
 }
 
 static int fatfs_statvfs(void *ctx, struct statvfs *buf) {
     struct fatfs_mount *vfs = ctx;
     DWORD nclst;
     FATFS *fatfs;
-    if (fatfs_result(f_getfree(vfs->path, &nclst, &fatfs))) {
+    if (fatfs_result(f_getfree(vfs->path, &nclst, &fatfs)) < 0) {
         return -1;
     }
 
@@ -353,7 +364,7 @@ static int fatfs_unlink(void *ctx, const char *file) {
     return fatfs_result(f_unlink(file));
 }
 
-static const struct vfs_vtable fatfs_vtable = {
+static const struct vfs_mount_vtable fatfs_vtable = {
     .mkdir = fatfs_mkdir,
     .open = fatfs_open,
     .rename = fatfs_rename,
@@ -365,6 +376,7 @@ static const struct vfs_vtable fatfs_vtable = {
     .rmdir = fatfs_unlink,
 
     .statvfs = fatfs_statvfs,
+    .syncfs = fatfs_syncfs,
 };
 
 
@@ -384,42 +396,51 @@ static int fatfs_closedir(void *ctx) {
 
 static int fatfs_fstat(void *ctx, struct stat *pstat) {
     struct fatfs_file *file = ctx;
-    int result = fatfs_result(f_lseek(&file->fp, f_tell(&file->fp)));
-    if (result < 0) {
-        return result;
+    if (fatfs_result(f_lseek(&file->fp, f_tell(&file->fp))) < 0) {
+        return -1;
     }
     struct fatfs_mount *vfs = (struct fatfs_mount *)((char *)file->fp.obj.fs - offsetof(struct fatfs_mount, fs));
     fatfs_init_stat(vfs, 0, f_size(&file->fp), 0, pstat);
     return 0;
 }
 
-static off_t fatfs_lseek(void *ctx, off_t pos, int whence) {
+static off_t fatfs_lseek(void *ctx, off_t offset, int whence) {
     struct fatfs_file *file = ctx;
     switch (whence) {
+        case SEEK_SET:
+            break;
         case SEEK_CUR:
-            pos += f_tell(&file->fp);
+            offset += file->pos;
             break;
         case SEEK_END:
-            pos += f_size(&file->fp);
+            offset += f_size(&file->fp);
             break;
         default:
-            assert(whence == SEEK_SET);
-            break;
+            errno = EINVAL;
+            return -1;
     }
-    int result = fatfs_result(f_lseek(&file->fp, pos));
-    if (result >= 0) {
-        result = pos;
+    if (fatfs_result(f_lseek(&file->fp, offset)) < 0) {
+        return -1;
     }
-    return result;
+    return file->pos = offset;
 }
 
-static int fatfs_read(void *ctx, void *buf, size_t cnt) {
+static int fatfs_pread(void *ctx, void *buffer, size_t size, off_t offset) {
     struct fatfs_file *file = ctx;
-    UINT br;
-    int result = fatfs_result(f_read(&file->fp, buf, cnt, &br));
-    if (result >= 0) {
-        result = br;
+    if (fatfs_result(f_lseek(&file->fp, offset)) < 0) {
+        return -1;
     }
+    UINT br;
+    if (fatfs_result(f_read(&file->fp, buffer, size, &br)) < 0) {
+        return -1;
+    }
+    return br;
+}
+
+static int fatfs_read(void *ctx, void *buffer, size_t size) {
+    struct fatfs_file *file = ctx;
+    int result = fatfs_pread(file, buffer, size, file->pos);
+    file->pos = f_tell(&file->fp);
     return result;
 }
 
@@ -441,13 +462,22 @@ static void fatfs_rewinddir(void *ctx) {
     fatfs_result(f_rewinddir(&dir->dp));
 }
 
-static int fatfs_write(void *ctx, const void *buf, size_t cnt) {
+static int fatfs_pwrite(void *ctx, const void *buffer, size_t size, off_t offset) {
     struct fatfs_file *file = ctx;
-    UINT bw;
-    int result = fatfs_result(f_write(&file->fp, buf, cnt, &bw));
-    if (result >= 0) {
-        result = bw;
+    if (fatfs_result(f_lseek(&file->fp, offset)) < 0) {
+        return -1;
     }
+    UINT bw;
+    if (fatfs_result(f_write(&file->fp, buffer, size, &bw)) < 0) {
+        return -1;
+    }
+    return bw;
+}
+
+static int fatfs_write(void *ctx, const void *buffer, size_t size) {
+    struct fatfs_file *file = ctx;
+    int result = fatfs_pwrite(file, buffer, size, file->pos);
+    file->pos = f_tell(&file->fp);
     return result;
 }
 
@@ -455,6 +485,8 @@ static const struct vfs_file_vtable fatfs_file_vtable = {
     .close = fatfs_close,
     .fstat = fatfs_fstat,
     .lseek = fatfs_lseek,
+    .pread = fatfs_pread,
+    .pwrite = fatfs_pwrite,
     .read = fatfs_read,
     .write = fatfs_write,
 };

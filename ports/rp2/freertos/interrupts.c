@@ -51,6 +51,7 @@ void vPortTaskSwitchHook(TaskHandle_t task) {
         uint irq_num = __builtin_ffsll(*irq_mask);
         irq_set_pending(irq_num - 1);
         *irq_mask >>= irq_num;
+        *irq_mask <<= irq_num;
     }
 }
 #endif

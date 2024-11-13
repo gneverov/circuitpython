@@ -6,7 +6,6 @@
 
 #include "tinyusb/tusb_lock.h"
 
-#include "./usb_cdc.h"
 #include "./usb_msc.h"
 #include "./usb_config.h"
 #include "py/mperrno.h"
@@ -78,15 +77,11 @@ static const mp_rom_map_elem_t usb_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_connect),         MP_ROM_PTR(&usb_connect_obj) },
     { MP_ROM_QSTR(MP_QSTR_disconnect),      MP_ROM_PTR(&usb_disconnect_obj) },
 
-#if CFG_TUD_CDC
-    { MP_ROM_QSTR(MP_QSTR_CdcDevice),       MP_ROM_PTR(&usb_cdc_type) },
-#endif
-
 #if CFG_TUD_MSC
     { MP_ROM_QSTR(MP_QSTR_MscDevice),       MP_ROM_PTR(&usb_msc_type) },
 #endif
 
-    { MP_ROM_QSTR(MP_QSTR_UsbConfig),       MP_ROM_PTR(&usb_config_type) },
+    // { MP_ROM_QSTR(MP_QSTR_UsbConfig),       MP_ROM_PTR(&usb_config_type) },
 };
 static MP_DEFINE_CONST_DICT(usb_module_globals, usb_module_globals_table);
 

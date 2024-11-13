@@ -3,9 +3,11 @@
 
 #pragma once
 
+#include "FreeRTOS.h"
+
 #include "hardware/dma.h"
 
-typedef void (*pico_dma_handler_t)(uint channel, void *context);
+typedef void (*pico_dma_handler_t)(uint channel, void *context, BaseType_t *pxHigherPriorityTaskWoken);
 
 void pico_dma_init(void);
 

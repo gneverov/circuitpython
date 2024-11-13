@@ -3,22 +3,25 @@
 
 #pragma once
 
+#include "newlib/event.h"
+
 #include "pico/fifo.h"
 
-#include "py/mphal.h"
-#include "py/stream_poll.h"
+#include "py/obj.h"
+
 
 typedef struct {
     mp_obj_base_t base;
-    mp_hal_pin_obj_t a_pin;
-    mp_hal_pin_obj_t b_pin;
+    int fd;
+    struct event_file *event;
+    uint a_pin;
+    uint b_pin;
     uint pwm_slice;
     pico_fifo_t fifo;
+    size_t threshold;
     uint32_t error;
     uint32_t top;
     uint32_t divisor;
-    mp_stream_poll_t poll;
-    TickType_t timeout;
     uint8_t fragment[4];
 
     uint num_channels;

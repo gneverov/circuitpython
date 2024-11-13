@@ -5,15 +5,13 @@
 
 #include "pico/uart.h"
 
-#include "py/stream_poll.h"
-
 
 typedef struct {
     mp_obj_base_t base;
     int uart_num;
-    pico_uart_t uart;
-    TickType_t timeout;
-    mp_stream_poll_t poll;
+    // pico_uart_t uart;
+    // int fd;
+    // struct event_file *event;
 } uart_obj_t;
 
 extern const mp_obj_type_t uart_type;

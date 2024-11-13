@@ -128,13 +128,6 @@ set(MICROPY_SOURCE_PY
     ${MICROPY_PY_DIR}/warning.c
 )
 
-if(MICROPY_FREERTOS)
-    list(APPEND MICROPY_SOURCE_PY
-        ${MICROPY_PY_DIR}/poll.c    
-        ${MICROPY_PY_DIR}/stream_poll.c
-    )
-endif()
-
 # Helper macro to collect include directories and compile definitions for qstr processing.
 macro(micropy_gather_target_properties targ)
     if(TARGET ${targ})

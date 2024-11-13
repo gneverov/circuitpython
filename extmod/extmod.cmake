@@ -66,9 +66,13 @@ set(MICROPY_SOURCE_EXTMOD
 
 if(MICROPY_FREERTOS)
     list(APPEND MICROPY_SOURCE_EXTMOD 
+        ${MICROPY_EXTMOD_DIR}/modfcntl.c
+        ${MICROPY_EXTMOD_DIR}/modlocale.c
+        ${MICROPY_EXTMOD_DIR}/modio_newlib.c
         ${MICROPY_EXTMOD_DIR}/modos_newlib.c
         ${MICROPY_EXTMOD_DIR}/modselect_freertos.c
         ${MICROPY_EXTMOD_DIR}/modsignal.c
+        ${MICROPY_EXTMOD_DIR}/modtermios.c
         ${MICROPY_EXTMOD_DIR}/modtime_newlib.c
     )
 
@@ -89,8 +93,7 @@ if(MICROPY_FREERTOS)
     
     list(APPEND MICROPY_SOURCE_EXTMOD   
         ${MICROPY_EXTMOD_DIR}/usb/modusb.c
-        ${MICROPY_EXTMOD_DIR}/usb/usb_cdc.c
-        ${MICROPY_EXTMOD_DIR}/usb/usb_config.c
+        # ${MICROPY_EXTMOD_DIR}/usb/usb_config.c
         ${MICROPY_EXTMOD_DIR}/usb/usb_msc.c
     )
  

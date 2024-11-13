@@ -23,53 +23,35 @@ void pico_gpio_init(void) {
     irq_set_enabled(IO_IRQ_BANK0, true);
 }
 
-/* The IRQ enable bits for each GPIO pad are duplicated by core. Because we are in a regime where
- * all interrupt activity happens on a designated core, we must be careful how these bits are
- * accessed. Fortunately because it is possible to directly access the other core's register, we
- * don't need to switch the core we're already executing on. Therefore it is still possible to call
- * this function from an interrupt context.
- *
- * TODO: similar wrappers for irq_set_mask_enabled and irq_is_enabled.
- */
 void pico_gpio_set_irq_enabled(uint gpio, uint32_t events, bool enabled) {
-    io_bank0_irq_ctrl_hw_t *irq_ctrl_base = &io_bank0_hw->proc0_irq_ctrl + INTERRUPT_CORE_NUM;
-
-    // Clear stale events which might cause immediate spurious handler entry
-    gpio_acknowledge_irq(gpio, events);
-
-    io_rw_32 *en_reg = &irq_ctrl_base->inte[gpio / 8];
-    events <<= 4 * (gpio % 8);
-
-    if (enabled) {
-        hw_set_bits(en_reg, events);
-    } else {
-        hw_clear_bits(en_reg, events);
-    }
+    UBaseType_t save = set_interrupt_core_affinity();
+    gpio_set_irq_enabled(gpio, events, enabled);
+    clear_interrupt_core_affinity(save);
 }
 
 bool pico_gpio_add_handler(uint gpio, pico_gpio_handler_t handler, void *context) {
-    taskENTER_CRITICAL();
+    UBaseType_t save = set_interrupt_core_affinity();
     bool ret = false;
     if (!pico_gpio_handlers[gpio]) {
-        pico_gpio_set_irq_enabled(gpio, 0xf, false);
+        gpio_set_irq_enabled(gpio, 0xf, false);
         pico_gpio_handlers[gpio] = handler;
         pico_gpio_contexts[gpio] = context;
         ret = true;
     }
-    taskEXIT_CRITICAL();
+    clear_interrupt_core_affinity(save);
     return ret;
 }
 
 bool pico_gpio_remove_handler(uint gpio) {
-    taskENTER_CRITICAL();
+    UBaseType_t save = set_interrupt_core_affinity();
     bool ret = false;
     if (pico_gpio_handlers[gpio]) {
-        pico_gpio_set_irq_enabled(gpio, 0xf, false);
+        gpio_set_irq_enabled(gpio, 0xf, false);
         pico_gpio_handlers[gpio] = NULL;
         pico_gpio_contexts[gpio] = NULL;
         ret = true;
     }
-    taskEXIT_CRITICAL();
+    clear_interrupt_core_affinity(save);
     return ret;
 }
 

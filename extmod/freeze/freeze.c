@@ -24,15 +24,15 @@
 static uint8_t ram_data[2048] __aligned(MICROPY_BYTES_PER_GC_BLOCK);
 static size_t freeze_last_ram_size;
 static int freeze_mode;
-static const flash_heap_header_t *freeze_checkpoint;
+static uint freeze_device;
 
 static void freeze_writer_nlr_callback(void *ctx) {
     freeze_writer_t *self = ctx - offsetof(freeze_writer_t, nlr_callback);
     flash_heap_free(&self->heap);
 }
 
-static void freeze_writer_init(freeze_writer_t *self, uint32_t type, uintptr_t base) {
-    if (flash_heap_open(&self->heap, type, base) < 0) {
+static void freeze_writer_init(freeze_writer_t *self, uint device, uint32_t type) {
+    if (flash_heap_open(&self->heap, device, type) < 0) {
         mp_raise_OSError(errno);
     }
     self->ram_start = ram_data + freeze_last_ram_size;
@@ -42,9 +42,9 @@ static void freeze_writer_init(freeze_writer_t *self, uint32_t type, uintptr_t b
 
     mp_map_init(&self->obj_map, 0);
     nlr_push_jump_callback(&self->nlr_callback, freeze_writer_nlr_callback);
-    if (flash_heap_get_header(&self->heap) < freeze_checkpoint) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("reset needed"));
-    }    
+    // if ((flash_heap_get_header(&self->heap) < freeze_checkpoint)) {
+    //     mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("reset needed"));
+    // }    
 }
 
 static void freeze_writer_deinit(freeze_writer_t *self) {
@@ -899,8 +899,12 @@ mp_obj_t freeze_clear(void) {
     if (freeze_mode > 0) {
         mp_raise_msg(&mp_type_RuntimeError, "Freezing in progress");
     }
-    if (flash_heap_truncate(NULL) < 0) {
-        mp_raise_OSError(errno);
+    for (uint i = 0; i < FLASH_HEAP_NUM_DEVICES; i++) {
+        if (flash_heap_truncate(i, NULL) < 0) {
+            if (errno != ENODEV) {
+                mp_raise_OSError(errno);
+            }
+        }
     }
     freeze_mode = -1;
     // Restart for changes to take effect
@@ -909,11 +913,13 @@ mp_obj_t freeze_clear(void) {
 }
 
 void freeze_gc() {
-    const flash_heap_header_t *header = NULL;
-    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
-        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
-            const freeze_header_t *p = header->entry;
-            gc_collect_root((void**)p->ram_dst, p->ram_len / sizeof(void *));            
+    for (uint i = 0; i <= FLASH_HEAP_NUM_DEVICES; i++) {
+        const flash_heap_header_t *header = NULL;
+        while (flash_heap_iterate(i, &header)/* && (header < freeze_checkpoint)*/) {
+            if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+                const freeze_header_t *p = header->entry;
+                gc_collect_root((void**)p->ram_dst, p->ram_len / sizeof(void *));            
+            }
         }
     }
 }
@@ -927,20 +933,21 @@ static void freeze_set_qstr_pool(qstr_pool_t *qstr_pool) {
 
 void freeze_init() {
     freeze_mode = 0;
-
-    const flash_heap_header_t *header = NULL;
-    while (flash_heap_iterate(&header)) {
-        if (header->type == FREEZE_QSTR_POOL_FLASH_HEAP_TYPE) {
-            const qstr_pool_t *qstr_pool = header->entry;
-            assert(qstr_pool->prev == MP_STATE_VM(last_pool));
-            freeze_set_qstr_pool((qstr_pool_t *)qstr_pool);
-        }
-        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
-            const freeze_header_t *p = header->entry;
-            freeze_last_ram_size += p->ram_len;
+    for (uint i = 0; i < FLASH_HEAP_NUM_DEVICES; i++) {
+        const flash_heap_header_t *header = NULL;
+        while (flash_heap_iterate(i, &header)) {
+            if (header->type == FREEZE_QSTR_POOL_FLASH_HEAP_TYPE) {
+                const qstr_pool_t *qstr_pool = header->entry;
+                assert(qstr_pool->prev == MP_STATE_VM(last_pool));
+                freeze_set_qstr_pool((qstr_pool_t *)qstr_pool);
+            }
+            if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+                const freeze_header_t *p = header->entry;
+                freeze_last_ram_size += p->ram_len;
+            }
         }
     }
-    freeze_checkpoint = flash_heap_next_header();
+    // freeze_checkpoint = flash_heap_next_header();
 }
 
 static bool freeze_check_module_name(mp_obj_t module_obj, qstr module_name) {
@@ -952,35 +959,37 @@ static bool freeze_check_module_name(mp_obj_t module_obj, qstr module_name) {
 }
 
 mp_obj_t mp_module_get_frozen(qstr module_name, mp_obj_t outer_module_obj) {
-    const flash_heap_header_t *header = NULL;
-    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
-        mp_obj_t module_obj;
-        if (header->type == DL_FLASH_HEAP_TYPE) {
-            mp_obj_t (*extmod_init)(void) = dlsym(header, "mp_extmod_init");
-            if (!extmod_init) {
+    for (uint i = 0; i <= FLASH_HEAP_NUM_DEVICES; i++) {
+        const flash_heap_header_t *header = NULL;
+        while (flash_heap_iterate(i, &header)/* && (header < freeze_checkpoint)*/) {
+            mp_obj_t module_obj;
+            if (header->type == DL_FLASH_HEAP_TYPE) {
+                mp_obj_t (*extmod_init)(void) = dlsym(header, "mp_extmod_init");
+                if (!extmod_init) {
+                    continue;
+                }
+                module_obj = extmod_init();
+                if (!freeze_check_module_name(module_obj, module_name)) {
+                    continue;
+                }
+            }
+            else if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+                const freeze_header_t *p = header->entry;
+                if (p->module_name != module_name) {
+                    continue;
+                }
+                module_obj = MP_OBJ_FROM_PTR(p->module);
+                memcpy(p->ram_dst, p->ram_src, p->ram_len);
+            }
+            else {
                 continue;
             }
-            module_obj = extmod_init();
-            if (!freeze_check_module_name(module_obj, module_name)) {
-                continue;
-            }
-        }
-        else if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
-            const freeze_header_t *p = header->entry;
-            if (p->module_name != module_name) {
-                continue;
-            }
-            module_obj = MP_OBJ_FROM_PTR(p->module);
-            memcpy(p->ram_dst, p->ram_src, p->ram_len);
-        }
-        else {
-            continue;
-        }
 
-        mp_map_t *module_map = &MP_STATE_VM(mp_loaded_modules_dict).map;
-        mp_map_elem_t *elem = mp_map_lookup(module_map, MP_OBJ_NEW_QSTR(module_name), MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
-        elem->value = module_obj;
-        return module_obj;
+            mp_map_t *module_map = &MP_STATE_VM(mp_loaded_modules_dict).map;
+            mp_map_elem_t *elem = mp_map_lookup(module_map, MP_OBJ_NEW_QSTR(module_name), MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
+            elem->value = module_obj;
+            return module_obj;
+        }
     }
     return MP_OBJ_NULL;
 }
@@ -991,7 +1000,7 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     }
 
     freeze_writer_t freezer;
-    freeze_writer_init(&freezer, FREEZE_MODULE_FLASH_HEAP_TYPE, (uintptr_t)freeze_checkpoint);
+    freeze_writer_init(&freezer, freeze_device, FREEZE_MODULE_FLASH_HEAP_TYPE);
     flash_ptr_t fmodule = freeze_new_module(&freezer, module_obj);
     
     size_t ram_size = freezer.ram_end - freezer.ram_start;
@@ -1017,36 +1026,43 @@ mp_obj_t mp_module_freeze(qstr module_name, mp_obj_t module_obj, mp_obj_t outer_
     return module_obj;
 }
 
-static void freeze_qstrs(uintptr_t base) {
+typedef struct {
+    nlr_jump_callback_node_t nlr_callback;
+    uint device;
+    const flash_heap_header_t *checkpoint;
+} freeze_checkpoint_node_t;
+
+static void freeze_qstrs(uint device, const flash_heap_header_t *checkpoint) {
     const qstr_pool_t *last_pool = MP_STATE_VM(last_pool);
-    if (freeze_is_frozen_ptr(NULL, last_pool)) {
+    if ((uintptr_t)last_pool < SRAM_BASE) {
         return;
     }
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         freeze_writer_t freezer;
-        freeze_writer_init(&freezer, FREEZE_QSTR_POOL_FLASH_HEAP_TYPE, base);
+        freeze_writer_init(&freezer, device, FREEZE_QSTR_POOL_FLASH_HEAP_TYPE);
         flash_ptr_t fpool = freeze_new_qstr_pool(&freezer, last_pool);
         if (fpool) {
             freezer.heap.entry = fpool;
             freeze_writer_commit(&freezer);
             freeze_set_qstr_pool((void *)fpool);
         }
-        freeze_checkpoint = flash_heap_next_header();
+        // freeze_checkpoint = flash_heap_next_header();
         freeze_writer_deinit(&freezer);
         nlr_pop();
     }
     else {
-        if (flash_heap_truncate(freeze_checkpoint) < 0) {
+        if (flash_heap_truncate(device, checkpoint) < 0) {
             panic("flash heap corrupted");
         }
         nlr_jump(nlr.ret_val);
     }
 }
 
-static void freeze_mode_nlr_callback(void *ctx) {
-        freeze_qstrs((uintptr_t)freeze_checkpoint);
-        freeze_mode--;
+static void freeze_checkpoint_callback(void *ctx) {
+    freeze_checkpoint_node_t *node = ctx;
+    freeze_qstrs(node->device, node->checkpoint);
+    freeze_mode--;
 }
 
 __attribute__((visibility("hidden")))
@@ -1060,12 +1076,12 @@ mp_obj_t freeze_import_modules(size_t n_args, const mp_obj_t *args, mp_map_t *kw
     if (elem && (elem->value != mp_const_none)) {
 #if PSRAM_BASE
         // If flash is requested but we've already started using psram, then a reboot is needed
-        if (mp_obj_is_true(elem->value) && ((uintptr_t)freeze_checkpoint >= PSRAM_BASE)) {
+        if (mp_obj_is_true(elem->value) && (freeze_device > 0)) {
             mp_raise_msg(&mp_type_RuntimeError, "Reboot pending");
         }
         // If psram is requested, move checkpoint pointer to psram
-        if (!mp_obj_is_true(elem->value) && ((uintptr_t)freeze_checkpoint < PSRAM_BASE)) {
-            freeze_checkpoint = (void *)PSRAM_BASE;
+        if (!mp_obj_is_true(elem->value)) {
+            freeze_device = 1;
         }
 #else
         // psram is requested but there is not psram!
@@ -1081,33 +1097,38 @@ mp_obj_t freeze_import_modules(size_t n_args, const mp_obj_t *args, mp_map_t *kw
     mp_obj_tuple_get(result, &len, &items);
 
     freeze_mode++;
-    size_t start_flash_size, start_ram_size, start_psram_size;
+    size_t start_flash_size[FLASH_HEAP_NUM_DEVICES], start_ram_size;
     size_t start_ram_size2 = freeze_last_ram_size;
-    flash_heap_stats(&start_flash_size, &start_ram_size, &start_psram_size);
-    nlr_jump_callback_node_t nlr_callback;
-    nlr_push_jump_callback(&nlr_callback, freeze_mode_nlr_callback);
+    flash_heap_stats(start_flash_size, &start_ram_size);
+    freeze_checkpoint_node_t checkpoint = {
+        .device = freeze_device,
+        .checkpoint = flash_heap_next_header(freeze_device),
+    };
+    nlr_push_jump_callback(&checkpoint.nlr_callback, freeze_checkpoint_callback);
     for (size_t i = 0; i <n_args; i++) {
         items[i] = mp_builtin___import__(1, &args[i]);
     }
     nlr_pop_jump_callback(true);
 
-    size_t end_flash_size, end_ram_size, end_psram_size;
-    flash_heap_stats(&end_flash_size, &end_ram_size, &end_psram_size);
+    size_t end_flash_size[FLASH_HEAP_NUM_DEVICES], end_ram_size;
+    flash_heap_stats(end_flash_size, &end_ram_size);
     size_t end_ram_size2 = freeze_last_ram_size;
-    mp_printf(&mp_plat_print, "loaded %u flash bytes, %u ram bytes, %u psram bytes\n", end_flash_size - start_flash_size, end_ram_size - start_ram_size + end_ram_size2 - start_ram_size2, end_psram_size - start_psram_size);
+    mp_printf(&mp_plat_print, "loaded %u flash bytes, %u ram bytes, %u psram bytes\n", end_flash_size[0] - start_flash_size[0], end_ram_size - start_ram_size + end_ram_size2 - start_ram_size2, end_flash_size[1] - start_flash_size[1]);
     return result;
 }
 
 __attribute__((visibility("hidden")))
 mp_obj_t freeze_get_modules(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
-    const flash_heap_header_t *header = NULL;
-    while (flash_heap_iterate(&header) && (header < freeze_checkpoint)) {
-        if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
-            const freeze_header_t *module_header = header->entry;
-            mp_obj_t module_name = MP_OBJ_NEW_QSTR(module_header->module_name);
-            mp_obj_t module_obj = MP_OBJ_FROM_PTR(module_header->module);
-            mp_obj_dict_store(dict, module_name, module_obj);
+    for (uint i = 0; i < FLASH_HEAP_NUM_DEVICES; i++) {
+        const flash_heap_header_t *header = NULL;
+        while (flash_heap_iterate(i, &header)/* && (header < freeze_checkpoint)*/) {
+            if (header->type == FREEZE_MODULE_FLASH_HEAP_TYPE) {
+                const freeze_header_t *module_header = header->entry;
+                mp_obj_t module_name = MP_OBJ_NEW_QSTR(module_header->module_name);
+                mp_obj_t module_obj = MP_OBJ_FROM_PTR(module_header->module);
+                mp_obj_dict_store(dict, module_name, module_obj);
+            }
         }
     }
     return dict;
@@ -1163,13 +1184,14 @@ static int freeze_schedule(freeze_schedule_fun_t fun, ...) {
 }
 
 static int vfreeze_qstrs(va_list args) {
-    uintptr_t base = va_arg(args, uintptr_t);
-    freeze_qstrs(base);
+    uint device = va_arg(args, uint);
+    const flash_heap_header_t *checkpoint = va_arg(args, const flash_heap_header_t *);
+    freeze_qstrs(device, checkpoint);
     return 0;
 }
 
 static int freeze_post_link(const flash_heap_header_t *header) {
-    return freeze_schedule(vfreeze_qstrs, (uintptr_t)header);
+    return freeze_schedule(vfreeze_qstrs, 0, header);
 }
 
 static int vqstr_from_strn(va_list args) {

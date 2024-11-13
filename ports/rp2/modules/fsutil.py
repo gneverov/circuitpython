@@ -14,16 +14,19 @@ def local(readonly=False):
 
 def usb(readonly=False):
     msc.eject()
-    msc.insert(root_device, os.O_RDONLY if readonly else os.O_RDWR)
+    local(not readonly)
+    msc.insert(root_device, 1 if readonly else 0)
 
 
 def uf2():
     msc.eject()
-    msc.insert("/dev/uf2", os.O_RDWR)
+    local()
+    msc.insert("/dev/uf2")
 
 
 def none():
     msc.eject()
+    local()
 
 
 def sdcard(spi=0, sck=10, mosi=11, miso=12, cs=14, path="/sdcard"):

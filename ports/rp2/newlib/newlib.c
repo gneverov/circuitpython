@@ -5,17 +5,20 @@
 #include <fcntl.h>
 #include <malloc.h>
 #include <memory.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include <termios.h>
 
 #include "hardware/watchdog.h"
 #include "pico/bootrom.h"
 #include "pico/runtime.h"
 
 #include "newlib/dlfcn.h"
+#include "newlib/ioctl.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
 #include "newlib/thread.h"
@@ -38,7 +41,7 @@ void __attribute__((noreturn)) _exit(int status) {
     // switch to MSP stack
     // clear current task
 
-    if (status == 0) {
+    if (status < 1) {
         watchdog_reboot(0, 0, 0);
     } else if (status == 3) {
         reset_usb_boot(0, 0);
@@ -48,8 +51,37 @@ void __attribute__((noreturn)) _exit(int status) {
     }
 }
 
+int fcntl(int fd, int cmd, ...) {
+    va_list args;
+    va_start(args, cmd);
+    int ret = -1;
+    switch (cmd) {
+        case F_GETFL: {
+            int flags = 0;
+            struct vfs_file *file = vfs_acquire_file(fd, &flags);
+            if (file) {
+                ret = (flags & ~O_ACCMODE) | ((flags - 1) & O_ACCMODE);
+                vfs_release_file(file);
+            }
+            break;
+        }
+        case F_SETFL: {
+            int flags = va_arg(args, int);
+            ret = vfs_set_flags(fd, flags & ~O_ACCMODE) >= 0 ? 0 : -1;
+            break;
+        }
+        default: {
+            errno = EINVAL;
+            break;
+        }
+    }
+    va_end(args);
+    return ret;
+}
+
 int fstat(int fd, struct stat *pstat) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
@@ -73,7 +105,8 @@ int getpid(void) {
 }
 
 int isatty(int fd) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
@@ -107,14 +140,15 @@ void kill_from_isr(int pid, int sig, BaseType_t *pxHigherPriorityTaskWoken) {
     }
 }
 
-off_t lseek(int fd, off_t pos, int whence) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+off_t lseek(int fd, off_t offset, int whence) {
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
     int ret = -1;
     if (file->func->lseek) {
-        ret = file->func->lseek(file, pos, whence);
+        ret = file->func->lseek(file, offset, whence);
     } else {
         errno = S_ISCHR(file->mode) ? ESPIPE : ENOSYS;
     }
@@ -159,24 +193,29 @@ int open(const char *path, int flags, ...) {
     int ret = -1;
     if (file) {
         if (file->func->isatty && !(flags & O_NOCTTY)) {
-            vfs_replace(0, file);
-            vfs_replace(1, file);
-            vfs_replace(2, file);
+            vfs_settty(file);
+            vfs_replace(0, file, (flags & ~O_ACCMODE) | FREAD);
+            vfs_replace(1, file, (flags & ~O_ACCMODE) | FWRITE);
+            vfs_replace(2, file, (flags & ~O_ACCMODE) | FWRITE);
         }
-        ret = vfs_replace(-1, file);
+        ret = vfs_replace(-1, file, (flags & ~O_ACCMODE) | ((flags + 1) & O_ACCMODE));
         vfs_release_file(file);
     }
     return ret;
 }
 
-int read(int fd, void *buf, size_t nbyte) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+int read(int fd, void *buffer, size_t size, off_t offset) {
+    int flags = FREAD;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
     int ret = -1;
     if (file->func->read) {
-        ret = file->func->read(file, buf, nbyte);
+        do {
+            ret = file->func->read(file, buffer, size);
+        }
+        while (!(flags & FNONBLOCK) && (ret < 0) && (errno == EAGAIN) && (poll_file(file, POLLIN, -1) >= 0));
     } else {
         errno = S_ISDIR(file->mode) ? EISDIR : ENOSYS;
     }
@@ -184,7 +223,32 @@ int read(int fd, void *buf, size_t nbyte) {
     return ret;
 }
 
-// int _rename(const char *old, const char *new) {
+ssize_t pread(int fd, void *buffer, size_t size, off_t offset) {
+    if (lseek(fd, 0, SEEK_CUR) < 0) {
+        return -1;
+    }
+    if (offset < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    int flags = FREAD;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
+    if (!file) {
+        return -1;
+    }
+    int ret = -1;
+    if (file->func->read) {
+        do {
+            ret = file->func->pread(file, buffer, size, offset);
+        }
+        while (!(flags & FNONBLOCK) && (ret < 0) && (errno == EAGAIN) && (poll_file(file, POLLIN, -1) >= 0));
+    } else {
+        errno = S_ISDIR(file->mode) ? EISDIR : ENOSYS;
+    }
+    vfs_release_file(file);
+    return ret;
+}
+
 int rename(const char *old, const char *new) {
     int ret = -1;
     struct vfs_mount *vfs_old = NULL;
@@ -256,14 +320,44 @@ int unlink(const char *file) {
     return ret;
 }
 
-int write(int fd, const void *buf, size_t nbyte) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+int write(int fd, const void *buffer, size_t size) {
+    int flags = FWRITE;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
     int ret = -1;
     if (file->func->write) {
-        ret = file->func->write(file, buf, nbyte);
+        do {
+            ret = file->func->write(file, buffer, size);
+        }
+        while (!(flags & FNONBLOCK) && (ret < 0) && (errno == EAGAIN) && (poll_file(file, POLLOUT, -1) >= 0));
+    } else {
+        errno = S_ISDIR(file->mode) ? EISDIR : ENOSYS;
+    }
+    vfs_release_file(file);
+    return ret;
+}
+
+ssize_t pwrite(int fd, const void *buffer, size_t size, off_t offset) {
+    if (lseek(fd, 0, SEEK_CUR) < 0) {
+        return -1;
+    }
+    if (offset < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    int flags = FWRITE;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
+    if (!file) {
+        return -1;
+    }
+    int ret = -1;
+    if (file->func->write) {
+        do {
+            ret = file->func->pwrite(file, buffer, size, offset);
+        }
+        while (!(flags & FNONBLOCK) && (ret < 0) && (errno == EAGAIN) && (poll_file(file, POLLOUT, -1) >= 0));
     } else {
         errno = S_ISDIR(file->mode) ? EISDIR : ENOSYS;
     }

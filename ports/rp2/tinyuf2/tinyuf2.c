@@ -11,7 +11,6 @@
 #include "task.h"
 
 #include "newlib/dlfcn.h"
-#include "newlib/flash_heap.h"
 #include "newlib/ioctl.h"
 #include "newlib/newlib.h"
 #include "newlib/vfs.h"
@@ -30,10 +29,11 @@ static struct tinyuf2_file {
 static int tinyuf2_close(void *ctx) {
     struct tinyuf2_file *file = ctx;
     dl_loader_free(&file->loader);
+    dev_lock();
+    assert(tinyuf2_file == file);
+    tinyuf2_file = NULL;
+    dev_unlock();
     free(file);
-    if (tinyuf2_file == file) {
-        tinyuf2_file = NULL;
-    }
     return 0;
 }
 
@@ -73,34 +73,30 @@ static int tinyuf2_ioctl(void *ctx, unsigned long request, va_list args) {
     }
 }
 
-static off_t tinyuf2_lseek(void *ctx, off_t pos, int whence) {
+static off_t tinyuf2_lseek(void *ctx, off_t offset, int whence) {
     struct tinyuf2_file *file = ctx;
-    off_t ptr;
     switch (whence) {
         case SEEK_SET:
-            ptr = 0;
             break;
         case SEEK_CUR:
-            ptr = file->ptr;
+            offset += file->ptr;
             break;
         case SEEK_END:
-            ptr = CFG_UF2_NUM_BLOCKS * 512;
+            offset += CFG_UF2_NUM_BLOCKS * 512;
             break;
         default:
             errno = EINVAL;
             return -1;
     }
-    ptr += pos;
-    if (ptr < 0) {
+    if (offset < 0) {
         errno = EINVAL;
         return -1;
     }
-    if (ptr > CFG_UF2_NUM_BLOCKS * 512) {
+    if (offset > CFG_UF2_NUM_BLOCKS * 512) {
         errno = EFBIG;
         return -1;
     }
-    file->ptr = (ptr + 511) & ~511;
-    return file->ptr;
+    return file->ptr = offset;
 }
 
 static int tinyuf2_read(void *ctx, void *buf, size_t size) {
@@ -147,27 +143,35 @@ static const struct vfs_file_vtable tinyuf2_vtable = {
     .write = tinyuf2_write,
 };
 
-void *tinyuf2_open(const char *fragment, int flags, mode_t mode, dev_t dev) {
+static void *tinyuf2_open(const void *ctx, dev_t dev, int flags, mode_t mode) {
+    struct tinyuf2_file *file = NULL;
+    dev_lock();
     if (tinyuf2_file) {
+        dev_unlock();
         errno = EBUSY;
         return NULL;
     }
-    struct tinyuf2_file *file = malloc(sizeof(struct tinyuf2_file));
+    file = calloc(1, sizeof(struct tinyuf2_file));
     if (!file) {
-        errno = ENOMEM;
+        dev_unlock();
         return NULL;
     }
-    vfs_file_init(&file->base, &tinyuf2_vtable, mode);
-    file->ptr = 0;
-    memset(&file->wr_state, 0, sizeof(file->wr_state));
-    if (dl_loader_open(&file->loader, FLASH_BASE) < 0) {
+    vfs_file_init(&file->base, &tinyuf2_vtable, mode | S_IFBLK);
+    tinyuf2_file = file;
+    dev_unlock();
+
+    if (dl_loader_open(&file->loader, 0) < 0) {
         vfs_release_file(&file->base);
         return NULL;
     }
     uf2_init();
-    tinyuf2_file = file;
     return file;
 }
+
+const struct dev_driver tinyuf2_drv = {
+    .dev = DEV_UF2,
+    .open = tinyuf2_open,
+};
 
 static void tinyuf2_link(void *pvParameters) {
     struct tinyuf2_file *file = pvParameters;
@@ -198,8 +202,10 @@ void board_flash_flush(void) {
         // Because the flash heap cache can use all available RAM, we need to evict some cache so
         // that there is enough free RAM to allocate the FreeRTOS task. So we ensure there is at
         // least double the task's stack size of free RAM before creating the task.
-        void *alloc = flash_heap_realloc_with_evict(&file->loader.heap, NULL, 1024 * sizeof(StackType_t));
-        free(alloc);
+
+        // For now the flash heap cache is bounded, but this may change.
+        // void *alloc = flash_heap_realloc_with_evict(&file->loader.heap, NULL, 1024 * sizeof(StackType_t));
+        // free(alloc);
 
         // Increment ref counter on file object for the reference used by the new task.
         file = (struct tinyuf2_file *)vfs_copy_file(&file->base);

@@ -44,7 +44,7 @@
 #define ILI9341_RGBSET      0x2D /* [8.2.23] Color Set (LUT for 16-bit to 18-bit color depth conversion) */
 #define ILI9341_RAMRD       0x2E /* [8.2.24] Memory Read */
 #define ILI9341_PTLAR       0x30 /* [8.2.25] Partial Area */
-#define ILI9341_VSCRDEF     0x33 /* [8.2.26] Veritcal Scrolling Definition */
+#define ILI9341_VSCRDEF     0x33 /* [8.2.26] Vertical Scrolling Definition */
 #define ILI9341_TEOFF       0x34 /* [8.2.27] Tearing Effect Line OFF */
 #define ILI9341_TEON        0x35 /* [8.2.28] Tearing Effect Line ON */
 #define ILI9341_MADCTL      0x36 /* [8.2.29] Memory Access Control */
@@ -211,7 +211,7 @@ static void disp_write(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *data,
     pico_spi_give(drv->spi);
 }
 
-static void disp_dma_irq_handler(uint channel, void *context) {
+static void disp_dma_irq_handler(uint channel, void *context, BaseType_t *pxHigherPriorityTaskWoken) {
     lv_ili9341_disp_t *drv = context;
     pico_dma_acknowledge_irq(drv->dma);
     drv->int_count++;
@@ -220,16 +220,14 @@ static void disp_dma_irq_handler(uint channel, void *context) {
     spi_set_format(drv->spi->inst, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_put(drv->cs, true);
 
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    pico_spi_give_from_isr(drv->spi, &xHigherPriorityTaskWoken);
+    pico_spi_give_from_isr(drv->spi, pxHigherPriorityTaskWoken);
 
     TaskHandle_t task = drv->task;
     drv->task = NULL;
     assert(task);
     if (task) {
-        vTaskNotifyGiveFromISR(task, &xHigherPriorityTaskWoken);
+        vTaskNotifyGiveFromISR(task, pxHigherPriorityTaskWoken);
     }
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 static void disp_write_dma(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *data, size_t len) {

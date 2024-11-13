@@ -6,12 +6,11 @@ target_sources(pico_helper INTERFACE
     dma.c
     fifo.c
     gpio.c
+    irq.c
     pio.c
     pwm.c
     sdcard.c
     spi.c
-    terminal.c
-    terminal_boot.c
     terminal_uart.c
     time.c
     uart.c

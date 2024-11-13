@@ -3,18 +3,24 @@ cmake_minimum_required(VERSION 3.13)
 add_library(newlib_helper INTERFACE)
 
 target_sources(newlib_helper INTERFACE
+    dev.c
     devfs.c
     dlfcn.c
-    env.c
-    flash_dev.c
+    event.c
     flash_env.c
     flash_heap.c
-    flash_lockout.c
     lock.c
+    mem.c
+    mtdblk.c
     newlib.c
+    pipe.c
+    poll.c
     posix.c
     random.c
+    ring.c
+    termios.c
     thread.c
+    tty.c
     vfs.c
 )
 
@@ -27,15 +33,9 @@ set_source_files_properties(
 add_library(newlib_helper_headers INTERFACE)
 target_include_directories(newlib_helper_headers INTERFACE include)
 
-target_link_options(newlib_helper INTERFACE
-    LINKER:--wrap=setenv
-    LINKER:--wrap=unsetenv
-)
-
 target_link_libraries(newlib_helper INTERFACE
     newlib_helper_headers
     freertos
-    hardware_flash
 )
 
 
@@ -46,6 +46,12 @@ target_link_libraries(newlib_fatfs INTERFACE
     newlib_helper
 )
 
+add_library(newlib_littlefs INTERFACE)
+target_sources(newlib_littlefs INTERFACE littlefs.c)
+target_link_libraries(newlib_littlefs INTERFACE
+    littlefs
+    newlib_helper
+)
 
 add_library(newlib_dhara INTERFACE)
 target_sources(newlib_dhara INTERFACE dhara.c)

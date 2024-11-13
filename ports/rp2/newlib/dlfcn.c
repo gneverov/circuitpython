@@ -8,16 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 #include <unistd.h>
-
 #include "newlib/dlfcn.h"
 #include "newlib/flash_heap.h"
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-
-#ifndef MIN
-#define MIN(a, b) ((b) > (a)?(a):(b))
-#endif
 
 
 typedef char elf_str_t[256];
@@ -57,8 +53,8 @@ static void dl_seterror() {
 }
 
 __attribute__((visibility("hidden")))
-int dl_loader_open(dl_loader_t *loader, uintptr_t base) {
-    if (flash_heap_open(&loader->heap, DL_FLASH_HEAP_TYPE, base) < 0) {
+int dl_loader_open(dl_loader_t *loader, uint device) {
+    if (flash_heap_open(&loader->heap, device, DL_FLASH_HEAP_TYPE) < 0) {
         return -1;
     }
     if (loader->heap.flash_start < (flash_ptr_t)dl_last_loaded) {
@@ -293,7 +289,7 @@ error:
 }
 
 __attribute__((visibility("hidden")))
-void *dl_load(const char *file, uintptr_t base) {
+void *dl_load(const char *file, uint device) {
     dl_loader_t loader = { 0 };
     int fd = open(file, O_RDONLY, 0);
     if (fd < 0) {
@@ -301,10 +297,10 @@ void *dl_load(const char *file, uintptr_t base) {
         goto cleanup;
     }
 
-    size_t start_flash_size, start_ram_size, start_psram_size;
-    flash_heap_stats(&start_flash_size, &start_ram_size, &start_psram_size);
+    size_t start_flash_size[FLASH_HEAP_NUM_DEVICES], start_ram_size;
+    flash_heap_stats(start_flash_size, &start_ram_size);
 
-    if (dl_loader_open(&loader, base) < 0) {
+    if (dl_loader_open(&loader, device) < 0) {
         goto cleanup;
     }
 
@@ -346,13 +342,13 @@ void *dl_load(const char *file, uintptr_t base) {
     }
 
     dl_loader_free(&loader);
-    size_t end_flash_size, end_ram_size, end_psram_size;
-    flash_heap_stats(&end_flash_size, &end_ram_size, &end_psram_size);
+    size_t end_flash_size[FLASH_HEAP_NUM_DEVICES], end_ram_size;
+    flash_heap_stats(end_flash_size, &end_ram_size);
     printf(
         "loaded %u flash bytes, %u ram bytes, %u psram bytes\n",
-        end_flash_size - start_flash_size,
+        end_flash_size[0] - start_flash_size[0],
         end_ram_size - start_ram_size,
-        end_psram_size - start_psram_size);
+        end_flash_size[1] - start_flash_size[1]);
     return (void *)loader.flash_base;
 
 cleanup:
@@ -670,15 +666,15 @@ void *dl_realloc(const dl_linker_t *linker, void *ptr, size_t size) {
 
 
 bool dl_iterate(const flash_heap_header_t **header) {
-    bool result = flash_heap_iterate(header);
+    bool result = flash_heap_iterate(0, header);
     while (result && ((*header)->type != DL_FLASH_HEAP_TYPE)) {
-        result = flash_heap_iterate(header);
+        result = flash_heap_iterate(0, header);
     }
     return result && (*header < dl_last_loaded);
 }
 
 void *dl_flash(const char *file) {
-    return dl_load(file, FLASH_BASE);
+    return dl_load(file, 0);
 }
 
 void *dlopen(const char *file, int mode) {

@@ -56,8 +56,12 @@ static void pin_irq_handler(uint gpio, uint32_t events, void *context) {
     self->events |= events;
     self->event_mask &= ~events;
 
-    pin_disable_interrupt(self);
-    pin_enable_interrupt(self);
+    gpio_set_irq_enabled(self->pin, 0xf, false);
+    uint32_t event_mask = self->event_mask & 0xf;
+    if (self->event_mask & 0x30) {
+        event_mask |= GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE;
+    }
+    gpio_set_irq_enabled(self->pin, event_mask, true);
 
     BaseType_t xHigherPriorityTaskWoken = 0;
     mp_stream_poll_signal(&self->poll, MP_STREAM_POLL_RD, &xHigherPriorityTaskWoken);

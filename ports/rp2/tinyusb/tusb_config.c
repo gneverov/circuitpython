@@ -3,14 +3,16 @@
 
 #include "pico/unique_id.h"
 
-#include "newlib/flash_env.h"
-
 #include "tinyusb/tusb_config.h"
 
 #define TUSB_ENV_DEVICE 0x0100
 #define TUSB_ENV_CONFIG 0x0200
 #define TUSB_ENV_STRING 0x0300
 
+
+const void *flash_env_get(int key, size_t *len) {
+    return NULL;
+}
 
 void tusb_config_load(tusb_config_t *config) {
     size_t len;
@@ -24,6 +26,7 @@ void tusb_config_load(tusb_config_t *config) {
 }
 
 bool tusb_config_save(const tusb_config_t *config) {
+    #if 0
     struct flash_env *env = flash_env_open();
     if (!env) {
         return false;
@@ -50,6 +53,9 @@ bool tusb_config_save(const tusb_config_t *config) {
         tud_connect();
     }
     return true;
+    #else
+    return false;
+    #endif
 }
 
 #define USBD_DESC_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)

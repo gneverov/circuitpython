@@ -1,43 +1,75 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include "newlib/dev.h"
 #include "newlib/devfs.h"
 // #include "newlib/dhara.h"
 #include "newlib/fatfs.h"
-#include "newlib/flash_dev.h"
+#include "newlib/littlefs.h"
+#include "newlib/mem.h"
+#include "newlib/mtdblk.h"
+#include "newlib/tty.h"
+#include "mtd.h"
 #include "pico/sdcard.h"
 #include "pico/terminal.h"
 #include "tinyuf2/tinyuf2.h"
 #include "tinyusb/terminal.h"
 
 
-const struct devfs_driver devfs_drvs[] = {
-    { "/", S_IFDIR, 0, NULL },
+const struct dev_driver *dev_drvs[] = {
+    &mem_drv,
+    &tty_drv,
+    &mtd_drv,
+    &mtdblk_drv,
+    &uart_drv,
+    &usb_drv,
+    &tinyuf2_drv,
+};
+const size_t dev_num_drvs = sizeof(dev_drvs) / sizeof(dev_drvs[0]);
 
-    { "/null", S_IFCHR, DEV_NULL, dev_open },
-    { "/zero", S_IFCHR, DEV_ZERO, dev_open },
-    { "/full", S_IFCHR, DEV_FULL, dev_open },
 
-    { "/flash", S_IFBLK, DEV_FLASH, flash_open },
+const struct devfs_entry devfs_entries[] = {
+    { "/", S_IFDIR, 0 },
+
+    { "/mem", S_IFCHR, DEV_MEM },
+    { "/null", S_IFCHR, DEV_NULL },
+    { "/zero", S_IFCHR, DEV_ZERO },
+    { "/full", S_IFCHR, DEV_FULL },
+
+    { "/mtd0", S_IFCHR, DEV_MTD0 },
+    { "/mtd1", S_IFCHR, DEV_MTD1 },
+    { "/mtd2", S_IFCHR, DEV_MTD2 },
+    { "/mtd3", S_IFCHR, DEV_MTD3 },
+
+    { "/firmware", S_IFBLK, DEV_MTDBLK0 },
+    { "/mtdblock1", S_IFBLK, DEV_MTDBLK1 },
+    { "/mtdblock2", S_IFBLK, DEV_MTDBLK2 },
+    // { "/psram", S_IFBLK, DEV_MTDBLK4 },
+    // { "/mtdblock5", S_IFBLK, DEV_MTDBLK5 },
+    // { "/mtdblock6", S_IFBLK, DEV_MTDBLK6 },
 
     // { "/dhara", S_IFBLK, DEV_DHARA, dhara_open },
 
-    { "/ttyS0", S_IFCHR, DEV_TTYS0, terminal_open },
-    { "/ttyS1", S_IFCHR, DEV_TTYS1, terminal_open },
+    { "/tty", S_IFCHR, DEV_TTY },
 
-    { "/ttyUSB0", S_IFCHR, DEV_TTYUSB0, terminal_usb_open },
+    { "/ttyS0", S_IFCHR, DEV_TTYS0 },
+    { "/ttyS1", S_IFCHR, DEV_TTYS1 },
 
-    { "/uf2", S_IFBLK, 0, tinyuf2_open },
+    { "/ttyUSB0", S_IFCHR, DEV_TTYUSB0 },
 
-    { "/sdcard0", S_IFBLK, DEV_SDCARD0, sdcard_open },
-    { "/sdcard1", S_IFBLK, DEV_SDCARD1, sdcard_open },
+    { "/uf2", S_IFBLK, DEV_UF2 },
+
+    { "/sdcard0", S_IFBLK, DEV_MMCBLK0 | 14 },
+    { "/sdcard1", S_IFBLK, DEV_MMCBLK0 | 0x80 | 6 },
 };
 
-const size_t devfs_num_drvs = sizeof(devfs_drvs) / sizeof(devfs_drvs[0]);
+const size_t devfs_num_entries = sizeof(devfs_entries) / sizeof(devfs_entries[0]);
+
 
 const struct vfs_filesystem *vfs_fss[] = {
     &devfs_fs,
     &fatfs_fs,
+    &littlefs_fs,
 };
 
 const size_t vfs_num_fss = sizeof(vfs_fss) / sizeof(vfs_fss[0]);

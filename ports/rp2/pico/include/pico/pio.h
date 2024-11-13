@@ -3,13 +3,16 @@
 
 #pragma once
 
+#include "FreeRTOS.h"
+
 #include "hardware/pio.h"
 
 #define NUM_PIO_INTERRUPT_SOURCES 12
 
+
 PIO pico_pio(uint pio_index);
 
-typedef void (*pico_pio_handler_t)(PIO pio, enum pio_interrupt_source source, void *context);
+typedef void (*pico_pio_handler_t)(PIO pio, enum pio_interrupt_source source, void *context, BaseType_t *pxHigherPriorityTaskWoken);
 
 void pico_pio_init(void);
 

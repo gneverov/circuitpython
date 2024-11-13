@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <errno.h>
+#include <fcntl.h>
 #include <malloc.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -19,8 +20,11 @@ static SemaphoreHandle_t vfs_mutex;
 static struct vfs_mount *vfs_table;
 
 static struct vfs_file *vfs_fd_table[VFS_FD_MAX];
+static uint16_t vfs_fd_flags[VFS_FD_MAX];
 
 static char *vfs_cwd;
+
+static struct vfs_file *vfs_tty;
 
 __attribute__((constructor, visibility("hidden")))
 void vfs_init(void) {
@@ -58,6 +62,31 @@ void vfs_setcwd(char *value) {
     vfs_unlock();
 }
 
+__attribute__((visibility("hidden")))
+struct vfs_file *vfs_gettty(void) {
+    vfs_lock();
+    struct vfs_file *file = vfs_tty;
+    if (file) {
+        file->ref_count++;
+    }
+    vfs_unlock();
+    return file;
+}
+
+__attribute__((visibility("hidden")))
+void vfs_settty(struct vfs_file *file) {
+    vfs_lock();
+    struct vfs_file *old_file = vfs_tty;
+    if (file) {
+        file->ref_count++;
+    }
+    vfs_tty = file;
+    vfs_unlock();
+    if (old_file) {
+        vfs_release_file(old_file);
+    }
+}
+
 static const struct vfs_filesystem *vfs_lookup_filesystem(const char *type) {
     const struct vfs_filesystem *fs = NULL;
     for (int i = 0; i < vfs_num_fss; i++) {
@@ -69,7 +98,7 @@ static const struct vfs_filesystem *vfs_lookup_filesystem(const char *type) {
     return fs;
 }
 
-void vfs_mount_init(struct vfs_mount *vfs, const struct vfs_vtable *func) {
+void vfs_mount_init(struct vfs_mount *vfs, const struct vfs_mount_vtable *func) {
     vfs->func = func;
     vfs->ref_count = 1;
     vfs->path = NULL;
@@ -312,9 +341,10 @@ void vfs_file_init(struct vfs_file *file, const struct vfs_file_vtable *func, mo
     file->func = func;
     file->ref_count = 1;
     file->mode = mode;
+    file->event = NULL;
 }
 
-struct vfs_file *vfs_acquire_file(int fd) {
+struct vfs_file *vfs_acquire_file(int fd, int *flags) {
     if ((uint)fd >= VFS_FD_MAX) {
         errno = EBADF;
         return NULL;
@@ -322,10 +352,12 @@ struct vfs_file *vfs_acquire_file(int fd) {
 
     vfs_lock();
     struct vfs_file *file = vfs_fd_table[fd];
-    if (file) {
+    if (file && ((vfs_fd_flags[fd] & *flags) == *flags)) {
         file->ref_count++;
+        *flags = vfs_fd_flags[fd];
     } else {
         errno = EBADF;
+        file = NULL;
     }
     vfs_unlock();
     return file;
@@ -342,9 +374,31 @@ void vfs_release_file(struct vfs_file *file) {
     vfs_lock();
     int ref_count = --file->ref_count;
     vfs_unlock();
-    if ((ref_count == 0) && (file->func->close)) {
-        file->func->close(file);
+    if (ref_count == 0) {
+        assert(file->event == NULL);
+        if (file->func->close) {
+            file->func->close(file);
+        } else {
+            free(file);
+        }
     }
+}
+
+int vfs_set_flags(int fd, int flags) {
+    if ((uint)fd >= VFS_FD_MAX) {
+        errno = EBADF;
+        return -1;
+    }
+
+    int ret = -1;
+    vfs_lock();
+    if (vfs_fd_table[fd]) {
+        ret = vfs_fd_flags[fd] = (vfs_fd_flags[fd] & O_ACCMODE) | (flags & ~O_ACCMODE);
+    } else {
+        errno = EBADF;
+    }
+    vfs_unlock();
+    return ret;
 }
 
 static int vfs_fd_next(void) {
@@ -381,7 +435,7 @@ exit:
     return ret;
 }
 
-int vfs_replace(int fd, struct vfs_file *file) {
+int vfs_replace(int fd, struct vfs_file *file, int flags) {
     if (fd >= VFS_FD_MAX) {
         errno = EBADF;
         return -1;
@@ -398,6 +452,7 @@ int vfs_replace(int fd, struct vfs_file *file) {
     file->ref_count++;
     prev_file = vfs_fd_table[fd];
     vfs_fd_table[fd] = file;
+    vfs_fd_flags[fd] = flags;
 exit:
     vfs_unlock();
     if (prev_file) {
@@ -407,11 +462,12 @@ exit:
 }
 
 int dup(int oldfd) {
-    struct vfs_file *old_file = vfs_acquire_file(oldfd);
+    int flags = 0;
+    struct vfs_file *old_file = vfs_acquire_file(oldfd, &flags);
     if (!old_file) {
         return -1;
     }
-    int ret = vfs_replace(-1, old_file);
+    int ret = vfs_replace(-1, old_file, flags);
     vfs_release_file(old_file);
     return ret;
 }
@@ -421,11 +477,12 @@ int dup2(int oldfd, int newfd) {
         errno = EBADF;
         return -1;
     }
-    struct vfs_file *old_file = vfs_acquire_file(oldfd);
+    int flags = 0;
+    struct vfs_file *old_file = vfs_acquire_file(oldfd, &flags);
     if (!old_file) {
         return -1;
     }
-    int ret = vfs_replace(newfd, old_file);
+    int ret = vfs_replace(newfd, old_file, flags);
     vfs_release_file(old_file);
     return ret;
 }
@@ -433,6 +490,8 @@ int dup2(int oldfd, int newfd) {
 __attribute__((destructor(200)))
 void vfs_deinit(void) {
     for (int fd = VFS_FD_MAX - 1; fd >= 0; fd--) {
+        fsync(fd);
         vfs_close(fd);
     }
+    sync();
 }

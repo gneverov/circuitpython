@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <sys/types.h>
+#include "newlib/dev.h"
 
 
-void *tinyuf2_open(const char *fragment, int flags, mode_t mode, dev_t dev);
+extern const struct dev_driver tinyuf2_drv;

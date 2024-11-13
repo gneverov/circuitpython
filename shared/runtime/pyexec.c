@@ -139,7 +139,6 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         mp_hal_set_interrupt_char(-1); // disable interrupt
         mp_handle_pending(true); // handle any pending exceptions (and any callbacks)
         nlr_pop();
-        ret = 1;
         if (exec_flags & EXEC_FLAG_PRINT_EOF) {
             mp_hal_stdout_tx_strn("\x04", 1);
         }
@@ -159,12 +158,14 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         }
 
         // check for SystemExit
-        if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
-            // at the moment, the value of SystemExit is unused
-            ret = pyexec_system_exit;
+        const mp_obj_exception_t *exc = nlr.ret_val;
+        if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(exc->base.type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+            if ((exc->args->len > 0) && mp_obj_is_small_int(exc->args->items[0])) {
+                pyexec_system_exit = MP_OBJ_SMALL_INT_VALUE(exc->args->items[0]);
+            }
+            ret = PYEXEC_FORCED_EXIT;
         } else {
             mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
-            ret = 0;
         }
     }
 

@@ -1,96 +1,98 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
+#include <assert.h>
 #include <errno.h>
-#include <malloc.h>
-#include <memory.h>
+#include <fcntl.h>
+#include <stddef.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
-#include "FreeRTOS.h"
-#include "task.h"
-
-#include "newlib/flash.h"
-#include "newlib/flash_env.h"
-#include "newlib/flash_lockout.h"
+#define FLASH_ENV_MAX 64
+#define FLASH_ENV_OFFSET 0x1000
 
 
-static_assert(sizeof(struct flash_env) == FLASH_SECTOR_SIZE);
+struct flash_env {
+    const char *env[FLASH_ENV_MAX];
+    uintptr_t nenv[FLASH_ENV_MAX];
+    char buffer[3584];
+};
+
+static_assert(sizeof(struct flash_env) == 4096);
+
+extern char **environ;
 
 __attribute__((section(".flash_env")))
-static struct flash_env flash_env;
+static const volatile struct flash_env flash_env;
 
-static inline struct flash_env_item *flash_env_next(const struct flash_env_item *item) {
-    return (struct flash_env_item *)(((uintptr_t)item + item->len + __alignof(struct flash_env_item) - 1) & ~(__alignof(struct flash_env_item) - 1));
-}
-
-const void *flash_env_get(int key, size_t *len) {
-    uint i = 0;
-    struct flash_env_item *item = &flash_env.head;
-    while (item->len && (item->check == (i++ & 15))) {
-        if (item->key == key) {
-            *len = item->len - sizeof(struct flash_env_item);
-            return item->value;
+__attribute__((constructor(101), visibility("hidden")))
+void env_init(void) {
+    for (int i = 0; i < FLASH_ENV_MAX; i++) {
+        if ((uintptr_t)flash_env.env[i] != ~flash_env.nenv[i]) {
+            return;
         }
-        item = flash_env_next(item);
     }
-    return NULL;
+    environ = (char **)flash_env.env;
 }
 
-struct flash_env *flash_env_open(void) {
-    struct flash_env *env = malloc(sizeof(struct flash_env));
-    if (!env) {
-        errno = ENOMEM;
-        return NULL;
+static int env_compare(void) {
+    if (environ == (char **)flash_env.env) {
+        return 0;
     }
-    if (flash_env.head.check == 0) {
-        *env = flash_env;
-    } else {
-        memset(env, 0, sizeof(struct flash_env));
-    }
-    return env;
-}
-
-int flash_env_set(struct flash_env *env, int key, const void *value, size_t len) {
-    struct flash_env_item *src = &env->head;
-    struct flash_env_item *dst = src;
-
-    uint src_i = 0, dst_i = 0;
-    while (src->len && (src->check == (src_i++ & 15))) {
-        if (src->key != key) {
-            memmove(dst, src, src->len);
-            dst->check = dst_i++;
-            dst = flash_env_next(dst);
+    char **e = environ;
+    for (int i = 0; i < FLASH_ENV_MAX; i++) {
+        if (*e != flash_env.env[i]) {
+            return 1;
         }
-        src = flash_env_next(src);
+        if (*e) {
+            e++;
+        }
     }
-    if ((char *)(dst + 1) + len > (char *)(env + 1)) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (value) {
-        dst->key = key;
-        dst->len = len + sizeof(struct flash_env_item);
-        dst->check = dst_i++;
-        memcpy(dst->value, value, len);
-        dst = flash_env_next(dst);
-    }
-    dst->key = 0;
-    dst->len = 0;
-    dst->check = dst_i++;
     return 0;
 }
 
-void flash_env_clear(struct flash_env *env) {
-    memset(env, 0, sizeof(struct flash_env));
-}
+__attribute__((destructor, visibility("hidden")))
+int env_fini(void) {
+    if (!env_compare()) {
+        return 0;
+    }
 
-void flash_env_close(struct flash_env *env) {
-    uint32_t flash_offset = (uintptr_t)&flash_env - XIP_BASE;
-    assert((flash_offset & (FLASH_SECTOR_SIZE - 1)) == 0);
+    int fd = open("/dev/firmware", O_RDWR);
+    if (fd < 0) {
+        return -1;
+    }
+    int ret = -1;
+    void *addr = mmap(0, sizeof(struct flash_env), PROT_READ, MAP_SHARED, fd, FLASH_ENV_OFFSET);
+    if (addr != &flash_env) {
+        goto exit;
+    }
 
-    flash_lockout_start();
-    flash_memwrite(flash_offset, env, FLASH_SECTOR_SIZE);
-    assert(memcmp(&flash_env, env, FLASH_SECTOR_SIZE) == 0);
-    flash_lockout_end();
-
-    free(env);
+    off_t pos = offsetof(struct flash_env, buffer);
+    char **e = environ;
+    for (int i = 0; i < FLASH_ENV_MAX; i++) {
+        uintptr_t ptr = *e ? pos + (uintptr_t)&flash_env : 0;
+        if (pwrite(fd, &ptr, sizeof(ptr), FLASH_ENV_OFFSET + offsetof(struct flash_env, env[i])) < 0) {
+            goto exit;
+        }
+        ptr = ~ptr;
+        if (pwrite(fd, &ptr, sizeof(ptr), FLASH_ENV_OFFSET + offsetof(struct flash_env, nenv[i])) < 0) {
+            goto exit;
+        }
+        if (*e) {
+            size_t len = strlen(*e) + 1;
+            if (pwrite(fd, *e, len, FLASH_ENV_OFFSET + pos) < 0) {
+                goto exit;
+            }
+            pos += len;
+            e++;
+        }
+    }
+    if (fsync(fd) < 0) {
+        goto exit;
+    }
+    ret = 0;
+exit:
+    close(fd);
+    return ret;
 }

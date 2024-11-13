@@ -35,7 +35,7 @@ void cyw43_mutex_init(void) {
 static void cyw43_do_poll(void *pvParameter1, uint32_t ulParameter2);
 
 static void cyw43_set_irq_enabled(bool enabled) {
-    pico_gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
+    gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
 }
 
 // GPIO interrupt handler to tell us there's cyw43 has work to do
@@ -69,7 +69,9 @@ void cyw43_irq_deinit(void) {
 }
 
 void cyw43_post_poll_hook(void) {
+    UBaseType_t save = set_interrupt_core_affinity();
     cyw43_set_irq_enabled(true);
+    clear_interrupt_core_affinity(save);
 }
 
 void cyw43_schedule_internal_poll_dispatch(__unused void (*func)(void)) {

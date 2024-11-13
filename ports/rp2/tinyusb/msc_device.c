@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/unistd.h>
 #include "newlib/ioctl.h"
+#include "newlib/mount.h"
 #include "tinyusb/tusb_lock.h"
 
 static struct {
@@ -15,14 +16,18 @@ static struct {
     size_t eject : 1;
 } tud_msc_disk;
 
-int tud_msc_insert(uint8_t lun, const char *device, int flags) {
+int tud_msc_insert(uint8_t lun, const char *device, int mountflags) {
     int ret = -1;
-    int fd = open(device, flags, 0);
+    int fd = open(device, O_RDWR);
     if (fd < 0) {
         goto cleanup;
     }
     int ssize;
     if (ioctl(fd, BLKSSZGET, &ssize) < 0) {
+        goto cleanup;
+    }
+    mountflags &= MS_RDONLY;
+    if (ioctl(fd, BLKROSET, &mountflags) < 0) {
         goto cleanup;
     }
 
@@ -72,7 +77,9 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 // Invoked when received Test Unit Ready command.
 // return true allowing host to read/write this LUN e.g SD card inserted
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
+    // printf("test_unit_ready: fd=%d, ssize=%d, eject=%d\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject);
     if (tud_msc_disk.eject) {
+        fsync(tud_msc_disk.fd);
         close(tud_msc_disk.fd);
         tud_msc_disk.fd = 0;
         tud_msc_disk.ssize = 0;
@@ -84,6 +91,7 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) {
 // Invoked when received SCSI_CMD_READ_CAPACITY_10 and SCSI_CMD_READ_FORMAT_CAPACITY to determine the disk size
 // Application update block count and block size
 void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_size) {
+    // printf("capacity: fd=%d, ssize=%d, eject=%d\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject);
     *block_count = 0;
     *block_size = 0;
 
@@ -98,11 +106,13 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_siz
 
 // Callback invoked when received READ10 command.
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize) {
+    // printf("read10: fd=%d, ssize=%d, eject=%d, lba=%ld, offset=%ld\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject, lba, offset);
     return pread(tud_msc_disk.fd, buffer, bufsize, lba * tud_msc_disk.ssize + offset);
 }
 
 // Callback invoked when received WRITE10 command.
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize) {
+    // printf("write10: fd=%d, ssize=%d, eject=%d, lba=%ld, offset=%ld\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject, lba, offset);
     return pwrite(tud_msc_disk.fd, buffer, bufsize, lba * tud_msc_disk.ssize + offset);
 }
 
@@ -110,6 +120,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t *
 // - READ_CAPACITY10, READ_FORMAT_CAPACITY, INQUIRY, MODE_SENSE6, REQUEST_SENSE
 // - READ10 and WRITE10 has their own callbacks
 int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, uint16_t bufsize) {
+    // printf("scsi: fd=%d, ssize=%d, eject=%d, cmd=%d\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject, scsi_cmd[0]);
     int32_t resplen = 0;
     switch (scsi_cmd[0]) {
         case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL:
@@ -128,6 +139,7 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, u
 
 // Invoked to check if device is writable as part of SCSI WRITE10
 bool tud_msc_is_writable_cb(uint8_t lun) {
+    // printf("is_writable: fd=%d, ssize=%d, eject=%d\n", tud_msc_disk.fd, tud_msc_disk.ssize, tud_msc_disk.eject);
     int ro = 0;
     ioctl(tud_msc_disk.fd, BLKROGET, &ro);
     return !ro;

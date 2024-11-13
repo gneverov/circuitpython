@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 #include <memory.h>
+#include <poll.h>
+#include <unistd.h>
 
 #include "./pio_sm.h"
 #include "machine_pin.h"
+#include "extmod/modos_newlib.h"
+#include "py/mperrno.h"
 #include "py/parseargs.h"
+#include "py/runtime.h"
 
 
 #define OUT_PIN 1
@@ -14,7 +19,12 @@
 #define SIDESET_PIN 4
 #define JMP_PIN 5
 
+static void state_machine_rx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
+static void state_machine_tx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
+
 static void state_machine_init(state_machine_obj_t *self, uint16_t *instructions, uint8_t length) {
+    self->fd = -1;
+    self->event = NULL;
     self->pio = NULL;
     self->program.instructions = self->instructions;
     self->program.length = length;
@@ -22,11 +32,8 @@ static void state_machine_init(state_machine_obj_t *self, uint16_t *instructions
     self->loaded_offset = -1u;
     self->sm = -1u;
     self->config = pio_get_default_sm_config();
-    pico_fifo_init(&self->rx_fifo, false);
-    pico_fifo_init(&self->tx_fifo, true);
-    self->rx_enabled = false;
-    self->timeout = portMAX_DELAY;
-    mp_stream_poll_init(&self->poll);
+    pico_fifo_init(&self->rx_fifo, false, state_machine_rx_fifo_handler);
+    pico_fifo_init(&self->tx_fifo, true, state_machine_tx_fifo_handler);
     memset(&self->instructions, 0, 32 * sizeof(uint16_t));
     memcpy(&self->instructions, instructions, length * sizeof(uint16_t));
     self->stalls = 0;
@@ -40,54 +47,39 @@ static void state_machine_free(PIO pio, uint sm_mask) {
     }
 }
 
-static bool state_machine_tx_from_source(enum pio_interrupt_source source, uint sm) {
-    source -= sm;
-    assert((source == pis_sm0_tx_fifo_not_full) || (source == pis_sm0_rx_fifo_not_empty));
-    return source == pis_sm0_tx_fifo_not_full;
-}
-
-static void state_machine_pio_handler(PIO pio, enum pio_interrupt_source source, void *context) {
+static void state_machine_pio_handler(PIO pio, enum pio_interrupt_source source, void *context, BaseType_t *pxHigherPriorityTaskWoken) {
     state_machine_obj_t *self = context;
-    bool tx = state_machine_tx_from_source(source, self->sm);
+    assert(source == pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
 
-    BaseType_t xHigherPriorityTaskWoken = 0;
-    if (!tx) {
-        self->rx_enabled = true;
-        pico_pio_clear_irq(pio, source);
-        pico_fifo_set_enabled(&self->rx_fifo, true);
-        mp_stream_poll_signal(&self->poll, MP_STREAM_POLL_RD, &xHigherPriorityTaskWoken);
-    }
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    pico_fifo_set_enabled(&self->rx_fifo, true);
+    event_notify_from_isr(self->event, 0, POLLIN, pxHigherPriorityTaskWoken);
+    // wait for DMA to start
 }
 
-static void state_machine_fifo_handler(pico_fifo_t *fifo, bool stalled) {
+static void state_machine_rx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
+    state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, rx_fifo));
+    pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), ring_write_count(ring));
+}
+
+static void state_machine_tx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
     state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, tx_fifo));
 
-    BaseType_t xHigherPriorityTaskWoken = 0;
-    mp_stream_poll_signal(&self->poll, MP_STREAM_POLL_WR, &xHigherPriorityTaskWoken);
-    if (stalled) {
+    uint events = 0;
+    if (!ring_read_count(ring)) {
+        events |= POLLPRI;
         self->stalls++;
     }
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
-static void state_machine_acquire(state_machine_obj_t *self) {
-    pico_pio_clear_irq(self->pio, pis_sm0_rx_fifo_not_empty << self->sm);
-    pico_fifo_set_handler(&self->tx_fifo, NULL);
-}
-
-static void state_machine_release(state_machine_obj_t *self) {
-    if (!self->rx_enabled) {
-        pico_pio_set_irq(self->pio, pis_sm0_rx_fifo_not_empty << self->sm, state_machine_pio_handler, self);
+    if (ring_write_count(ring) >= self->threshold) {
+        events |= POLLOUT;
     }
-    pico_fifo_set_handler(&self->tx_fifo, state_machine_fifo_handler);
+    event_notify_from_isr(self->event, POLLOUT | POLLPRI, events, pxHigherPriorityTaskWoken);
 }
 
 static void state_machine_deinit(state_machine_obj_t *self) {
     if (self->sm != -1u) {
         pio_sm_set_enabled(self->pio, self->sm, false);
         pio_sm_restart(self->pio, self->sm);
-        state_machine_acquire(self);
+        pico_pio_clear_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
         pico_fifo_deinit(&self->tx_fifo);
         pico_fifo_deinit(&self->rx_fifo);
         state_machine_free(self->pio, 1 << self->sm);
@@ -97,6 +89,14 @@ static void state_machine_deinit(state_machine_obj_t *self) {
     if (self->loaded_offset != -1u) {
         pio_remove_program(self->pio, &self->program, self->loaded_offset);
         self->loaded_offset = -1;
+    }
+    if (self->fd >= 0) {
+        close(self->fd);
+        self->fd = -1;
+    }
+    if (self->event) {
+        vfs_release_file(&self->event->base);
+        self->event = NULL;
     }
 }
 
@@ -116,13 +116,16 @@ static state_machine_obj_t *state_machine_get_raise(mp_obj_t self_in) {
     return self;
 }
 
-static bool state_machine_fifo_alloc(state_machine_obj_t *self, uint fifo_size, bool tx, uint threshold, enum dma_channel_transfer_size dma_transfer_size, bool bswap) {
+static bool state_machine_fifo_alloc(state_machine_obj_t *self, uint fifo_size, bool tx, enum dma_channel_transfer_size dma_transfer_size, bool bswap) {
     pico_fifo_t *fifo = tx ? &self->tx_fifo: &self->rx_fifo;
     pico_fifo_deinit(fifo);
 
-    PIO pio = self->pio;
-    const volatile void *fifo_addr = tx ? &pio->txf[self->sm] : &pio->rxf[self->sm];
-    return pico_fifo_alloc(fifo, fifo_size, pio_get_dreq(pio, self->sm, tx), threshold, dma_transfer_size, bswap, (volatile void *)fifo_addr);
+    if (fifo_size) {
+        PIO pio = self->pio;
+        const volatile void *fifo_addr = tx ? &pio->txf[self->sm] : &pio->rxf[self->sm];
+        return pico_fifo_alloc(fifo, fifo_size, pio_get_dreq(pio, self->sm, tx), dma_transfer_size, bswap, (volatile void *)fifo_addr);
+    }
+    return true;
 }
 
 static bool state_machine_alloc(const pio_program_t *program, uint num_sms, PIO *pio, uint *sm_mask) {
@@ -170,6 +173,16 @@ static mp_obj_t state_machine_make_new(const mp_obj_type_t *type, size_t n_args,
     state_machine_obj_t *self = mp_obj_malloc_with_finaliser(state_machine_obj_t, type);
     state_machine_init(self, program_buf.buf, program_buf.len / sizeof(uint16_t));
 
+    int eventfd = event_open(0, 0);
+    if (eventfd < 0) {
+        goto cleanup;
+    }
+    self->fd = eventfd;
+    self->event = event_fdopen(eventfd);
+    if (!self->event) {
+        goto cleanup;
+    }
+
     uint sm_mask;
     if (!state_machine_alloc(&self->program, 1, &self->pio, &sm_mask)) {
         errno = MP_EBUSY;
@@ -189,17 +202,15 @@ static mp_obj_t state_machine_make_new(const mp_obj_type_t *type, size_t n_args,
         }
     }
 
-    if (!state_machine_fifo_alloc(self, 16, false, 0, DMA_SIZE_8, false)) {
-        errno = MP_ENOMEM;
+    if (!state_machine_fifo_alloc(self, 16, false, DMA_SIZE_8, false)) {
         goto cleanup;
     }
-    if (!state_machine_fifo_alloc(self, 16, true, 0, DMA_SIZE_8, false)) {
-        errno = MP_ENOMEM;
+    if (!state_machine_fifo_alloc(self, 16, true, DMA_SIZE_8, false)) {
         goto cleanup;
     }
 
     pico_fifo_set_enabled(&self->rx_fifo, false);
-    state_machine_release(self);
+    pico_pio_set_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), state_machine_pio_handler, self);
 
     return MP_OBJ_FROM_PTR(self);
 
@@ -208,19 +219,12 @@ cleanup:
     mp_raise_OSError(errno);
 }
 
-static mp_obj_t state_machine_del(mp_obj_t self_in) {
+static mp_obj_t state_machine_close(mp_obj_t self_in) {
     state_machine_obj_t *self = MP_OBJ_TO_PTR(self_in);
     state_machine_deinit(self);
-    return mp_const_none;
+    return MP_OBJ_NEW_SMALL_INT(0);
 }
-MP_DEFINE_CONST_FUN_OBJ_1(state_machine_del_obj, state_machine_del);
-
-static mp_uint_t state_machine_close(mp_obj_t self_in, int *errcode) {
-    state_machine_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    mp_stream_poll_close(&self->poll);
-    state_machine_deinit(self);
-    return 0;
-}
+static MP_DEFINE_CONST_FUN_OBJ_1(state_machine_close_obj, state_machine_close);
 
 static mp_obj_t state_machine_configure_fifo(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_tx, MP_QSTR_fifo_size, MP_QSTR_threshold, MP_QSTR_dma_transfer_size, MP_QSTR_bswap, 0 };
@@ -229,14 +233,13 @@ static mp_obj_t state_machine_configure_fifo(size_t n_args, const mp_obj_t *args
     parse_args_and_kw_map(n_args, args, kw_args, "Op|iiip", kws, &self_in, &tx, &fifo_size, &threshold, &dma_transfer_size, &bswap);
 
     state_machine_obj_t *self = state_machine_get_raise(self_in);
-    if (!state_machine_fifo_alloc(self, fifo_size, tx, threshold, dma_transfer_size, bswap)) {
-        errno = MP_ENOMEM;
-        state_machine_close(self_in, &errno);
+    if (!state_machine_fifo_alloc(self, fifo_size, tx, dma_transfer_size, bswap)) {
+        state_machine_close(self_in);
         mp_raise_OSError(errno);
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_KW(state_machine_configure_fifo_obj, 2, state_machine_configure_fifo);
+static MP_DEFINE_CONST_FUN_OBJ_KW(state_machine_configure_fifo_obj, 2, state_machine_configure_fifo);
 
 static mp_obj_t state_machine_set_pins(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_pin_type, MP_QSTR_pin_base, MP_QSTR_pin_count, 0 };
@@ -274,10 +277,10 @@ static mp_obj_t state_machine_set_pins(size_t n_args, const mp_obj_t *args) {
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pins_obj, 4, 4, state_machine_set_pins);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pins_obj, 4, 4, state_machine_set_pins);
 
 static mp_obj_t state_machine_set_pulls(size_t n_args, const mp_obj_t *args) {
-    const qstr kws[] = { MP_QSTR_, MP_QSTR_pin_mask, MP_QSTR_pull_up, MP_QSTR_pull_down, 0 };
+    const qstr kws[] = { MP_QSTR_, MP_QSTR_pull_up, MP_QSTR_pull_down, 0 };
     mp_obj_t self_in, pull_ups, pull_downs;
     parse_args_and_kw(n_args, 0, args, "OO!O!", kws, &self_in, &mp_type_list, &pull_ups, &mp_type_list, &pull_downs);
 
@@ -297,7 +300,7 @@ static mp_obj_t state_machine_set_pulls(size_t n_args, const mp_obj_t *args) {
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pulls_obj, 4, 4, state_machine_set_pulls);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pulls_obj, 3, 3, state_machine_set_pulls);
 
 static mp_obj_t state_machine_set_sideset(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_bit_count, MP_QSTR_optional, MP_QSTR_pindirs, 0 };
@@ -309,7 +312,7 @@ static mp_obj_t state_machine_set_sideset(size_t n_args, const mp_obj_t *args) {
     sm_config_set_sideset(&self->config, bit_count, optional, pindirs);
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_sideset_obj, 4, 4, state_machine_set_sideset);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_sideset_obj, 4, 4, state_machine_set_sideset);
 
 static mp_obj_t state_machine_set_frequency(mp_obj_t self_in, mp_obj_t freq_obj) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
@@ -320,7 +323,7 @@ static mp_obj_t state_machine_set_frequency(mp_obj_t self_in, mp_obj_t freq_obj)
     uint32_t clkdiv = self->config.clkdiv >> 8;
     return mp_obj_new_float(sysclk / (clkdiv / 256.0f));
 }
-MP_DEFINE_CONST_FUN_OBJ_2(state_machine_set_frequency_obj, state_machine_set_frequency);
+static MP_DEFINE_CONST_FUN_OBJ_2(state_machine_set_frequency_obj, state_machine_set_frequency);
 
 static mp_obj_t state_machine_set_wrap(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_wrap_target, MP_QSTR_wrap, 0 };
@@ -333,7 +336,7 @@ static mp_obj_t state_machine_set_wrap(size_t n_args, const mp_obj_t *args) {
     sm_config_set_wrap(&self->config, loaded_offset + wrap_target, loaded_offset + wrap);
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_wrap_obj, 3, 3, state_machine_set_wrap);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_wrap_obj, 3, 3, state_machine_set_wrap);
 
 static mp_obj_t state_machine_set_shift(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_out, MP_QSTR_shift_right, MP_QSTR_auto, MP_QSTR_threshold, 0 };
@@ -355,7 +358,7 @@ static mp_obj_t state_machine_set_shift(size_t n_args, const mp_obj_t *args) {
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_shift_obj, 5, 5, state_machine_set_shift);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_shift_obj, 5, 5, state_machine_set_shift);
 
 static mp_obj_t state_machine_reset(size_t n_args, const mp_obj_t *args) {
     state_machine_obj_t *self = state_machine_get_raise(args[0]);
@@ -369,19 +372,25 @@ static mp_obj_t state_machine_reset(size_t n_args, const mp_obj_t *args) {
 
     pico_fifo_set_enabled(&self->rx_fifo, false);
     pico_fifo_clear(&self->rx_fifo);
-    self->rx_enabled = false;
-    pico_pio_set_irq(self->pio, pis_sm0_rx_fifo_not_empty << self->sm, state_machine_pio_handler, self);
 
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_reset_obj, 1, 2, state_machine_reset);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_reset_obj, 1, 2, state_machine_reset);
 
 static mp_obj_t state_machine_set_enabled(mp_obj_t self_in, mp_obj_t enabled_obj) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
     pio_sm_set_enabled(self->pio, self->sm, mp_obj_is_true(enabled_obj));
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_2(state_machine_set_enabled_obj, state_machine_set_enabled);
+static MP_DEFINE_CONST_FUN_OBJ_2(state_machine_set_enabled_obj, state_machine_set_enabled);
+
+
+// static mp_obj_t state_machine_get_pc(mp_obj_t self_in, mp_obj_t instr_obj) {
+//     state_machine_obj_t *self = state_machine_get_raise(self_in);
+//     int pc = pio_sm_get_pc(self->pio, self->sm);
+//     return MP_OBJ_NEW_SMALL_INT(pc);
+// }
+// MP_DEFINE_CONST_FUN_OBJ_2(state_machine_get_pc_obj, state_machine_get_pc);
 
 static mp_obj_t state_machine_exec(mp_obj_t self_in, mp_obj_t instr_obj) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
@@ -389,7 +398,7 @@ static mp_obj_t state_machine_exec(mp_obj_t self_in, mp_obj_t instr_obj) {
     pio_sm_exec(self->pio, self->sm, instr);
     return pio_sm_is_exec_stalled(self->pio, self->sm) ? mp_const_false : mp_const_true;
 }
-MP_DEFINE_CONST_FUN_OBJ_2(state_machine_exec_obj, state_machine_exec);
+static MP_DEFINE_CONST_FUN_OBJ_2(state_machine_exec_obj, state_machine_exec);
 
 static mp_obj_t state_machine_set_pin_values(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_set_pins, MP_QSTR_clear_pins, 0 };
@@ -407,7 +416,7 @@ static mp_obj_t state_machine_set_pin_values(size_t n_args, const mp_obj_t *args
     pio_sm_set_pins_with_mask(self->pio, self->sm, set_pin_mask, pin_value_mask);
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pin_values_obj, 3, 3, state_machine_set_pin_values);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pin_values_obj, 3, 3, state_machine_set_pin_values);
 
 static mp_obj_t state_machine_set_pindirs(size_t n_args, const mp_obj_t *args) {
     const qstr kws[] = { MP_QSTR_, MP_QSTR_in_pins, MP_QSTR_out_pins, 0 };
@@ -425,123 +434,92 @@ static mp_obj_t state_machine_set_pindirs(size_t n_args, const mp_obj_t *args) {
     pio_sm_set_pindirs_with_mask(self->pio, self->sm, out_pin_mask, pindir_mask);
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pindirs_obj, 3, 3, state_machine_set_pindirs);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_set_pindirs_obj, 3, 3, state_machine_set_pindirs);
 
-static mp_uint_t state_machine_read_nonblock(mp_obj_t self_in, void *buf, size_t len, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    if (!state_machine_inited(self)) {
-        *errcode = MP_EBADF;
-        return MP_STREAM_ERROR;
+static mp_obj_t state_machine_readinto(mp_obj_t self_in, mp_obj_t b_in) {
+    state_machine_obj_t *self = state_machine_get_raise(self_in);
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(b_in, &bufinfo, MP_BUFFER_WRITE);
+    if (self->rx_fifo.channel < 0) {
+        mp_raise_ValueError(NULL);
     }
 
-    mp_uint_t ret = pico_fifo_transfer(&self->rx_fifo, buf, len, true);
-    if (ret == 0) {
+    ring_t ring;
+    pico_fifo_exchange(&self->rx_fifo, &ring, 0);
+    while (ring_read_count(&ring) == 0) {
+        if (!mp_os_event_wait(self->fd, POLLIN)) {
+            return mp_const_none;
+        }
+        pico_fifo_exchange(&self->rx_fifo, &ring, 0);
+    }
+
+    void *buf = bufinfo.buf;
+    size_t len = bufinfo.len;
+    size_t ret = pico_fifo_transfer(&self->rx_fifo, buf, len);
+    if (ret >= ring_read_count(&ring)) {
+        event_notify(self->event, POLLIN, 0);
         pico_fifo_set_enabled(&self->rx_fifo, false);
-        self->rx_enabled = false;
-        pico_pio_set_irq(self->pio, pis_sm0_rx_fifo_not_empty << self->sm, state_machine_pio_handler, self);
-
-        *errcode = MP_EAGAIN;
-        return MP_STREAM_ERROR;
     }
-    return ret;
+    return mp_obj_new_int(ret);
 }
-
-static mp_uint_t state_machine_read_block(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    return mp_poll_block(self_in, (void *)buf, size, errcode, state_machine_read_nonblock, MP_STREAM_POLL_RD, self->timeout, false);
-}
-
-static mp_uint_t state_machine_write_nonblock(mp_obj_t self_in, void *buf, size_t len, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    if (!state_machine_inited(self)) {
-        *errcode = MP_EBADF;
-        return MP_STREAM_ERROR;
-    }
-
-    mp_uint_t ret = pico_fifo_transfer(&self->tx_fifo, buf, len, false);
-    if ((ret == 0) && (len != 0)) {
-        *errcode = MP_EAGAIN;
-        return MP_STREAM_ERROR;
-    }
-    return ret;
-}
-
-static mp_uint_t state_machine_write_block(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    return mp_poll_block(self_in, (void *)buf, size, errcode, state_machine_write_nonblock, MP_STREAM_POLL_WR, self->timeout, true);
-}
+static MP_DEFINE_CONST_FUN_OBJ_2(state_machine_readinto_obj, state_machine_readinto);
 
 static mp_obj_t state_machine_write(size_t n_args, const mp_obj_t *args) {
+    state_machine_obj_t *self = state_machine_get_raise(args[0]);
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args[1], &bufinfo, MP_BUFFER_READ);
+    void *buf = bufinfo.buf;
     size_t len = bufinfo.len;
     if ((n_args > 2) && (args[2] != mp_const_none)) {
         len = MIN(len, (size_t)mp_obj_get_int(args[2]));
     }
-    int errcode;
-    mp_uint_t ret = state_machine_write_block(args[0], bufinfo.buf, len, &errcode);
-    return mp_stream_return(ret, errcode);
+    if (self->tx_fifo.channel < 0) {
+        mp_raise_ValueError(NULL);
+    }
+
+    ring_t ring;
+    pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    while (ring_write_count(&ring) == 0) {
+        if (!mp_os_event_wait(self->fd, POLLOUT)) {
+            return mp_const_none;
+        }
+        pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    }
+
+    size_t ret = pico_fifo_transfer(&self->tx_fifo, buf, len);
+    uint events = 0;
+    if (ret > 0) {
+        events |= POLLPRI;
+    }
+    if (ret >= ring_write_count(&ring)) {
+        events |= POLLOUT;
+    }
+    if (events) {
+        event_notify(self->event, events, 0);
+    }
+    return mp_obj_new_int(ret);
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(state_machine_write_obj, 2, 3, state_machine_write);
 
-static mp_uint_t state_machine_empty(mp_obj_t self_in, void *buf, mp_uint_t len, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    if (!state_machine_inited(self)) {
-        *errcode = MP_EBADF;
-        return MP_STREAM_ERROR;
-    }
-    if (!pico_fifo_empty(&self->tx_fifo)) {
-        *errcode = MP_EAGAIN;
-        return MP_STREAM_ERROR;
-    }
-    return 0;
-}
-
 static mp_obj_t state_machine_drain(mp_obj_t self_in) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
-    pico_fifo_flush(&self->tx_fifo);
-    int errcode;
-    mp_uint_t ret = mp_poll_block(self_in, NULL, 0, &errcode, state_machine_empty, MP_STREAM_POLL_WR, self->timeout, true);
-    return mp_stream_return(ret, errcode);
+
+    ring_t ring;
+    pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    while (ring_write_count(&ring) > 0) {
+        if (!mp_os_event_wait(self->fd, POLLPRI)) {
+            return mp_const_none;
+        }
+        pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    }
+    if (self->tx_fifo.channel < 0) {
+        mp_raise_ValueError(NULL);
+    }
+
+    int ret = ring_write_count(&ring);
+    return mp_obj_new_int(ret);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(state_machine_drain_obj, state_machine_drain);
-
-static mp_uint_t state_machine_flush(mp_obj_t self_in, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    pico_fifo_flush(&self->tx_fifo);
-    return 0;
-}
-
-static mp_uint_t state_machine_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
-    state_machine_obj_t *self = state_machine_get(self_in);
-    if (!state_machine_inited(self) && (request != MP_STREAM_CLOSE)) {
-        *errcode = MP_EBADF;
-        return MP_STREAM_ERROR;
-    }
-
-    uint32_t ret;
-    switch (request) {
-        case MP_STREAM_FLUSH:
-            ret = state_machine_flush(self_in, errcode);
-            break;
-        case MP_STREAM_TIMEOUT:
-            ret = mp_stream_timeout(&self->timeout, arg, errcode);
-            break;
-        case MP_STREAM_POLL_CTL:
-            state_machine_acquire(self);
-            ret = mp_stream_poll_ctl(&self->poll, (void *)arg, errcode);
-            state_machine_release(self);
-            break;
-        case MP_STREAM_CLOSE:
-            ret = state_machine_close(self_in, errcode);
-            break;
-        default:
-            *errcode = MP_EINVAL;
-            ret = MP_STREAM_ERROR;
-            break;
-    }
-    return ret;
-}
 
 #ifndef NDEBUG
 #include <stdio.h>
@@ -578,7 +556,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(state_machine_debug_obj, state_machine_debug);
 #endif
 
 static const mp_rom_map_elem_t state_machine_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&state_machine_del_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&state_machine_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_configure_fifo),  MP_ROM_PTR(&state_machine_configure_fifo_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_pins),        MP_ROM_PTR(&state_machine_set_pins_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_pulls),       MP_ROM_PTR(&state_machine_set_pulls_obj) },
@@ -591,12 +569,10 @@ static const mp_rom_map_elem_t state_machine_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_enabled),     MP_ROM_PTR(&state_machine_set_enabled_obj) },
     { MP_ROM_QSTR(MP_QSTR_exec),            MP_ROM_PTR(&state_machine_exec_obj) },
 
-    { MP_ROM_QSTR(MP_QSTR_read),            MP_ROM_PTR(&mp_stream_read_obj) },
-    { MP_ROM_QSTR(MP_QSTR_readinto),        MP_ROM_PTR(&mp_stream_readinto_obj) },
+    // { MP_ROM_QSTR(MP_QSTR_read),            MP_ROM_PTR(&state_machine_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_readinto),        MP_ROM_PTR(&state_machine_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_write),           MP_ROM_PTR(&state_machine_write_obj) },
-    { MP_ROM_QSTR(MP_QSTR_close),           MP_ROM_PTR(&mp_stream_close_obj) },
-    { MP_ROM_QSTR(MP_QSTR_flush),           MP_ROM_PTR(&mp_stream_flush_obj) },
-    { MP_ROM_QSTR(MP_QSTR_settimeout),      MP_ROM_PTR(&mp_stream_settimeout_obj) },
+    { MP_ROM_QSTR(MP_QSTR_close),           MP_ROM_PTR(&state_machine_close_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_drain),           MP_ROM_PTR(&state_machine_drain_obj) },
 
@@ -618,19 +594,10 @@ static const mp_rom_map_elem_t state_machine_locals_dict_table[] = {
 };
 static MP_DEFINE_CONST_DICT(state_machine_locals_dict, state_machine_locals_dict_table);
 
-static const mp_stream_p_t state_machine_stream_p = {
-    .read = state_machine_read_block,
-    .write = state_machine_write_block,
-    .ioctl = state_machine_ioctl,
-    .is_text = 0,
-    .can_poll = 1,
-};
-
 MP_DEFINE_CONST_OBJ_TYPE(
     state_machine_type,
     MP_QSTR_PioStateMachine,
-    MP_TYPE_FLAG_ITER_IS_STREAM,
+    MP_TYPE_FLAG_NONE,
     make_new, state_machine_make_new,
-    protocol, &state_machine_stream_p,
     locals_dict, &state_machine_locals_dict
     );

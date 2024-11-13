@@ -4,13 +4,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "py/mphal.h"
-#include "py/stream_poll.h"
 
 typedef struct {
     mp_obj_base_t base;
     mp_hal_pin_obj_t pin;
-    mp_stream_poll_t poll;
-    TickType_t timeout;
+    // int fd;
+    // struct event_file *event;
     uint32_t events;
     uint32_t event_mask;
     int64_t pulse_down;

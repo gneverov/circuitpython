@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include <time.h>
 
-int nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
+#include "newlib/vfs.h"
+
+
+extern const struct dev_driver tty_drv;

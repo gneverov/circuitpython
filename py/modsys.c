@@ -51,7 +51,10 @@ extern struct _mp_dummy_t mp_sys_stdin_obj;
 extern struct _mp_dummy_t mp_sys_stdout_obj;
 extern struct _mp_dummy_t mp_sys_stderr_obj;
 
-#if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+#if MICROPY_NEWLIB
+void mp_io_print(void *data, const char *str, size_t len);
+const mp_print_t mp_sys_stdout_print = {&mp_sys_stdout_obj, mp_io_print};
+#elif MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
 const mp_print_t mp_sys_stdout_print = {&mp_sys_stdout_obj, mp_stream_write_adaptor};
 #endif
 
@@ -162,20 +165,16 @@ static mp_obj_t mp_sys_exit(size_t n_args, const mp_obj_t *args) {
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_sys_exit_obj, 0, 1, mp_sys_exit);
 
 static mp_obj_t mp_sys_print_exception(size_t n_args, const mp_obj_t *args) {
-    #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
-    void *stream_obj = &mp_sys_stdout_obj;
-    if (n_args > 1) {
-        mp_get_stream_raise(args[1], MP_STREAM_OP_WRITE);
-        stream_obj = MP_OBJ_TO_PTR(args[1]);
-    }
-
-    mp_print_t print = {stream_obj, mp_stream_write_adaptor};
-    mp_obj_print_exception(&print, args[0]);
+    mp_obj_t stream_obj = (n_args > 1) ? args[1] : MP_OBJ_FROM_PTR(&mp_sys_stdout_obj);
+    #if MICROPY_NEWLIB
+    mp_print_t print = {MP_OBJ_TO_PTR(stream_obj), mp_io_print};
+    #elif MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+    mp_get_stream_raise(stream_obj, MP_STREAM_OP_WRITE);
+    mp_print_t print = {MP_OBJ_TO_PTR(stream_obj), mp_stream_write_adaptor};
     #else
-    (void)n_args;
-    mp_obj_print_exception(&mp_plat_print, args[0]);
+    mp_print_t print = mp_plat_print;
     #endif
-
+    mp_obj_print_exception(&print, args[0]);
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_sys_print_exception_obj, 1, 2, mp_sys_print_exception);

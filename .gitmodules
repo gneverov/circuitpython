@@ -86,3 +86,6 @@
 [submodule "lib/picolibc"]
 	path = lib/picolibc
 	url = https://github.com/picolibc/picolibc.git
+[submodule "lib/littlefs"]
+	path = lib/littlefs
+	url = https://github.com/littlefs-project/littlefs.git

@@ -26,11 +26,12 @@
  */
 
 #include <fcntl.h>
+#include <locale.h>
 #include <malloc.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include <sys/timespec.h>
 #include <sys/unistd.h>
 
 #include "FreeRTOS.h"
@@ -40,7 +41,6 @@
 #if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
 #endif
-#include "newlib/flash_lockout.h"
 #include "newlib/mount.h"
 #include "newlib/newlib.h"
 #include "newlib/thread.h"
@@ -69,6 +69,7 @@
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
 #include "tusb.h"
+#include "flash_lockout.h"
 #include "modmachine.h"
 #include "modrp2.h"
 #include "mpbthciport.h"
@@ -127,29 +128,23 @@ static void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_
         signal_init();
 
         // Execute user scripts.
-        int ret = 0;
         if (i == 0) {
-            ret = pyexec_file_if_exists("boot.py");
+            int ret = pyexec_file_if_exists("boot.py");
             if (ret & PYEXEC_FORCED_EXIT) {
                 goto soft_reset_exit;
             }
         }
-        if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && ret != 0) {
-            ret = pyexec_file_if_exists("main.py");
+        if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL) {
+            int ret = pyexec_file_if_exists("main.py");
             if (ret & PYEXEC_FORCED_EXIT) {
                 goto soft_reset_exit;
             }
         }
 
         for (;;) {
-            if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
-                if (pyexec_raw_repl() != 0) {
-                    break;
-                }
-            } else {
-                if (pyexec_friendly_repl() != 0) {
-                    break;
-                }
+            int ret = (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) ? pyexec_raw_repl() : pyexec_friendly_repl();
+            if (ret & PYEXEC_FORCED_EXIT) {
+                goto soft_reset_exit;
             }
         }
 
@@ -166,6 +161,7 @@ static void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_
         gc_sweep_all();
         gc_handle_collect(true);
         mp_deinit();
+        sync();
     }
 }
 
@@ -185,6 +181,10 @@ thread_t *mp_thread;
 #define MIN_MP_STACK (4 << 10)
 
 static void mp_task(void *params) {
+    #ifdef _MB_CAPABLE
+    setlocale(LC_CTYPE, "C.utf8");
+    #endif
+
     size_t mp_stack_size = (uintptr_t)params;
     const char *gc_heap_str = getenv("GC_HEAP");
     size_t gc_heap_size = gc_heap_str ? atoi(gc_heap_str) : DEFAULT_GC_HEAP;
@@ -259,12 +259,12 @@ static void setup_tty(void) {
         // If the specified tty failed, try opening the default
         fd = open(DEFAULT_TTY, O_RDWR, 0);
     }
-    if (fd >= 0) {
-        // Success open of tty installs it on stdio fds, so we an close our fd.
-        close(fd);
-    } else {
+    if (fd < 0) {
         perror("failed up open terminal");
+        return;
     }
+    // Successful open of tty installs it on stdio fds, so we an close our fd.
+    close(fd);
 }
 
 static int mount_root_fs(void) {
@@ -299,8 +299,6 @@ error:
 
 static void init_task(void *params) {
     flash_lockout_init();
-    extern void flash_init(void);
-    flash_init();
 
     #if MICROPY_PY_LWIP
     lwip_helper_init();
@@ -337,7 +335,6 @@ static void init_task(void *params) {
 }
 
 int main(int argc, char **argv) {
-    env_init();
     set_time();
     xTaskCreate(init_task, "init", INIT_STACK_SIZE / sizeof(StackType_t), NULL, 3, NULL);
     vTaskStartScheduler();

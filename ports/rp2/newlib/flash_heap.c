@@ -2,292 +2,119 @@
 // SPDX-License-Identifier: MIT
 
 #include <errno.h>
+#include <fcntl.h>
 #include <memory.h>
 #include <stdio.h>
-#include <sys/unistd.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "newlib/flash.h"
 #include "newlib/flash_heap.h"
-#include "newlib/flash_lockout.h"
-#include "newlib/dlfcn.h"
-
-#define FLASH_HEAP_NUM_PAGES 16
+#include "newlib/ioctl.h"
 
 
 extern uint8_t __StackLimit;
 extern uint8_t end;
 
 __attribute__((section(".flash_heap")))
-static flash_heap_header_t flash_heap_head = { 0, 0, 0, &end, NULL };
-
-static const flash_heap_header_t *flash_heap_tail;
+static flash_heap_header_t flash_heap_flash_head = { 0, 0, 0, &end, NULL };
 
 #if PSRAM_BASE
-static const flash_heap_header_t *psram_heap_tail = (void *)PSRAM_BASE;
+__attribute__((section(".psram_heap")))
+static flash_heap_header_t flash_heap_psram_head = { 0, 0, 0, 0, NULL };
 #endif
+
+const flash_heap_header_t *const flash_heap_head[FLASH_HEAP_NUM_DEVICES] = {
+    &flash_heap_flash_head,
+    #if PSRAM_BASE
+    &flash_heap_psram_head,
+    #endif
+};
+
+static const flash_heap_header_t *flash_heap_tail[FLASH_HEAP_NUM_DEVICES];
+
+static const char *const flash_heap_device_names[FLASH_HEAP_NUM_DEVICES] = {
+    "/dev/firmware",
+    "/dev/psram",
+};
+
+static int flash_heap_dev(uint device, flash_ptr_t *base_addr, size_t *size) {
+    int fd = -1;
+    if (device >= FLASH_HEAP_NUM_DEVICES) {
+        errno = EINVAL;
+        goto error;
+    }
+    fd = open(flash_heap_device_names[device], O_RDWR);
+    if (fd < 0) {
+        goto error;
+    }
+    if (ioctl(fd, BLKGETSIZE, size) < 0) {
+        goto error;
+    }
+    *size <<= 9;
+    *base_addr = (flash_ptr_t)mmap(0, *size, PROT_READ, MAP_SHARED, fd, 0);
+    if (!*base_addr) {
+        goto error;
+    }
+    return fd;
+error:
+    if (fd >= 0) {
+        close(fd);
+    }
+    return -1;
+}
 
 __attribute__((constructor(101), visibility("hidden")))
 void flash_heap_init(void) {
-    const flash_heap_header_t *header = &flash_heap_head;
+    const flash_heap_header_t *header = flash_heap_head[0];
     while (header->type) {
         void *ram_base = sbrk(header->ram_size);
         if (header->ram_base != ram_base) {
             panic("flash heap corrupt");
             return;
         }
-        header = (flash_heap_header_t *)((uint8_t *)header + header->flash_size);
+        header = ((void *)header) + header->flash_size;
     }
-    flash_heap_tail = header;
-
-    #if PSRAM_BASE
-    memset((void *)PSRAM_BASE, 0, sizeof(flash_heap_header_t));
-    #endif
+    flash_heap_tail[0] = header;
+    flash_heap_tail[1] = flash_heap_head[1];
 }
 
-const flash_heap_header_t *flash_heap_next_header(void) {
-    return flash_heap_tail;
-}
-
-static void flash_heap_read_page(flash_page_t *ram_page, const flash_page_t *flash_page) {
-    assert(((uintptr_t)flash_page >= (uintptr_t)&flash_heap_head) && ((uintptr_t)flash_page < XIP_BASE + flash_storage_offset));
-    assert(((uintptr_t)ram_page >= (uintptr_t)&end) && ((uintptr_t)ram_page < (uintptr_t)&__StackLimit));
-    vTaskSuspendAll();
-    flash_memread((uintptr_t)flash_page - XIP_BASE, ram_page, sizeof(flash_page_t));
-    xTaskResumeAll();
-}
-
-static void flash_heap_write_page(const flash_page_t *flash_page, const flash_page_t *ram_page) {
-    assert(((uintptr_t)flash_page >= (uintptr_t)&flash_heap_head) && ((uintptr_t)flash_page < XIP_BASE + flash_storage_offset));
-    assert(((uintptr_t)ram_page >= (uintptr_t)&end) && ((uintptr_t)ram_page < (uintptr_t)&__StackLimit));
-    uint32_t flash_offset = (uintptr_t)flash_page - XIP_BASE;
-
-    flash_lockout_start();
-    flash_memwrite(flash_offset, ram_page, sizeof(flash_page_t));
-    assert(memcmp(flash_page, ram_page, sizeof(flash_page_t)) == 0);
-    flash_lockout_end();
-}
-
-// inline size_t flash_heap_num_flash_pages(flash_heap_t *file) {
-//     return (file->flash_end - file->flash_start + sizeof(flash_page_t) - 1) / sizeof(flash_page_t);
-// }
-
-static flash_page_t *flash_heap_put_page(flash_heap_t *file, size_t page_num) {
-    assert(page_num < file->num_cache_pages);
-    flash_page_t *cache_page = file->cache_pages[page_num];
-    const flash_page_t *flash_page = &file->flash_pages[page_num];
-    assert(cache_page != NULL);
-    flash_heap_write_page(flash_page, cache_page);
-    return cache_page;
-}
-
-static flash_page_t *flash_heap_evict_page(flash_heap_t *file) {
-    size_t page_num = 0;
-    while (file->cache_pages[page_num] == NULL) {
-        if (++page_num == file->num_cache_pages) {
-            return NULL;
-        }
-    }
-    size_t oldest_page_num = page_num++;
-    while (page_num < file->num_cache_pages) {
-        if ((file->cache_pages[page_num] != NULL) && (file->cache_ticks[page_num] < file->cache_ticks[oldest_page_num])) {
-            oldest_page_num = page_num;
-        }
-        page_num++;
-    }
-
-    flash_page_t *cached_page = flash_heap_put_page(file, oldest_page_num);
-    file->cache_pages[oldest_page_num] = NULL;
-    return cached_page;
-}
-
-void *flash_heap_realloc_with_evict(flash_heap_t *file, void *ptr, size_t size) {
-    void *new_ptr = realloc(ptr, size);
-    while (!new_ptr) {
-        flash_page_t *evicted_page = flash_heap_evict_page(file);
-        if (!evicted_page) {
-            errno = ENOMEM;
-            return NULL;
-        }
-        free(evicted_page);
-        #pragma GCC diagnostic push
-        #if __GNUC__ >= 12
-        #pragma GCC diagnostic ignored "-Wuse-after-free"
-        #endif
-        new_ptr = realloc(ptr, size);
-        #pragma GCC diagnostic pop
-    }
-    return new_ptr;
-}
-
-static int flash_heap_ensure_cache_pages(flash_heap_t *file, size_t page_num) {
-    while (page_num >= file->num_cache_pages) {
-        flash_page_t **new_cache_pages = flash_heap_realloc_with_evict(file, file->cache_pages, sizeof(flash_page_t *) * file->num_cache_pages * 2);
-        if (!new_cache_pages) {
-            return -1;
-        }
-        file->cache_pages = new_cache_pages;
-        memset(file->cache_pages + file->num_cache_pages, 0, sizeof(flash_page_t *) * file->num_cache_pages);
-
-        uint *new_cache_ticks = flash_heap_realloc_with_evict(file, file->cache_ticks, sizeof(uint) * file->num_cache_pages * 2);
-        if (!new_cache_ticks) {
-            return -1;
-        }
-        file->cache_ticks = new_cache_ticks;
-        memset(file->cache_ticks + file->num_cache_pages, 0, sizeof(uint) * file->num_cache_pages);
-
-        file->num_cache_pages *= 2;
-    }
-    return 0;
-}
-
-static flash_page_t *flash_heap_get_page(flash_heap_t *file, size_t page_num) {
-    if (flash_heap_ensure_cache_pages(file, page_num) < 0) {
-        return NULL;
-    }
-    if (!file->cache_pages[page_num]) {
-        flash_page_t *cache_page = NULL;
-        cache_page = malloc(sizeof(flash_page_t));
-        if (!cache_page) {
-            cache_page = flash_heap_evict_page(file);
-        }
-        if (!cache_page) {
-            errno = ENOMEM;
-            return NULL;
-        }
-        file->cache_pages[page_num] = cache_page;
-
-        const flash_page_t *flash_page = &file->flash_pages[page_num];
-        flash_heap_read_page(cache_page, flash_page);
-    }
-    file->cache_ticks[page_num] = ++file->next_tick;
-    return file->cache_pages[page_num];
-}
-
-static void *flash_heap_get(flash_heap_t *file, flash_ptr_t ptr, size_t *len) {
-    switch (ptr >> 24) {
-        case 0x10: {
-            if (ptr >= file->flash_limit) {
-                errno = ENOSPC;
-                return NULL;
-            }
-            size_t max_len = file->flash_limit - ptr;
-            size_t page_num = (ptr - (flash_ptr_t)file->flash_pages) / sizeof(flash_page_t);
-            flash_page_t *page = flash_heap_get_page(file, page_num);
-            if (page == NULL) {
-                return NULL;
-            }
-            size_t offset = ptr % sizeof(flash_page_t);
-            *len = MIN(sizeof(flash_page_t) - offset, max_len);
-            return *page + offset;
-        }
-        case 0x11: {
-            if (ptr >= file->flash_limit) {
-                errno = ENOSPC;
-                return NULL;
-            }
-            *len = file->flash_limit - ptr;
-            return (void *)ptr;
-        }
-        default: {
-            errno = EFAULT;
-            return NULL;
-        }
-    }
+const flash_heap_header_t *flash_heap_next_header(uint device) {
+    return (device < FLASH_HEAP_NUM_DEVICES) ? flash_heap_tail[device] : NULL;
 }
 
 void flash_heap_free(flash_heap_t *file) {
-    #if PSRAM_BASE
-    if (file->flash_start >= PSRAM_BASE) {
-        free((void *)file->ram_start);
-        file->ram_start = 0;
+    if (file->fd >= 0) {
+        close(file->fd);
     }
-    #endif
-    for (size_t page_num = 0; page_num < file->num_cache_pages; page_num++) {
-        free(file->cache_pages[page_num]);
-        file->cache_pages[page_num] = NULL;
-    }
-    free(file->cache_pages);
-    file->cache_pages = NULL;
-    free(file->cache_ticks);
-    file->cache_ticks = NULL;
-    file->num_cache_pages = 0;
+    file->fd = -1;
 }
 
-int flash_heap_open_flash(flash_heap_t *file, uint32_t type) {
+int flash_heap_open(flash_heap_t *file, uint device, uint32_t type) {
     memset(file, 0, sizeof(flash_heap_t));
+    file->device = device;
     file->type = type;
 
-    file->flash_pages = (flash_page_t *)((uintptr_t)flash_heap_tail & ~(sizeof(flash_page_t) - 1));
-    file->flash_start = (flash_ptr_t)flash_heap_tail;
-    file->flash_end = file->flash_start + sizeof(flash_heap_header_t);
-    file->flash_limit = XIP_BASE + flash_storage_offset;
-    file->flash_pos = file->flash_end;
-
-    file->ram_start = (flash_ptr_t)flash_heap_tail->ram_base;
-    file->ram_end = file->ram_start;
-    file->ram_limit = (flash_ptr_t)&__StackLimit;
-
-    file->num_cache_pages = FLASH_HEAP_NUM_PAGES;
-    file->cache_pages = calloc(file->num_cache_pages, sizeof(flash_page_t *));
-    file->cache_ticks = calloc(file->num_cache_pages, sizeof(uint));
-
-    if (!file->cache_pages || !file->cache_ticks) {
-        flash_heap_free(file);
-        errno = ENOMEM;
+    flash_ptr_t base;
+    size_t size;
+    file->fd = flash_heap_dev(device, &base, &size);
+    if (file->fd < 0) {
         return -1;
     }
-    return 0;
-}
 
-#if PSRAM_BASE
-int flash_heap_open_psram(flash_heap_t *file, uint32_t type) {
-    memset(file, 0, sizeof(flash_heap_t));
-    file->type = type;
-
-    file->flash_pages = NULL;
-    file->flash_start = (flash_ptr_t)psram_heap_tail;
+    const flash_heap_header_t *tail = flash_heap_tail[device];
+    file->flash_base = base;
+    file->flash_start = (flash_ptr_t)tail;
     file->flash_end = file->flash_start + sizeof(flash_heap_header_t);
-    file->flash_limit = PSRAM_BASE + psram_size;
+    file->flash_limit = base + size;
     file->flash_pos = file->flash_end;
 
-    // Try to allocate the largest available contiguous block of RAM. It will be reallocated down
-    // to the size actually used when the object is closed.
-    size_t ram_size = -1;
-    void *ram_start = NULL;
-    while (!ram_start) {
-        ram_size /= 2;
-        if (!ram_size) {
-            return -1;
-        }
-        ram_start = malloc(ram_size);
-    }
-    file->ram_start = (flash_ptr_t)ram_start;
+    file->ram_start = (flash_ptr_t)tail->ram_base;
     file->ram_end = file->ram_start;
-    file->ram_limit = file->ram_start + ram_size;
-
-    file->num_cache_pages = 0;
-    file->cache_pages = NULL;
-    file->cache_ticks = NULL;
-
+    // file->ram_limit = (flash_ptr_t)&__StackLimit;
     return 0;
-}
-#endif
-
-int flash_heap_open(flash_heap_t *file, uint32_t type, uintptr_t base) {
-    switch (base >> 24) {
-        case 0x10:
-            return flash_heap_open_flash(file, type);
-        #if PSRAM_BASE
-        case 0x11:
-            return flash_heap_open_psram(file, type);
-        #endif
-        default:
-            errno = EINVAL;
-            return -1;
-    }
 }
 
 int flash_heap_close(flash_heap_t *file) {
@@ -313,26 +140,10 @@ int flash_heap_close(flash_heap_t *file) {
         goto cleanup;
     }
 
-    for (size_t page_num = 0; page_num < file->num_cache_pages; page_num++) {
-        if (file->cache_pages[page_num]) {
-            flash_heap_put_page(file, page_num);
-        }
+    if (fsync(file->fd) < 0) {
+        goto cleanup;
     }
-
-    const flash_heap_header_t **tail = &flash_heap_tail;
-    #if PSRAM_BASE
-    if (file->flash_start >= PSRAM_BASE) {
-        tail = &psram_heap_tail;
-        // Reallocate the RAM block to the size actually used. It is assumed the block will not be
-        // moved and its address won't change.
-        flash_ptr_t new_ram_start = (flash_ptr_t)realloc((void *)file->ram_start, ram_size);
-        assert((ram_size == 0) || (new_ram_start == file->ram_start));
-        // Clear the pointer so the block is not freed. The RAM block will live forever now with
-        // its associated PSRAM.
-        file->ram_start = 0;
-    }
-    #endif
-    *tail = (const void *)new_tail;
+    flash_heap_tail[file->device] = (const void *)new_tail;
     ret = 0;
 
 cleanup:
@@ -341,41 +152,29 @@ cleanup:
 }
 
 int flash_heap_seek(flash_heap_t *file, flash_ptr_t pos) {
-    flash_ptr_t start;
-    flash_ptr_t *end;
-    flash_ptr_t limit;
-    flash_ptr_t *ppos = NULL;
-    switch (pos >> 28) {
-        case 1: {
-            start = file->flash_start;
-            end = &file->flash_end;
-            limit = file->flash_limit;
-            ppos = &file->flash_pos;
-            break;
-        }
-        case 2: {
-            start = file->ram_start;
-            end = &file->ram_end;
-            limit = file->ram_limit;
-            break;
-        }
-        default: {
-            errno = EFAULT;
-            return -1;
-        }
-    }
-    if (pos < start) {
+    if (pos < file->flash_start) {
         errno = EINVAL;
         return -1;
     }
-    if (pos >= limit) {
+    if (pos >= file->flash_limit) {
         errno = ENOSPC;
         return -1;
     }
-    *end = MAX(*end, pos);
-    if (ppos) {
-        *ppos = pos;
+    file->flash_end = MAX(file->flash_end, pos);
+    file->flash_pos = pos;
+    return 0;
+}
+
+int flash_heap_set_ram(flash_heap_t *file, flash_ptr_t pos) {
+    if (pos < file->ram_start) {
+        errno = EINVAL;
+        return -1;
     }
+    if (pos >= file->ram_limit) {
+        errno = ENOSPC;
+        return -1;
+    }
+    file->ram_end = pos;
     return 0;
 }
 
@@ -383,31 +182,8 @@ int flash_heap_trim(flash_heap_t *file, flash_ptr_t pos) {
     if (flash_heap_seek(file, pos) < 0) {
         return -1;
     }
-    switch (pos >> 24) {
-        case 0x10: {
-            file->flash_end = pos;
-            size_t page_num = (file->flash_pos - (flash_ptr_t)file->flash_pages + sizeof(flash_page_t) - 1) / sizeof(flash_page_t);
-            while (page_num < file->num_cache_pages) {
-                free(file->cache_pages[page_num]);
-                file->cache_pages[page_num] = NULL;
-                page_num++;
-            }
-            break;
-        }
-        #if PSRAM_BASE
-        case 0x11: {
-            file->flash_end = pos;
-            break;
-        }
-        #endif
-        case 0x20: {
-            file->ram_end = pos;
-            break;
-        }
-        default: {
-            errno = EFAULT;
-            return -1;
-        }
+    if (ftruncate(file->fd, file->flash_pos - file->flash_base) < 0) {
+        return -1;
     }
     return 0;
 }
@@ -417,54 +193,32 @@ flash_ptr_t flash_heap_align(flash_ptr_t addr, size_t align) {
     return (addr + align - 1) & ~(align - 1);
 }
 
-int flash_heap_write(flash_heap_t *file, const void *buffer, size_t size) {
-    size_t remaining = size;
-    while (remaining > 0) {
-        size_t len;
-        uint8_t *out = flash_heap_get(file, file->flash_pos, &len);
-        if (!out) {
-            return -1;
-        }
-        len = MIN(len, remaining);
-        memcpy(out, buffer, len);
-        buffer += len;
-        remaining -= len;
-        file->flash_pos += len;
-        file->flash_end = MAX(file->flash_end, file->flash_pos);
-    }
-    return size;
-}
-
-int flash_heap_read(flash_heap_t *file, void *buffer, size_t size) {
-    size = MIN(size, file->flash_end - file->flash_pos);
-    size_t remaining = size;
-    while (remaining > 0) {
-        size_t len;
-        uint8_t *out = flash_heap_get(file, file->flash_pos, &len);
-        if (!out) {
-            return -1;
-        }
-        len = MIN(len, remaining);
-        memcpy(buffer, out, len);
-        buffer += len;
-        remaining -= len;
-        file->flash_pos += len;
-    }
-    return size;
-}
-
 int flash_heap_pwrite(flash_heap_t *file, const void *buffer, size_t length, flash_ptr_t pos) {
-    if (flash_heap_seek(file, pos) < 0) {
-        return -1;
-    }
-    return flash_heap_write(file, buffer, length);
+    return pwrite(file->fd, buffer, length, pos - file->flash_base);
 }
 
 int flash_heap_pread(flash_heap_t *file, void *buffer, size_t length, flash_ptr_t pos) {
-    if (flash_heap_seek(file, pos) < 0) {
+    return pread(file->fd, buffer, length, pos - file->flash_base);
+}
+
+int flash_heap_write(flash_heap_t *file, const void *buffer, size_t size) {
+    int ret = flash_heap_pwrite(file, buffer, size, file->flash_pos);
+    if (ret < 0) {
         return -1;
     }
-    return flash_heap_read(file, buffer, length);
+    file->flash_pos += ret;
+    file->flash_end = MAX(file->flash_end, file->flash_pos);
+    return ret;
+}
+
+int flash_heap_read(flash_heap_t *file, void *buffer, size_t size) {
+    int ret = flash_heap_pread(file, buffer, size, file->flash_pos);
+    if (ret < 0) {
+        return -1;
+    }
+    file->flash_pos += ret;
+    file->flash_end = MAX(file->flash_end, file->flash_pos);
+    return ret;
 }
 
 bool flash_heap_is_valid_ptr(flash_heap_t *heap, flash_ptr_t pos) {
@@ -473,66 +227,62 @@ bool flash_heap_is_valid_ptr(flash_heap_t *heap, flash_ptr_t pos) {
         ((pos >= heap->ram_start) && (pos <= heap->ram_end));
 }
 
-bool flash_heap_iterate(const flash_heap_header_t **pheader) {
+bool flash_heap_iterate(uint device, const flash_heap_header_t **pheader) {
+    if ((device >= FLASH_HEAP_NUM_DEVICES) || !flash_heap_head[device]) {
+        return false;
+    }
     const flash_heap_header_t *header = *pheader;
     if (header == NULL) {
-        *pheader = &flash_heap_head;
+        *pheader = flash_heap_head[device];
     } else {
-        *pheader = (flash_heap_header_t *)(((uint8_t *)header) + header->flash_size);
+        *pheader = ((void *)header) + header->flash_size;
     }
-    #if PSRAM_BASE
-    // Move on to iterating PSRAM if it's available
-    if (((uintptr_t)pheader < PSRAM_BASE) && !(*pheader)->type) {
-        *pheader = (const void *)PSRAM_BASE;
-    }
-    #endif
     return (*pheader)->type;
 }
 
-int flash_heap_truncate(const flash_heap_header_t *header) {
-    #if PSRAM_BASE
-    if ((uintptr_t)header >= PSRAM_BASE) {
-        flash_heap_header_t *ptr = (void *)header;
-        ptr->type = 0;
-        ptr->flash_size = 0;
-        ptr->ram_size = 0;
-        ptr->entry = NULL;
-        psram_heap_tail = header;
-        return 0;
-    }
-    #endif
-
-    if (!header) {
-        header = (flash_heap_header_t *)((void *)&flash_heap_head + flash_heap_head.flash_size);
-    }
-    flash_page_t *ram_page = malloc(sizeof(*ram_page));
-    if (!ram_page) {
-        errno = ENOMEM;
+int flash_heap_truncate(uint device, const flash_heap_header_t *header) {
+    if ((device >= FLASH_HEAP_NUM_DEVICES) || !flash_heap_head[device]) {
+        errno = ENODEV;
         return -1;
     }
+    if (!header) {
+        header = flash_heap_head[device];
+    }
 
-    flash_ptr_t fptr = (flash_ptr_t)header;
-    size_t foffset = fptr % sizeof(flash_page_t);
-    const flash_page_t *flash_page = (void *)(fptr - foffset);
-    flash_heap_read_page(ram_page, flash_page);
-    flash_heap_header_t *ptr = (void *)ram_page + foffset;
-    ptr->type = 0;
-    ptr->flash_size = 0;
-    ptr->ram_size = 0;
-    ptr->entry = NULL;
+    int ret = -1;
+    flash_ptr_t base_addr;
+    size_t size;
+    int fd = flash_heap_dev(device, &base_addr, &size);
+    if (fd < 0) {
+        goto exit;
+    }
 
-    flash_heap_write_page(flash_page, ram_page);
-    flash_heap_tail = header;
-    free(ram_page);
-    return 0;
+    flash_heap_header_t fheader;
+    off_t offset = ((uintptr_t)header) - base_addr;
+    if (pread(fd, &fheader, sizeof(fheader), offset) < 0) {
+        goto exit;
+    }
+    fheader.type = 0;
+    fheader.flash_size = 0;
+    fheader.ram_size = 0;
+    fheader.entry = NULL;
+    if (pwrite(fd, &fheader, sizeof(fheader), offset) < 0) {
+        goto exit;
+    }
+    flash_heap_tail[device] = header;
+    ret = 0;
+
+exit:
+    if (fd >= 0) {
+        close(fd);
+    }
+    return ret;
 }
 
-void flash_heap_stats(size_t *flash_size, size_t *ram_size, size_t *psram_size) {
-    *flash_size = (uintptr_t)flash_heap_tail - XIP_BASE;
-    *ram_size = (uintptr_t)flash_heap_tail->ram_base - SRAM_BASE;
-    #if PSRAM_BASE
-    *psram_size = (uintptr_t)psram_heap_tail - PSRAM_BASE;
-    #else
-    *psram_size = 0;
-    #endif
+void flash_heap_stats(size_t *flash_size, size_t *ram_size) {
+    ram_size[0] = 0;
+    for (uint i = 0; i < FLASH_HEAP_NUM_DEVICES; i++) {
+        flash_size[i] = (flash_heap_tail[i] - flash_heap_head[i]) * sizeof(flash_heap_header_t);
+        ram_size[0] += ((uintptr_t)flash_heap_tail[i]->ram_base) - SRAM_BASE;
+    }
 }

@@ -36,7 +36,7 @@
 #include "py/objstringio.h"
 #include "py/frozenmod.h"
 
-#if MICROPY_PY_IO
+#if MICROPY_PY_IO && !MICROPY_NEWLIB
 
 #if MICROPY_PY_IO_IOBASE
 

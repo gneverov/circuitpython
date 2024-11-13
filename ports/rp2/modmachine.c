@@ -52,10 +52,10 @@
     { MP_ROM_QSTR(MP_QSTR_Pin),                 MP_ROM_PTR(&machine_pin_type) }, \
     { MP_ROM_QSTR(MP_QSTR_Timer),               MP_ROM_PTR(&machine_timer_type) }, \
     \
-    { MP_ROM_QSTR(MP_QSTR_APin),                MP_ROM_PTR(&pin_type) }, \
+    /* { MP_ROM_QSTR(MP_QSTR_APin),                MP_ROM_PTR(&pin_type) }, */ \
     { MP_ROM_QSTR(MP_QSTR_AudioOutPwm),         MP_ROM_PTR(&audio_out_pwm_type) }, \
     { MP_ROM_QSTR(MP_QSTR_PioStateMachine),     MP_ROM_PTR(&state_machine_type) }, \
-    { MP_ROM_QSTR(MP_QSTR_UART),                MP_ROM_PTR(&uart_type) }, \
+    /* { MP_ROM_QSTR(MP_QSTR_UART),                MP_ROM_PTR(&uart_type) }, */ \
     \
     { MP_ROM_QSTR(MP_QSTR_PWRON_RESET),         MP_ROM_INT(RP2_RESET_PWRON) }, \
     { MP_ROM_QSTR(MP_QSTR_WDT_RESET),           MP_ROM_INT(RP2_RESET_WDT) }, \

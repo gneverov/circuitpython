@@ -3,19 +3,22 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/random.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "newlib/dev.h"
 #include "newlib/thread.h"
-#include "newlib/time.h"
 #include "newlib/vfs.h"
 
 
@@ -68,8 +71,14 @@ int closedir(DIR *dirp) {
     }
 }
 
+char *ctermid(char *s) {
+    char *ret = "/dev/tty";
+    return s ? strcpy(s, ret) : ret;
+}
+
 DIR *fdopendir(int fd) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return NULL;
     }
@@ -83,7 +92,8 @@ DIR *fdopendir(int fd) {
 }
 
 int fstatvfs(int fd, struct statvfs *buf) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
@@ -99,7 +109,8 @@ int fstatvfs(int fd, struct statvfs *buf) {
 }
 
 int fsync(int fd) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
@@ -112,7 +123,8 @@ int fsync(int fd) {
 }
 
 int ftruncate(int fd, off_t length) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+    int flags = FWRITE;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
@@ -145,21 +157,28 @@ int gethostname(char *name, size_t namelen) {
     return 0;
 }
 
-int ioctl(int fd, unsigned long request, ...) {
-    struct vfs_file *file = vfs_acquire_file(fd);
+__attribute__((visibility("hidden")))
+int vioctl(int fd, unsigned long request, va_list args) {
+    int flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &flags);
     if (!file) {
         return -1;
     }
     int ret = -1;
     if (file->func->ioctl) {
-        va_list args;
-        va_start(args, request);
         ret = file->func->ioctl(file, request, args);
-        va_end(args);
     } else {
-        errno = ENOSYS;
+        errno = ENOTTY;
     }
     vfs_release_file(file);
+    return ret;
+}
+
+int ioctl(int fd, unsigned long request, ...) {
+    va_list args;
+    va_start(args, request);
+    int ret = vioctl(fd, request, args);
+    va_end(args);
     return ret;
 }
 
@@ -198,20 +217,6 @@ DIR *opendir(const char *dirname) {
     vfs_release_mount(vfs);
 
     return file;
-}
-
-ssize_t pread(int fd, void *buf, size_t nbyte, off_t offset) {
-    if (lseek(fd, offset, SEEK_SET) < 0) {
-        return -1;
-    }
-    return read(fd, buf, nbyte);
-}
-
-ssize_t pwrite(int fd, const void *buf, size_t nbyte, off_t offset) {
-    if (lseek(fd, offset, SEEK_SET) < 0) {
-        return -1;
-    }
-    return write(fd, buf, nbyte);
 }
 
 struct dirent *readdir(DIR *dirp) {
@@ -259,6 +264,14 @@ int rmdir(const char *path) {
     }
     vfs_release_mount(vfs);
     return ret;
+}
+
+char *realpath(const char *file_name, char *resolved_name) {
+    vfs_path_buffer_t vfs_path;
+    if (vfs_expand_path(&vfs_path, file_name) < 0) {
+        return NULL;
+    }
+    return resolved_name ? strcpy(resolved_name, vfs_path.begin) : strdup(vfs_path.begin);
 }
 
 unsigned sleep(unsigned seconds) {
@@ -341,4 +354,66 @@ int uname(struct utsname *name) {
     strncpy(name->version, UTSNAME_VERSION, UTSNAME_LENGTH);
     strncpy(name->machine, UTSNAME_MACHINE, UTSNAME_LENGTH);
     return 0;
+}
+
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off) {
+    int fd_flags = 0;
+    struct vfs_file *file = vfs_acquire_file(fd, &fd_flags);
+    if (!file) {
+        return NULL;
+    }
+    if (!(fd_flags & FREAD)) {
+        errno = EACCES;
+        return NULL;
+    }
+    if (!(fd_flags & FWRITE) && (prot & PROT_WRITE)) {
+        errno = EACCES;
+        return NULL;
+    }
+    if (!len || (off < 0)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    void *ret = NULL;
+    if (file->func->mmap) {
+        ret = file->func->mmap(file, addr, len, prot, flags, off);
+    } else {
+        errno = ENODEV;
+    }
+    vfs_release_file(file);
+    return ret;
+}
+
+int munmap(void *addr, size_t len) {
+    return 0;
+}
+
+
+#include <signal.h>
+#include "timers.h"
+static TimerHandle_t alarm_timer;
+
+static void alarm_callback(TimerHandle_t xTimer) {
+    dev_lock();
+    assert(alarm_timer == xTimer);
+    alarm_timer = NULL;
+    dev_unlock();
+    xTimerDelete(xTimer, portMAX_DELAY);
+    raise(SIGALRM);
+}
+
+unsigned alarm(unsigned seconds) {
+    TickType_t xTimerPeriod = pdMS_TO_TICKS(1000u * seconds);
+    unsigned result = 0;
+    dev_lock();
+    if (alarm_timer) {
+        TickType_t xExpiryTime = xTimerGetExpiryTime(alarm_timer);
+        xTimerChangePeriod(alarm_timer, xTimerPeriod, portMAX_DELAY);
+        result = (xExpiryTime - xTaskGetTickCount()) / configTICK_RATE_HZ;
+    } else {
+        alarm_timer = xTimerCreate("alarm", xTimerPeriod, pdFALSE, NULL, alarm_callback);
+        xTimerStart(alarm_timer, portMAX_DELAY);
+    }
+    dev_unlock();
+    return result;
 }

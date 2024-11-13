@@ -4,10 +4,10 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/time.h>
 
-#include "newlib/time.h"
-
+#include "extmod/modos_newlib.h"
 #include "py/mphal.h"
 #include "py/objint.h"
 #include "py/objstr.h"
@@ -52,8 +52,8 @@ static void mp_time_obj_to_tm(mp_obj_t obj, struct tm *tm) {
     if (len != 9) {
         mp_raise_TypeError(NULL);
     }
-    tm->tm_year = mp_obj_get_int(items[0] - 1900);
-    tm->tm_mon = mp_obj_get_int(items[1] - 1);
+    tm->tm_year = mp_obj_get_int(items[0]) - 1900;
+    tm->tm_mon = mp_obj_get_int(items[1]) - 1;
     tm->tm_mday = mp_obj_get_int(items[2]);
     tm->tm_hour = mp_obj_get_int(items[3]);
     tm->tm_min = mp_obj_get_int(items[4]);
@@ -164,16 +164,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mp_time_monotonic_ns_obj, mp_time_monotonic_ns)
 static mp_obj_t mp_time_sleep(mp_obj_t secs_in) {
     mp_float_t secs = mp_obj_get_float(secs_in);
     struct timespec t = { .tv_sec = secs, .tv_nsec = 1e9 * secs};
-    for (;;) {
-        MP_THREAD_GIL_EXIT();
-        int ret = nanosleep(&t, &t);
-        MP_THREAD_GIL_ENTER();
-        if ((ret >= 0) || (errno != EINTR)) {
-            break;
-        } else {
-            mp_handle_pending(true);
-        }
-    }
+    int ret;
+    MP_OS_CALL(ret, nanosleep, &t, &t);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_time_sleep_obj, mp_time_sleep);
@@ -241,8 +233,8 @@ static mp_obj_t mp_time_getattr(mp_obj_t attr) {
             return mp_obj_new_int(_timezone);
         case MP_QSTR_tzname: {
             mp_obj_t items[] = {
-                mp_obj_new_str_copy(&mp_type_str, (byte *)_tzname[0], strlen(_tzname[0])),
-                mp_obj_new_str_copy(&mp_type_str, (byte *)_tzname[1], strlen(_tzname[1])),
+                mp_obj_new_str_copy(&mp_type_str, (byte *)tzname[0], strlen(tzname[0])),
+                mp_obj_new_str_copy(&mp_type_str, (byte *)tzname[1], strlen(tzname[1])),
             };
             return mp_obj_new_tuple(2, items);
         }

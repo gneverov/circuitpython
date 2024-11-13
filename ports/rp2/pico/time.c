@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include <sys/time.h>
+#include <time.h>  // needed for sys/timespec.h
+#include <sys/timespec.h>
 
 #include "pico/aon_timer.h"
 #include "pico/time.h"
