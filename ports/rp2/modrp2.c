@@ -29,7 +29,7 @@
 
 #include "py/mphal.h"
 #include "py/runtime.h"
-#include "flash_lockout.h"
+#include "rp2/flash_lockout.h"
 #include "modrp2.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/ioqspi.h"

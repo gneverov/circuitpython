@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "newlib/event.h"
+#include "morelib/event.h"
 
-#include "pico/fifo.h"
-#include "pico/pio.h"
+#include "rp2/fifo.h"
+#include "rp2/pio.h"
 
 #include "py/obj.h"
 
@@ -22,8 +22,8 @@ typedef struct {
     pio_sm_config config;
     uint pin_mask;
 
-    pico_fifo_t rx_fifo;
-    pico_fifo_t tx_fifo;
+    rp2_fifo_t rx_fifo;
+    rp2_fifo_t tx_fifo;
     size_t threshold;
 
     uint16_t instructions[32];

@@ -21,5 +21,5 @@ target_compile_definitions(tinyuf2 INTERFACE
 )
 
 target_link_libraries(tinyuf2 INTERFACE
-    newlib_helper
+    morelib_core
 )

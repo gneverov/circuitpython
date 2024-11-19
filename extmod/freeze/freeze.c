@@ -4,9 +4,7 @@
 #include <elf.h>
 #include <malloc.h>
 #include <memory.h>
-
-#include "newlib/dlfcn.h"
-#include "newlib/flash_heap.h"
+#include "morelib/dlfcn.h"
 
 #include "./freeze.h"
 #include "./extmod.h"
@@ -964,7 +962,7 @@ mp_obj_t mp_module_get_frozen(qstr module_name, mp_obj_t outer_module_obj) {
         while (flash_heap_iterate(i, &header)/* && (header < freeze_checkpoint)*/) {
             mp_obj_t module_obj;
             if (header->type == DL_FLASH_HEAP_TYPE) {
-                mp_obj_t (*extmod_init)(void) = dlsym(header, "mp_extmod_init");
+                mp_obj_t (*extmod_init)(void) = dlsym((void *)header, "mp_extmod_init");
                 if (!extmod_init) {
                     continue;
                 }

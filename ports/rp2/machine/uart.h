@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "pico/uart.h"
+#include "rp2/uart.h"
 
 
 typedef struct {

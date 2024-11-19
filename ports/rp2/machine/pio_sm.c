@@ -19,8 +19,8 @@
 #define SIDESET_PIN 4
 #define JMP_PIN 5
 
-static void state_machine_rx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
-static void state_machine_tx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
+static void state_machine_rx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
+static void state_machine_tx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
 
 static void state_machine_init(state_machine_obj_t *self, uint16_t *instructions, uint8_t length) {
     self->fd = -1;
@@ -32,8 +32,8 @@ static void state_machine_init(state_machine_obj_t *self, uint16_t *instructions
     self->loaded_offset = -1u;
     self->sm = -1u;
     self->config = pio_get_default_sm_config();
-    pico_fifo_init(&self->rx_fifo, false, state_machine_rx_fifo_handler);
-    pico_fifo_init(&self->tx_fifo, true, state_machine_tx_fifo_handler);
+    rp2_fifo_init(&self->rx_fifo, false, state_machine_rx_fifo_handler);
+    rp2_fifo_init(&self->tx_fifo, true, state_machine_tx_fifo_handler);
     memset(&self->instructions, 0, 32 * sizeof(uint16_t));
     memcpy(&self->instructions, instructions, length * sizeof(uint16_t));
     self->stalls = 0;
@@ -51,17 +51,17 @@ static void state_machine_pio_handler(PIO pio, enum pio_interrupt_source source,
     state_machine_obj_t *self = context;
     assert(source == pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
 
-    pico_fifo_set_enabled(&self->rx_fifo, true);
+    rp2_fifo_set_enabled(&self->rx_fifo, true);
     event_notify_from_isr(self->event, 0, POLLIN, pxHigherPriorityTaskWoken);
     // wait for DMA to start
 }
 
-static void state_machine_rx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
+static void state_machine_rx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
     state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, rx_fifo));
     pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), ring_write_count(ring));
 }
 
-static void state_machine_tx_fifo_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
+static void state_machine_tx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
     state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, tx_fifo));
 
     uint events = 0;
@@ -79,9 +79,9 @@ static void state_machine_deinit(state_machine_obj_t *self) {
     if (self->sm != -1u) {
         pio_sm_set_enabled(self->pio, self->sm, false);
         pio_sm_restart(self->pio, self->sm);
-        pico_pio_clear_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
-        pico_fifo_deinit(&self->tx_fifo);
-        pico_fifo_deinit(&self->rx_fifo);
+        rp2_pio_clear_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
+        rp2_fifo_deinit(&self->tx_fifo);
+        rp2_fifo_deinit(&self->rx_fifo);
         state_machine_free(self->pio, 1 << self->sm);
         self->sm = -1u;
     }
@@ -117,20 +117,20 @@ static state_machine_obj_t *state_machine_get_raise(mp_obj_t self_in) {
 }
 
 static bool state_machine_fifo_alloc(state_machine_obj_t *self, uint fifo_size, bool tx, enum dma_channel_transfer_size dma_transfer_size, bool bswap) {
-    pico_fifo_t *fifo = tx ? &self->tx_fifo: &self->rx_fifo;
-    pico_fifo_deinit(fifo);
+    rp2_fifo_t *fifo = tx ? &self->tx_fifo: &self->rx_fifo;
+    rp2_fifo_deinit(fifo);
 
     if (fifo_size) {
         PIO pio = self->pio;
         const volatile void *fifo_addr = tx ? &pio->txf[self->sm] : &pio->rxf[self->sm];
-        return pico_fifo_alloc(fifo, fifo_size, pio_get_dreq(pio, self->sm, tx), dma_transfer_size, bswap, (volatile void *)fifo_addr);
+        return rp2_fifo_alloc(fifo, fifo_size, pio_get_dreq(pio, self->sm, tx), dma_transfer_size, bswap, (volatile void *)fifo_addr);
     }
     return true;
 }
 
 static bool state_machine_alloc(const pio_program_t *program, uint num_sms, PIO *pio, uint *sm_mask) {
     for (uint i = 0; i < NUM_PIOS; i++) {
-        *pio = pico_pio(i);
+        *pio = PIO_INSTANCE(i);
         *sm_mask = 0;
         if (!pio_can_add_program(*pio, program)) {
             continue;
@@ -209,8 +209,8 @@ static mp_obj_t state_machine_make_new(const mp_obj_type_t *type, size_t n_args,
         goto cleanup;
     }
 
-    pico_fifo_set_enabled(&self->rx_fifo, false);
-    pico_pio_set_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), state_machine_pio_handler, self);
+    rp2_fifo_set_enabled(&self->rx_fifo, false);
+    rp2_pio_set_irq(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), state_machine_pio_handler, self);
 
     return MP_OBJ_FROM_PTR(self);
 
@@ -367,11 +367,11 @@ static mp_obj_t state_machine_reset(size_t n_args, const mp_obj_t *args) {
         initial_pc = mp_obj_get_int(args[1]);
     }
 
-    pico_fifo_clear(&self->tx_fifo);
+    rp2_fifo_clear(&self->tx_fifo);
     pio_sm_init(self->pio, self->sm, self->loaded_offset + initial_pc, &self->config);
 
-    pico_fifo_set_enabled(&self->rx_fifo, false);
-    pico_fifo_clear(&self->rx_fifo);
+    rp2_fifo_set_enabled(&self->rx_fifo, false);
+    rp2_fifo_clear(&self->rx_fifo);
 
     return mp_const_none;
 }
@@ -445,20 +445,20 @@ static mp_obj_t state_machine_readinto(mp_obj_t self_in, mp_obj_t b_in) {
     }
 
     ring_t ring;
-    pico_fifo_exchange(&self->rx_fifo, &ring, 0);
+    rp2_fifo_exchange(&self->rx_fifo, &ring, 0);
     while (ring_read_count(&ring) == 0) {
         if (!mp_os_event_wait(self->fd, POLLIN)) {
             return mp_const_none;
         }
-        pico_fifo_exchange(&self->rx_fifo, &ring, 0);
+        rp2_fifo_exchange(&self->rx_fifo, &ring, 0);
     }
 
     void *buf = bufinfo.buf;
     size_t len = bufinfo.len;
-    size_t ret = pico_fifo_transfer(&self->rx_fifo, buf, len);
+    size_t ret = rp2_fifo_transfer(&self->rx_fifo, buf, len);
     if (ret >= ring_read_count(&ring)) {
         event_notify(self->event, POLLIN, 0);
-        pico_fifo_set_enabled(&self->rx_fifo, false);
+        rp2_fifo_set_enabled(&self->rx_fifo, false);
     }
     return mp_obj_new_int(ret);
 }
@@ -478,15 +478,15 @@ static mp_obj_t state_machine_write(size_t n_args, const mp_obj_t *args) {
     }
 
     ring_t ring;
-    pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     while (ring_write_count(&ring) == 0) {
         if (!mp_os_event_wait(self->fd, POLLOUT)) {
             return mp_const_none;
         }
-        pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+        rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     }
 
-    size_t ret = pico_fifo_transfer(&self->tx_fifo, buf, len);
+    size_t ret = rp2_fifo_transfer(&self->tx_fifo, buf, len);
     uint events = 0;
     if (ret > 0) {
         events |= POLLPRI;
@@ -505,12 +505,12 @@ static mp_obj_t state_machine_drain(mp_obj_t self_in) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
 
     ring_t ring;
-    pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+    rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     while (ring_write_count(&ring) > 0) {
         if (!mp_os_event_wait(self->fd, POLLPRI)) {
             return mp_const_none;
         }
-        pico_fifo_exchange(&self->tx_fifo, &ring, 0);
+        rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     }
     if (self->tx_fifo.channel < 0) {
         mp_raise_ValueError(NULL);
@@ -548,8 +548,8 @@ static mp_obj_t state_machine_debug(mp_obj_t self_in) {
     printf("\n");
     printf("  tx_stalls: %u\n", self->stalls);
 
-    pico_fifo_debug(&self->rx_fifo);
-    pico_fifo_debug(&self->tx_fifo);
+    rp2_fifo_debug(&self->rx_fifo);
+    rp2_fifo_debug(&self->tx_fifo);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(state_machine_debug_obj, state_machine_debug);

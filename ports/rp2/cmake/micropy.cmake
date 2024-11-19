@@ -31,7 +31,7 @@ function(add_micropy_extension_library target lib)
         add_dynamic_library(${target} ${ARGN})
         target_link_libraries(${target} micropython_import ${lib})
         target_link_options(${target} PRIVATE
-            LINKER:--script=${MICROPY_PORT_DIR}/chips/${PICO_CHIP}/memmap_ext.ld
+            LINKER:--script=${RP2_LIB_LD_SCRIPT}
             # LINKER:--no-warn-rwx-segments
             LINKER:-Map=$<TARGET_FILE:${target}>.map
         )
@@ -72,10 +72,6 @@ include(${MICROPY_DIR}/py/usermod.cmake)
 
 add_subdirectory(${MICROPY_PORT_DIR}/lwip)
 
-add_subdirectory(${MICROPY_PORT_DIR}/newlib)
-
-add_subdirectory(${MICROPY_PORT_DIR}/pico)
-
 set(TINYUF2_DIR "${MICROPY_DIR}/lib/tinyuf2")
 add_subdirectory(${MICROPY_PORT_DIR}/tinyuf2)
 set_target_visibility_hidden(tinyuf2)
@@ -93,7 +89,7 @@ add_subdirectory(${MICROPY_DIR}/lib/dhara dhara)
 set_target_visibility_hidden(dhara)
 
 if(MICROPY_DYNLINK)
-    add_firmware_executable(${MICROPY_TARGET})
+    add_dynamic_executable(${MICROPY_TARGET})
 else()
     add_executable(${MICROPY_TARGET})
 endif()
@@ -121,9 +117,6 @@ set(MICROPY_SOURCE_DRIVERS
 )
 
 set(MICROPY_SOURCE_PORT
-    flash.c
-    flash_lockout.c
-    mtd.c
     help.c
     machine_i2c.c
     machine_pin.c
@@ -138,7 +131,6 @@ set(MICROPY_SOURCE_PORT
     mphalport.c
     mpthreadport.c
     newlib_drv.c
-    random.c
     usbd.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
@@ -195,6 +187,11 @@ set(PICO_SDK_COMPONENTS
     tinyusb_common
     tinyusb_device
 )
+
+if(MICROPY_EXTMOD_EXAMPLE)
+    include(${MICROPY_DIR}/extmod/example/example.cmake)
+    add_micropy_extension_library(libexample extmod_example)    
+endif()
 
 if(MICROPY_LVGL)
     include(${MICROPY_DIR}/extmod/lvgl/lvgl.cmake)
@@ -481,13 +478,10 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
 )
 
 target_link_libraries(${MICROPY_TARGET}
-    freertos
-    # newlib_dhara
-    newlib_fatfs
-    newlib_helper 
-    newlib_littlefs
+    morelib_rp2
+    morelib_fatfs
+    morelib_littlefs
     tinyuf2
-    pico_helper 
     tinyusb_helper
     ${PICO_SDK_COMPONENTS}
 )
@@ -503,7 +497,7 @@ endif()
 #  a linker script modification) until we explicitly add  macro calls around the function
 #  defs to move them into RAM.
 if (PICO_ON_DEVICE AND NOT PICO_NO_FLASH AND NOT PICO_COPY_TO_RAM)
-    pico_set_linker_script(${MICROPY_TARGET} ${MICROPY_PORT_DIR}/chips/${PICO_CHIP}/memmap_mp.ld)
+    pico_set_linker_script(${MICROPY_TARGET} ${RP2_EXE_LD_SCRIPT})
 endif()
 
 pico_add_extra_outputs(${MICROPY_TARGET})
@@ -552,11 +546,26 @@ add_custom_command(
 if(MICROPY_DYNLINK)
     add_import_library(micropython_import ${MICROPY_TARGET})
 
+    # Execute "ar t" to list objects in libc archive
+    execute_process(COMMAND ${CMAKE_AR} t ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}/libc.a OUTPUT_VARIABLE LIBC_OBJS )
+    separate_arguments(LIBC_OBJS UNIX_COMMAND ${LIBC_OBJS})
+
+    set(LIBC_OBJS_DIR ${CMAKE_BINARY_DIR}/extract_libc/)
+    list(TRANSFORM LIBC_OBJS PREPEND ${LIBC_OBJS_DIR})
+
+    # Extract object files ("ar x") into output directory
+    add_custom_target(extract_libc2
+        COMMAND mkdir -p ${LIBC_OBJS_DIR}
+        COMMAND ${CMAKE_AR} x ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}/libc.a --output ${LIBC_OBJS_DIR}
+        BYPRODUCTS ${LIBC_OBJS}
+        VERBATIM
+    )
+
     # Explicitly add certain objects from libc.a to support dynamic linking
     include(${MICROPY_PORT_DIR}/cmake/picolibc_objs.cmake)
-    list(TRANSFORM LIBC_OBJECTS PREPEND ${CMAKE_BINARY_DIR}/newlib/)
+    list(TRANSFORM LIBC_OBJECTS PREPEND ${LIBC_OBJS_DIR}/)
     target_sources(${MICROPY_TARGET} PRIVATE
-        ${LIBC_OBJECTS}
+        # ${LIBC_OBJECTS}
     )
-    add_dependencies(${MICROPY_TARGET} extract_libc)
+    add_dependencies(${MICROPY_TARGET} extract_libc2)
 endif()

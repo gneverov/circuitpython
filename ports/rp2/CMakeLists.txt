@@ -33,63 +33,27 @@ include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
 
 include(${MICROPY_DIR}/lib/pico-sdk/pico_sdk_init.cmake)
 
-# Check that the compiler supports TLS, which is required for multicore Picolibc.
-execute_process(
-    COMMAND ${CMAKE_C_COMPILER} -v
-    ERROR_VARIABLE C_COMPILER_VERSION
-)
-if(C_COMPILER_VERSION MATCHES --disable-tls)
-    message(FATAL_ERROR "C compiler '${CMAKE_C_COMPILER}' does not support TLS")
-endif()
-
 find_package(Python3 COMPONENTS Interpreter)
-
-# Helper function to remove a list items from a target property.
-function(target_remove_property_value target property)
-    get_target_property(props ${target} ${property})
-    list(REMOVE_ITEM props ${ARGN})
-    set_target_properties(${target} PROPERTIES ${property} "${props}")
-endfunction()
-
-# Helper function to compile a project with hidden visibility.
-function(set_target_visibility_hidden TARGET)
-    get_target_property(SRCS ${TARGET} INTERFACE_SOURCES)
-    set_source_files_properties(${SRCS} PROPERTIES COMPILE_OPTIONS -fvisibility=hidden)
-endfunction()
 
 # Define the top-level project
 project(${MICROPY_TARGET})
 
 # Calls pico_sdk_init()
-include("cmake/pico-sdk.cmake")
+set(FREERTOS_DIR ${MICROPY_DIR}/lib/freertos)
+set(MORELIBC_DIR ${MICROPY_DIR}/lib/morelibc)
+include(${MORELIBC_DIR}/rp2/pico-sdk.cmake)
 
-if(NOT EXISTS ${MICROPY_PORT_DIR}/chips/${PICO_CHIP})
-    message(FATAL_ERROR "MicroPython does not support ${PICO_CHIP} chip")
-endif()
-include(${MICROPY_PORT_DIR}/chips/${PICO_CHIP}/chip.cmake)
+include(${MORELIBC_DIR}/cmake/picolibc.cmake)
 
-# Find the location of picolibc based on the location of GCC
-if(NOT DEFINED PICOLIBC_SYSROOT)
-    set(PICOLIBC_SYSROOT ${CMAKE_C_COMPILER})
-    cmake_path(GET PICOLIBC_SYSROOT PARENT_PATH PICOLIBC_SYSROOT)
-    cmake_path(APPEND PICOLIBC_SYSROOT .. picolibc arm-none-eabi)
-    cmake_path(NORMAL_PATH PICOLIBC_SYSROOT)
-endif()
-if(NOT EXISTS ${PICOLIBC_SYSROOT})
-    message(FATAL_ERROR "Picolibc not found at ${PICOLIBC_SYSROOT}")
-endif()
-if(NOT EXISTS ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE})
-    message(FATAL_ERROR "Picolibc build type ${PICOLIBC_BUILDTYPE} not found in ${PICOLIBC_SYSROOT}")
-endif()
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${PICOLIBC_SYSROOT}/include -ftls-model=local-exec")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostartfiles -L${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}")
+add_subdirectory(${FREERTOS_DIR} freertos)
 
-add_subdirectory(freertos)
-
-include("cmake/littlefs.cmake")
+set(FATFS_DIR ${MICROPY_DIR}/lib/fatfs)
+set(LITTLEFS_DIR ${MICROPY_DIR}/lib/littlefs)
+add_subdirectory(${MORELIBC_DIR} morelibc)
 
 set(MICROPY_FREERTOS ON)
 set(MICROPY_DYNLINK OFF)
+set(MICROPY_EXTMOD_EXAMPLE OFF)
 set(MICROPY_PY_AUDIO_MP3 OFF)
 set(MICROPY_LVGL OFF)
 set(MICROPY_SSL_MBEDTLS OFF)

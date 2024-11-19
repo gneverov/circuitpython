@@ -31,28 +31,19 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/timespec.h>
-#include <sys/unistd.h>
+#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include "morelib/mount.h"
+#include "morelib/thread.h"
 
 #include "FreeRTOS.h"
-#include "freertos/interrupts.h"
 #include "task.h"
+#include "freertos/interrupts.h"
 
 #if MICROPY_PY_LWIP
 #include "lwip/lwip_init.h"
 #endif
-#include "newlib/mount.h"
-#include "newlib/newlib.h"
-#include "newlib/thread.h"
-#include "pico/dma.h"
-#include "pico/gpio.h"
-#include "pico/pio.h"
-#include "pico/terminal.h"
-#include "tinyusb/msc_device.h"
-#include "tinyusb/net_device_lwip.h"
-#include "tinyusb/terminal.h"
-#include "tinyusb/tusb_config.h"
-#include "tinyusb/tusb_lock.h"
 
 #include "py/compile.h"
 #include "py/runtime.h"
@@ -69,16 +60,13 @@
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
 #include "tusb.h"
-#include "flash_lockout.h"
+#include "rp2/flash_lockout.h"
 #include "modmachine.h"
 #include "modrp2.h"
 #include "mpbthciport.h"
 #include "genhdr/mpversion.h"
 
-#include "pico/aon_timer.h"
-#include "pico/stdlib.h"
 #include "pico/binary_info.h"
-#include "pico/unique_id.h"
 #include "hardware/structs/rosc.h"
 
 
@@ -230,23 +218,21 @@ static void mp_tuh_task(void *params) {
 static void set_time(void) {
     tzset();
 
-    struct timespec ts;
-    if (aon_timer_is_running()) {
-        aon_timer_get_time(&ts);
-    } else {
-        struct tm tm = {
-            .tm_year = 124,
-            .tm_mon = 0,
-            .tm_mday = 1,
-        };
-        ts.tv_sec = mktime(&tm);
-        ts.tv_nsec = 0;
-    }
+    // should be defined in time.h
+    char *strptime(const char *__restrict, const char *__restrict, struct tm *__restrict);
 
-    struct timeval tv;
-    TIMESPEC_TO_TIMEVAL(&tv, &ts);
-    int __real_settimeofday(const struct timeval *tv, const struct timezone *tz);
-    __real_settimeofday(&tv, NULL);
+    // Get the build time
+    struct tm tm = { 0 };
+    strptime(__DATE__, "%b %d %Y", &tm);
+    struct timeval build_tv = { 0 };
+    build_tv.tv_sec = mktime(&tm);
+
+    // Set the current time to be at least the build time
+    struct timeval current_tv = { 0 };
+    gettimeofday(&current_tv, NULL);
+    if (current_tv.tv_sec < build_tv.tv_sec) {
+        settimeofday(&build_tv, NULL);
+    }
 }
 
 static void setup_tty(void) {

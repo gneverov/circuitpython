@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include "pico/gpio.h"
+#include "rp2/gpio.h"
 
 #include "./pin.h"
 #include "py/parseargs.h"

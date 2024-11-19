@@ -26,7 +26,7 @@
  */
 
 #include <malloc.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 
 #include "py/runtime.h"
 #include "py/gc.h"

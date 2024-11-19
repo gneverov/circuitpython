@@ -4,8 +4,6 @@
 #include <errno.h>
 #include <string.h>
 
-#include "newlib/dlfcn.h"
-
 #include "py/gc.h"
 #include "py/runtime.h"
 #include "./freeze.h"

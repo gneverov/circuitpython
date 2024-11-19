@@ -1,17 +1,16 @@
 // SPDX-FileCopyrightText: 2024 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include "newlib/dev.h"
-#include "newlib/devfs.h"
-// #include "newlib/dhara.h"
-#include "newlib/fatfs.h"
-#include "newlib/littlefs.h"
-#include "newlib/mem.h"
-#include "newlib/mtdblk.h"
-#include "newlib/tty.h"
-#include "mtd.h"
-#include "pico/sdcard.h"
-#include "pico/terminal.h"
+#include "morelib/dev.h"
+#include "morelib/devfs.h"
+#include "morelib/fatfs.h"
+#include "morelib/littlefs.h"
+#include "morelib/mem.h"
+#include "morelib/mtdblk.h"
+#include "morelib/tty.h"
+#include "rp2/mtd.h"
+#include "rp2/sdcard.h"
+#include "rp2/term_uart.h"
 #include "tinyuf2/tinyuf2.h"
 #include "tinyusb/terminal.h"
 
@@ -21,7 +20,7 @@ const struct dev_driver *dev_drvs[] = {
     &tty_drv,
     &mtd_drv,
     &mtdblk_drv,
-    &uart_drv,
+    &term_uart_drv,
     &usb_drv,
     &tinyuf2_drv,
 };

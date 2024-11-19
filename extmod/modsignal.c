@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
+#include "morelib/thread.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
-
-#include "newlib/thread.h"
 
 #include "./modsignal.h"
 #include "shared/runtime/interrupt_char.h"

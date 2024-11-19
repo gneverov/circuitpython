@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "newlib/event.h"
+#include "morelib/event.h"
 
-#include "pico/fifo.h"
+#include "rp2/fifo.h"
 
 #include "py/obj.h"
 
@@ -17,7 +17,7 @@ typedef struct {
     uint a_pin;
     uint b_pin;
     uint pwm_slice;
-    pico_fifo_t fifo;
+    rp2_fifo_t fifo;
     size_t threshold;
     uint32_t error;
     uint32_t top;

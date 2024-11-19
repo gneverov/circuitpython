@@ -5,15 +5,13 @@
 #include <fcntl.h>
 #include <malloc.h>
 #include <memory.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
+#include "morelib/dlfcn.h"
+#include "morelib/vfs.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
-
-#include "newlib/dlfcn.h"
-#include "newlib/ioctl.h"
-#include "newlib/newlib.h"
-#include "newlib/vfs.h"
 
 #include "uf2.h"
 #include "tinyuf2/tinyuf2.h"
@@ -99,25 +97,22 @@ static off_t tinyuf2_lseek(void *ctx, off_t offset, int whence) {
     return file->ptr = offset;
 }
 
-static int tinyuf2_read(void *ctx, void *buf, size_t size) {
-    struct tinyuf2_file *file = ctx;
-    uint32_t lba = file->ptr / 512;
+static int tinyuf2_pread(void *ctx, void *buf, size_t size, off_t offset) {
+    uint32_t lba = offset / 512;
     uint8_t *buffer = buf;
     uint32_t count = 0;
     while (count < size) {
         uf2_read_block(lba, buffer);
-
         lba++;
         buffer += 512;
         count += 512;
-        file->ptr += 512;
     }
     return count;
 }
 
-static int tinyuf2_write(void *ctx, const void *buf, size_t size) {
+static int tinyuf2_pwrite(void *ctx, const void *buf, size_t size, off_t offset) {
     struct tinyuf2_file *file = ctx;
-    uint32_t lba = file->ptr / 512;
+    uint32_t lba = offset / 512;
     uint8_t *buffer = (void *)buf;
     uint32_t count = 0;
     while (count < size) {
@@ -126,19 +121,37 @@ static int tinyuf2_write(void *ctx, const void *buf, size_t size) {
         if (0 == uf2_write_block(lba, buffer, &file->wr_state)) {
             break;
         }
-
         lba++;
         buffer += 512;
         count += 512;
-        file->ptr += 512;
     }
     return count;
+}
+
+static int tinyuf2_read(void *ctx, void *buf, size_t size) {
+    struct tinyuf2_file *file = ctx;
+    int ret = tinyuf2_pread(ctx, buf, size, file->ptr);
+    if (ret >= 0) {
+        file->ptr += ret;
+    }
+    return ret;
+}
+
+static int tinyuf2_write(void *ctx, const void *buf, size_t size) {
+    struct tinyuf2_file *file = ctx;
+    int ret = tinyuf2_pwrite(ctx, buf, size, file->ptr);
+    if (ret >= 0) {
+        file->ptr += ret;
+    }
+    return ret;
 }
 
 static const struct vfs_file_vtable tinyuf2_vtable = {
     .close = tinyuf2_close,
     .ioctl = tinyuf2_ioctl,
     .lseek = tinyuf2_lseek,
+    .pread = tinyuf2_pread,
+    .pwrite = tinyuf2_pwrite,
     .read = tinyuf2_read,
     .write = tinyuf2_write,
 };

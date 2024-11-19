@@ -31,7 +31,7 @@
 #include "task.h"
 #include "semphr.h"
 
-#include "newlib/thread.h"
+#include "morelib/thread.h"
 
 #include "py/mpthread.h"
 

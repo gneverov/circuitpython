@@ -3,7 +3,7 @@
 
 #include <fcntl.h>
 #include <memory.h>
-#include "newlib/ioctl.h"
+#include <sys/ioctl.h>
 
 #include "extmod/modos_newlib.h"
 

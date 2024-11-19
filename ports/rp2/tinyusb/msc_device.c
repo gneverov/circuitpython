@@ -5,9 +5,10 @@
 #if CFG_TUD_MSC
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/unistd.h>
-#include "newlib/ioctl.h"
-#include "newlib/mount.h"
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include "morelib/mount.h"
+
 #include "tinyusb/tusb_lock.h"
 
 static struct {

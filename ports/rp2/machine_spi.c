@@ -32,7 +32,7 @@
 #include "hardware/spi.h"
 #include "hardware/dma.h"
 
-#include "pico/spi.h"
+#include "rp2/spi.h"
 
 #define DEFAULT_SPI_BAUDRATE    (1000000)
 #define DEFAULT_SPI_POLARITY    (0)
@@ -93,7 +93,7 @@
 
 typedef struct _machine_spi_obj_t {
     mp_obj_base_t base;
-    // pico_spi_ll_t *spi;
+    // rp2_spi_t *spi;
     uint8_t spi_id;
     uint8_t polarity;
     uint8_t phase;
@@ -188,15 +188,15 @@ mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
             mp_raise_NotImplementedError(MP_ERROR_TEXT("LSB"));
         }
 
-        pico_spi_ll_t *spi = &pico_spis_ll[self->spi_id];
-        pico_spi_take(spi, portMAX_DELAY);
+        rp2_spi_t *spi = &rp2_spis[self->spi_id];
+        rp2_spi_take(spi, portMAX_DELAY);
         spi_init(spi->inst, self->baudrate);
         spi_set_format(spi->inst, self->bits, self->polarity, self->phase, self->firstbit);
         gpio_set_function(self->sck, GPIO_FUNC_SPI);
         gpio_set_function(self->miso, GPIO_FUNC_SPI);
         gpio_set_function(self->mosi, GPIO_FUNC_SPI);
         gpio_disable_pulls(self->miso);
-        pico_spi_give(spi);
+        rp2_spi_give(spi);
     }
 
     return MP_OBJ_FROM_PTR(self);
@@ -242,8 +242,8 @@ static void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
 
 static void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
     machine_spi_obj_t *self = (machine_spi_obj_t *)self_in;
-    pico_spi_ll_t *spi = &pico_spis_ll[self->spi_id];
-    pico_spi_take(spi, portMAX_DELAY);
+    rp2_spi_t *spi = &rp2_spis[self->spi_id];
+    rp2_spi_take(spi, portMAX_DELAY);
     spi_set_baudrate(spi->inst, self->baudrate);
     spi_set_format(spi->inst, self->bits, self->polarity, self->phase, self->firstbit);
     // Use DMA for large transfers if channels are available
@@ -302,7 +302,7 @@ static void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
             spi_write_read_blocking(spi->inst, src, dest, len);
         }
     }
-    pico_spi_give(spi);
+    rp2_spi_give(spi);
 }
 
 static const mp_machine_spi_p_t machine_spi_p = {

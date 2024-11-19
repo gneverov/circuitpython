@@ -10,7 +10,7 @@
 #include "pico/divider.h"
 #include "pico/rand.h"
 
-#include "pico/pwm.h"
+#include "rp2/pwm.h"
 
 #include "./audio_out_pwm.h"
 #include "machine_pin.h"
@@ -20,7 +20,7 @@
 #include "py/runtime.h"
 
 
-static void audio_out_pwm_irq_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
+static void audio_out_pwm_irq_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
 
 static void audio_out_pwm_init(audio_out_pwm_obj_t *self) {
     self->fd = -1;
@@ -28,13 +28,13 @@ static void audio_out_pwm_init(audio_out_pwm_obj_t *self) {
     self->a_pin = -1u;
     self->b_pin = -1u;
     self->pwm_slice = -1u;
-    pico_fifo_init(&self->fifo, true, audio_out_pwm_irq_handler);
+    rp2_fifo_init(&self->fifo, true, audio_out_pwm_irq_handler);
     self->error = 0;
     self->fragment[3] = 0;
 }
 
 static void audio_out_pwm_deinit(audio_out_pwm_obj_t *self) {
-    pico_fifo_deinit(&self->fifo);
+    rp2_fifo_deinit(&self->fifo);
 
     if (self->pwm_slice != -1u) {
         gpio_deinit(self->a_pin);
@@ -78,7 +78,7 @@ static uint audio_out_pwm_poll(audio_out_pwm_obj_t *self, const ring_t *ring) {
     return events;
 }
 
-static void audio_out_pwm_irq_handler(pico_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
+static void audio_out_pwm_irq_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
     audio_out_pwm_obj_t *self = (audio_out_pwm_obj_t *)((uint8_t *)fifo - offsetof(audio_out_pwm_obj_t, fifo));
     self->int_count++;
 
@@ -137,11 +137,11 @@ static mp_obj_t audio_out_pwm_make_new(const mp_obj_type_t *type, size_t n_args,
 
     uint dreq = pwm_get_dreq(pwm_slice);
 
-    if (!pico_fifo_alloc(&self->fifo, fifo_size, dreq, DMA_SIZE_16, false, &pwm_hw->slice[pwm_slice].cc)) {
+    if (!rp2_fifo_alloc(&self->fifo, fifo_size, dreq, DMA_SIZE_16, false, &pwm_hw->slice[pwm_slice].cc)) {
         errcode = errno;
         goto _finally;
     }
-    pico_fifo_set_enabled(&self->fifo, false);
+    rp2_fifo_set_enabled(&self->fifo, false);
     self->threshold = threshold;
 
     pwm_config c = pwm_get_default_config();
@@ -218,12 +218,12 @@ static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
     const size_t in_bytes_per_sample = self->num_channels * self->bytes_per_sample;
     const size_t out_bytes_per_sample = sizeof(uint16_t);
     ring_t ring;
-    pico_fifo_exchange(&self->fifo, &ring, 0);
+    rp2_fifo_exchange(&self->fifo, &ring, 0);
     while (ring_write_count(&ring) < out_bytes_per_sample) {
         if (!mp_os_event_wait(self->fd, POLLOUT)) {
             return mp_const_none;
         }
-        pico_fifo_exchange(&self->fifo, &ring, 0);
+        rp2_fifo_exchange(&self->fifo, &ring, 0);
     }
     size_t ret = 0;
     size_t fragment_size = self->fragment[3];
@@ -242,7 +242,7 @@ static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
             n_samples = audio_out_pwm_transcode(self, write_ptr, write_size, buf + ret, size - ret);
         }
 
-        pico_fifo_exchange(&self->fifo, &ring, n_samples * out_bytes_per_sample);
+        rp2_fifo_exchange(&self->fifo, &ring, n_samples * out_bytes_per_sample);
         uint events = audio_out_pwm_poll(self, &ring);
         event_notify(self->event, -1, events);
         ret += n_samples * in_bytes_per_sample;
@@ -261,12 +261,12 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audio_out_pwm_write_obj, 2, 3, audio_
 static mp_obj_t audio_out_pwm_drain(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
     ring_t ring;
-    pico_fifo_exchange(&self->fifo, &ring, 0);
+    rp2_fifo_exchange(&self->fifo, &ring, 0);
     while (ring_write_count(&ring) < ring.size) {
         if (!mp_os_event_wait(self->fd, POLLIN)) {
             return mp_const_none;
         }
-        pico_fifo_exchange(&self->fifo, &ring, 0);
+        rp2_fifo_exchange(&self->fifo, &ring, 0);
     }
     return MP_OBJ_NEW_SMALL_INT(0);
 }
@@ -274,14 +274,14 @@ static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_drain_obj, audio_out_pwm_drain);
 
 static mp_obj_t audio_out_pwm_start(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
-    pico_fifo_set_enabled(&self->fifo, true);
+    rp2_fifo_set_enabled(&self->fifo, true);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_start_obj, audio_out_pwm_start);
 
 static mp_obj_t audio_out_pwm_stop(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
-    pico_fifo_set_enabled(&self->fifo, false);
+    rp2_fifo_set_enabled(&self->fifo, false);
     pwm_set_both_levels(self->pwm_slice, self->top / 2, self->top / 2);
     return mp_const_none;
 }
@@ -306,10 +306,10 @@ static mp_obj_t audio_out_pwm_debug(mp_obj_t self_in) {
     printf("  stalls:      %u\n", self->stalls);
 
     if (self->pwm_slice != -1u) {
-        pico_pwm_debug(self->pwm_slice);
+        rp2_pwm_debug(self->pwm_slice);
     }
 
-    pico_fifo_debug(&self->fifo);
+    rp2_fifo_debug(&self->fifo);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_debug_obj, audio_out_pwm_debug);

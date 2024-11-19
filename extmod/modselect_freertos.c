@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <errno.h>
-#include <poll.h>
-#include "newlib/newlib.h"
+#include "morelib/poll.h"
 
 #include "FreeRTOS.h"
 

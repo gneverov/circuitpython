@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "newlib/flash_heap.h"
+#include "morelib/flash_heap.h"
 #include "py/runtime.h"
 
 #define FREEZE_MODULE_FLASH_HEAP_TYPE 101

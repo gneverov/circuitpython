@@ -5,12 +5,12 @@
 #if CFG_TUD_CDC
 #include <errno.h>
 #include <malloc.h>
-#include <poll.h>
 #include <signal.h>
-#include "newlib/dev.h"
-#include "newlib/ioctl.h"
-#include "newlib/newlib.h"
-#include "newlib/vfs.h"
+#include <sys/ioctl.h>
+#include "morelib/dev.h"
+#include "morelib/poll.h"
+#include "morelib/termios.h"
+#include "morelib/vfs.h"
 
 #include "FreeRTOS.h"
 #include "semphr.h"

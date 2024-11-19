@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "newlib/ring.h"
+#include "morelib/ring.h"
 
 #include "py/obj.h"
 

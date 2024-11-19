@@ -8,17 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/random.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/times.h>
 #include <sys/utsname.h>
 #include <unistd.h>
-#include "newlib/dlfcn.h"
-#include "newlib/event.h"
-#include "newlib/ioctl.h"
-#include "newlib/mount.h"
-#include "newlib/newlib.h"
+#include "morelib/dlfcn.h"
+#include "morelib/event.h"
+#include "morelib/mount.h"
 
 #include "extmod/modos_newlib.h"
 #include "py/objstr.h"
