@@ -76,17 +76,9 @@ set(TINYUF2_DIR "${MICROPY_DIR}/lib/tinyuf2")
 add_subdirectory(${MICROPY_PORT_DIR}/tinyuf2)
 set_target_visibility_hidden(tinyuf2)
 
-add_subdirectory(${MICROPY_PORT_DIR}/tinyusb)
-set_target_visibility_hidden(tinyusb_helper)
 set_target_visibility_hidden(tinyusb_device_base)
 set_target_visibility_hidden(tinyusb_common_base)
 set_target_visibility_hidden(tinyusb_device_base)
-
-add_subdirectory(${MICROPY_DIR}/lib/fatfs fatfs)
-set_target_visibility_hidden(fatfs)
-
-add_subdirectory(${MICROPY_DIR}/lib/dhara dhara)
-set_target_visibility_hidden(dhara)
 
 if(MICROPY_DYNLINK)
     add_dynamic_executable(${MICROPY_TARGET})
@@ -131,6 +123,7 @@ set(MICROPY_SOURCE_PORT
     mphalport.c
     mpthreadport.c
     newlib_drv.c
+    tinyusb/tusb_default_config.c
     usbd.c
     ${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c
 )
@@ -481,10 +474,11 @@ target_link_libraries(${MICROPY_TARGET}
     morelib_rp2
     morelib_fatfs
     morelib_littlefs
+    morelib_tinyusb
     tinyuf2
-    tinyusb_helper
     ${PICO_SDK_COMPONENTS}
 )
+target_include_directories(morelib_tinyusb INTERFACE tinyusb/include)
 
 if (MICROPY_HW_ENABLE_DOUBLE_TAP)
 # Enable double tap reset into bootrom.

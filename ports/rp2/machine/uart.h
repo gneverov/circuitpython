@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "rp2/uart.h"
+#include "py/obj.h"
 
 
 typedef struct {

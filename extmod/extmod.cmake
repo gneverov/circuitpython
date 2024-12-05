@@ -93,7 +93,7 @@ if(MICROPY_FREERTOS)
     
     list(APPEND MICROPY_SOURCE_EXTMOD   
         ${MICROPY_EXTMOD_DIR}/usb/modusb.c
-        # ${MICROPY_EXTMOD_DIR}/usb/usb_config.c
+        ${MICROPY_EXTMOD_DIR}/usb/usb_config.c
         ${MICROPY_EXTMOD_DIR}/usb/usb_msc.c
     )
  

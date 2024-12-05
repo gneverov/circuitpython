@@ -12,7 +12,7 @@
 #include "rp2/sdcard.h"
 #include "rp2/term_uart.h"
 #include "tinyuf2/tinyuf2.h"
-#include "tinyusb/terminal.h"
+#include "tinyusb/term_usb.h"
 
 
 const struct dev_driver *dev_drvs[] = {
@@ -21,7 +21,7 @@ const struct dev_driver *dev_drvs[] = {
     &mtd_drv,
     &mtdblk_drv,
     &term_uart_drv,
-    &usb_drv,
+    &term_usb_drv,
     &tinyuf2_drv,
 };
 const size_t dev_num_drvs = sizeof(dev_drvs) / sizeof(dev_drvs[0]);

@@ -81,7 +81,7 @@ static const mp_rom_map_elem_t usb_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MscDevice),       MP_ROM_PTR(&usb_msc_type) },
 #endif
 
-    // { MP_ROM_QSTR(MP_QSTR_UsbConfig),       MP_ROM_PTR(&usb_config_type) },
+    { MP_ROM_QSTR(MP_QSTR_UsbConfig),       MP_ROM_PTR(&usb_config_type) },
 };
 static MP_DEFINE_CONST_DICT(usb_module_globals, usb_module_globals_table);
 
