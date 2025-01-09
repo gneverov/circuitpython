@@ -3,18 +3,16 @@
 
 #pragma once
 
-#include "morelib/event.h"
-
 #include "rp2/fifo.h"
 #include "rp2/pio.h"
 
+#include "extmod/io/poll.h"
 #include "py/obj.h"
 
 
 typedef struct {
     mp_obj_base_t base;
-    int fd;
-    struct event_file *event;
+    mp_poll_t poll;
     PIO pio;
     pio_program_t program;
     uint loaded_offset;

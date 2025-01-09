@@ -1,12 +1,6 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include <poll.h>
-#include <unistd.h>
-
-#include "hardware/clocks.h"
-#include "hardware/gpio.h"
-#include "hardware/pwm.h"
 #include "pico/divider.h"
 #include "pico/rand.h"
 
@@ -23,8 +17,7 @@
 static void audio_out_pwm_irq_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
 
 static void audio_out_pwm_init(audio_out_pwm_obj_t *self) {
-    self->fd = -1;
-    self->event = NULL;
+    mp_poll_init(&self->poll);
     self->a_pin = -1u;
     self->b_pin = -1u;
     self->pwm_slice = -1u;
@@ -44,18 +37,7 @@ static void audio_out_pwm_deinit(audio_out_pwm_obj_t *self) {
         self->pwm_slice = -1u;
     }
 
-    if (self->event) {
-        vfs_release_file(&self->event->base);
-        self->event = NULL;
-    }
-    if (self->fd >= 0) {
-        close(self->fd);
-        self->fd = -1;
-    }
-}
-
-static bool audio_out_pwm_inited(audio_out_pwm_obj_t *self) {
-    return self->pwm_slice != -1u;
+    mp_poll_deinit(&self->poll);
 }
 
 static audio_out_pwm_obj_t *audio_out_pwm_get(mp_obj_t self_in) {
@@ -64,7 +46,7 @@ static audio_out_pwm_obj_t *audio_out_pwm_get(mp_obj_t self_in) {
 
 static audio_out_pwm_obj_t *audio_out_pwm_get_raise(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get(self_in);
-    if (!audio_out_pwm_inited(self)) {
+    if (self->pwm_slice == -1u) {
         mp_raise_OSError(MP_EBADF);
     }
     return self;
@@ -74,7 +56,7 @@ static uint audio_out_pwm_poll(audio_out_pwm_obj_t *self, const ring_t *ring) {
     uint events = 0;
     size_t write_count = ring_write_count(ring);
     events |= (write_count >= self->threshold) ? POLLOUT : 0;
-    events |= (write_count >= ring->size) ? POLLIN : 0;
+    events |= (write_count >= ring->size) ? POLLDRAIN : 0;
     return events;
 }
 
@@ -83,7 +65,7 @@ static void audio_out_pwm_irq_handler(rp2_fifo_t *fifo, const ring_t *ring, Base
     self->int_count++;
 
     uint events = audio_out_pwm_poll(self, ring);
-    event_notify_from_isr(self->event, -1, events, pxHigherPriorityTaskWoken);
+    poll_file_notify_from_isr(self->poll.file, 0, events, pxHigherPriorityTaskWoken);
 
     if (!ring_read_count(ring)) {
         pwm_set_both_levels(self->pwm_slice, self->top / 2, self->top / 2);
@@ -112,22 +94,12 @@ static mp_obj_t audio_out_pwm_make_new(const mp_obj_type_t *type, size_t n_args,
     int errcode = 0;
     audio_out_pwm_obj_t *self = mp_obj_malloc_with_finaliser(audio_out_pwm_obj_t, type);
     audio_out_pwm_init(self);
-
-    int eventfd = event_open(0, 0);
-    if (eventfd < 0) {
-        errcode = errno;
-        goto _finally;
-    }
-    self->fd = eventfd;
-    self->event = event_fdopen(eventfd);
-    if (!self->event) {
-        errcode = errno;
-        goto _finally;
-    }
-
     self->a_pin = a_pin;
     self->b_pin = b_pin;
     self->pwm_slice = pwm_slice;
+    if (mp_poll_alloc(&self->poll, POLLOUT | POLLDRAIN) < 0) {
+        goto _finally;
+    }
 
     self->top = (clock_get_hz(clk_sys) + (sample_rate / 2)) / sample_rate;
     if (phase_correct) {
@@ -205,6 +177,15 @@ static size_t audio_out_pwm_transcode(audio_out_pwm_obj_t *self, uint16_t *out_b
     return n_samples;
 }
 
+static void audio_out_pwm_wait(audio_out_pwm_obj_t *self, ring_t *ring) {
+    const size_t out_bytes_per_sample = sizeof(uint16_t);
+    TickType_t xTicksToWait = portMAX_DELAY;
+    do {
+        rp2_fifo_exchange(&self->fifo, ring, 0);
+    }
+    while ((ring_write_count(ring) < out_bytes_per_sample) && mp_poll_wait(&self->poll, POLLOUT, &xTicksToWait));
+}
+
 static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(args[0]);
     mp_buffer_info_t bufinfo;
@@ -218,16 +199,11 @@ static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
     const size_t in_bytes_per_sample = self->num_channels * self->bytes_per_sample;
     const size_t out_bytes_per_sample = sizeof(uint16_t);
     ring_t ring;
-    rp2_fifo_exchange(&self->fifo, &ring, 0);
-    while (ring_write_count(&ring) < out_bytes_per_sample) {
-        if (!mp_os_event_wait(self->fd, POLLOUT)) {
-            return mp_const_none;
-        }
-        rp2_fifo_exchange(&self->fifo, &ring, 0);
-    }
+    audio_out_pwm_wait(self, &ring);
     size_t ret = 0;
     size_t fragment_size = self->fragment[3];
     while ((size - ret + fragment_size >= in_bytes_per_sample) && (ring_write_count(&ring) >= out_bytes_per_sample)) {
+        poll_file_notify(self->poll.file, POLLOUT | POLLDRAIN, 0);
         size_t write_size;
         void *write_ptr = ring_at(&ring, ring.write_index, &write_size);
         write_size = MIN(write_size, ring_write_count(&ring));
@@ -244,7 +220,7 @@ static mp_obj_t audio_out_pwm_write(size_t n_args, const mp_obj_t *args) {
 
         rp2_fifo_exchange(&self->fifo, &ring, n_samples * out_bytes_per_sample);
         uint events = audio_out_pwm_poll(self, &ring);
-        event_notify(self->event, -1, events);
+        poll_file_notify(self->poll.file, 0, events);
         ret += n_samples * in_bytes_per_sample;
     }
     if (size - ret + fragment_size < in_bytes_per_sample) {
@@ -261,14 +237,12 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audio_out_pwm_write_obj, 2, 3, audio_
 static mp_obj_t audio_out_pwm_drain(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
     ring_t ring;
-    rp2_fifo_exchange(&self->fifo, &ring, 0);
-    while (ring_write_count(&ring) < ring.size) {
-        if (!mp_os_event_wait(self->fd, POLLIN)) {
-            return mp_const_none;
-        }
+    TickType_t xTicksToWait = portMAX_DELAY;
+    do {
         rp2_fifo_exchange(&self->fifo, &ring, 0);
     }
-    return MP_OBJ_NEW_SMALL_INT(0);
+    while (ring_read_count(&ring) && mp_poll_wait(&self->poll, POLLDRAIN, &xTicksToWait));
+    return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_drain_obj, audio_out_pwm_drain);
 
@@ -289,7 +263,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_stop_obj, audio_out_pwm_stop);
 
 static mp_obj_t audio_out_pwm_fileno(mp_obj_t self_in) {
     audio_out_pwm_obj_t *self = audio_out_pwm_get_raise(self_in);
-    return MP_OBJ_NEW_SMALL_INT(self->fd);
+    int fd = mp_poll_fileno(&self->poll);
+    return mp_os_check_ret(fd);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audio_out_pwm_fileno_obj, audio_out_pwm_fileno);
 

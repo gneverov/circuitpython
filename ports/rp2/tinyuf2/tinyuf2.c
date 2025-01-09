@@ -128,7 +128,7 @@ static int tinyuf2_pwrite(void *ctx, const void *buf, size_t size, off_t offset)
     return count;
 }
 
-static int tinyuf2_read(void *ctx, void *buf, size_t size) {
+static int tinyuf2_read(void *ctx, void *buf, size_t size, int flags) {
     struct tinyuf2_file *file = ctx;
     int ret = tinyuf2_pread(ctx, buf, size, file->ptr);
     if (ret >= 0) {
@@ -137,7 +137,7 @@ static int tinyuf2_read(void *ctx, void *buf, size_t size) {
     return ret;
 }
 
-static int tinyuf2_write(void *ctx, const void *buf, size_t size) {
+static int tinyuf2_write(void *ctx, const void *buf, size_t size, int flags) {
     struct tinyuf2_file *file = ctx;
     int ret = tinyuf2_pwrite(ctx, buf, size, file->ptr);
     if (ret >= 0) {
@@ -156,7 +156,7 @@ static const struct vfs_file_vtable tinyuf2_vtable = {
     .write = tinyuf2_write,
 };
 
-static void *tinyuf2_open(const void *ctx, dev_t dev, int flags, mode_t mode) {
+static void *tinyuf2_open(const void *ctx, dev_t dev, mode_t mode) {
     struct tinyuf2_file *file = NULL;
     dev_lock();
     if (tinyuf2_file) {
@@ -221,7 +221,7 @@ void board_flash_flush(void) {
         // free(alloc);
 
         // Increment ref counter on file object for the reference used by the new task.
-        file = (struct tinyuf2_file *)vfs_copy_file(&file->base);
+        vfs_copy_file(&file->base);
         if (xTaskCreate(tinyuf2_link, "uf2", 512, file, 1, NULL) != pdPASS) {
             vfs_release_file(&file->base);
         }

@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2023 Gregory Neverov
 // SPDX-License-Identifier: MIT
 
-#include <memory.h>
-#include <poll.h>
-#include <unistd.h>
-
 #include "./pio_sm.h"
 #include "machine_pin.h"
 #include "extmod/modos_newlib.h"
@@ -23,8 +19,7 @@ static void state_machine_rx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, 
 static void state_machine_tx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken);
 
 static void state_machine_init(state_machine_obj_t *self, uint16_t *instructions, uint8_t length) {
-    self->fd = -1;
-    self->event = NULL;
+    mp_poll_init(&self->poll);
     self->pio = NULL;
     self->program.instructions = self->instructions;
     self->program.length = length;
@@ -51,14 +46,15 @@ static void state_machine_pio_handler(PIO pio, enum pio_interrupt_source source,
     state_machine_obj_t *self = context;
     assert(source == pio_get_rx_fifo_not_empty_interrupt_source(self->sm));
 
+    pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), false);
     rp2_fifo_set_enabled(&self->rx_fifo, true);
-    event_notify_from_isr(self->event, 0, POLLIN, pxHigherPriorityTaskWoken);
+    poll_file_notify_from_isr(self->poll.file, 0, POLLIN, pxHigherPriorityTaskWoken);
     // wait for DMA to start
 }
 
 static void state_machine_rx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
-    state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, rx_fifo));
-    pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), ring_write_count(ring));
+    // state_machine_obj_t *self = (state_machine_obj_t *)((uint8_t *)fifo - offsetof(state_machine_obj_t, rx_fifo));
+    // pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), ring_write_count(ring));
 }
 
 static void state_machine_tx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, BaseType_t *pxHigherPriorityTaskWoken) {
@@ -66,13 +62,13 @@ static void state_machine_tx_fifo_handler(rp2_fifo_t *fifo, const ring_t *ring, 
 
     uint events = 0;
     if (!ring_read_count(ring)) {
-        events |= POLLPRI;
+        events |= POLLDRAIN;
         self->stalls++;
     }
     if (ring_write_count(ring) >= self->threshold) {
         events |= POLLOUT;
     }
-    event_notify_from_isr(self->event, POLLOUT | POLLPRI, events, pxHigherPriorityTaskWoken);
+    poll_file_notify_from_isr(self->poll.file, 0, events, pxHigherPriorityTaskWoken);
 }
 
 static void state_machine_deinit(state_machine_obj_t *self) {
@@ -90,14 +86,7 @@ static void state_machine_deinit(state_machine_obj_t *self) {
         pio_remove_program(self->pio, &self->program, self->loaded_offset);
         self->loaded_offset = -1;
     }
-    if (self->fd >= 0) {
-        close(self->fd);
-        self->fd = -1;
-    }
-    if (self->event) {
-        vfs_release_file(&self->event->base);
-        self->event = NULL;
-    }
+    mp_poll_deinit(&self->poll);
 }
 
 static bool state_machine_inited(state_machine_obj_t *self) {
@@ -172,14 +161,7 @@ static mp_obj_t state_machine_make_new(const mp_obj_type_t *type, size_t n_args,
 
     state_machine_obj_t *self = mp_obj_malloc_with_finaliser(state_machine_obj_t, type);
     state_machine_init(self, program_buf.buf, program_buf.len / sizeof(uint16_t));
-
-    int eventfd = event_open(0, 0);
-    if (eventfd < 0) {
-        goto cleanup;
-    }
-    self->fd = eventfd;
-    self->event = event_fdopen(eventfd);
-    if (!self->event) {
+    if (mp_poll_alloc(&self->poll, POLLOUT | POLLDRAIN) < 0) {
         goto cleanup;
     }
 
@@ -445,20 +427,19 @@ static mp_obj_t state_machine_readinto(mp_obj_t self_in, mp_obj_t b_in) {
     }
 
     ring_t ring;
-    rp2_fifo_exchange(&self->rx_fifo, &ring, 0);
-    while (ring_read_count(&ring) == 0) {
-        if (!mp_os_event_wait(self->fd, POLLIN)) {
-            return mp_const_none;
-        }
+    TickType_t xTicksToWait = portMAX_DELAY;
+    do {
         rp2_fifo_exchange(&self->rx_fifo, &ring, 0);
     }
+    while (!ring_read_count(&ring) && mp_poll_wait(&self->poll, POLLIN, &xTicksToWait));
 
-    void *buf = bufinfo.buf;
-    size_t len = bufinfo.len;
-    size_t ret = rp2_fifo_transfer(&self->rx_fifo, buf, len);
-    if (ret >= ring_read_count(&ring)) {
-        event_notify(self->event, POLLIN, 0);
+    poll_file_notify(self->poll.file, POLLIN, 0);
+    size_t ret = rp2_fifo_transfer(&self->rx_fifo, bufinfo.buf, bufinfo.len);
+    if (ret < ring_read_count(&ring)) {
+        poll_file_notify(self->poll.file, 0, POLLIN);
+    } else {
         rp2_fifo_set_enabled(&self->rx_fifo, false);
+        pio_set_irq0_source_enabled(self->pio, pio_get_rx_fifo_not_empty_interrupt_source(self->sm), true);
     }
     return mp_obj_new_int(ret);
 }
@@ -478,24 +459,16 @@ static mp_obj_t state_machine_write(size_t n_args, const mp_obj_t *args) {
     }
 
     ring_t ring;
-    rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
-    while (ring_write_count(&ring) == 0) {
-        if (!mp_os_event_wait(self->fd, POLLOUT)) {
-            return mp_const_none;
-        }
+    TickType_t xTicksToWait = portMAX_DELAY;
+    do {
         rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     }
+    while (!ring_write_count(&ring) && mp_poll_wait(&self->poll, POLLOUT, &xTicksToWait));
 
+    poll_file_notify(self->poll.file, POLLOUT | POLLDRAIN, 0);
     size_t ret = rp2_fifo_transfer(&self->tx_fifo, buf, len);
-    uint events = 0;
-    if (ret > 0) {
-        events |= POLLPRI;
-    }
-    if (ret >= ring_write_count(&ring)) {
-        events |= POLLOUT;
-    }
-    if (events) {
-        event_notify(self->event, events, 0);
+    if (ret < ring_write_count(&ring)) {
+        poll_file_notify(self->poll.file, 0, POLLOUT);
     }
     return mp_obj_new_int(ret);
 }
@@ -505,13 +478,12 @@ static mp_obj_t state_machine_drain(mp_obj_t self_in) {
     state_machine_obj_t *self = state_machine_get_raise(self_in);
 
     ring_t ring;
-    rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
-    while (ring_write_count(&ring) > 0) {
-        if (!mp_os_event_wait(self->fd, POLLPRI)) {
-            return mp_const_none;
-        }
+    TickType_t xTicksToWait = portMAX_DELAY;
+    do {
         rp2_fifo_exchange(&self->tx_fifo, &ring, 0);
     }
+    while (ring_read_count(&ring) && mp_poll_wait(&self->poll, POLLDRAIN, &xTicksToWait));
+
     if (self->tx_fifo.channel < 0) {
         mp_raise_ValueError(NULL);
     }

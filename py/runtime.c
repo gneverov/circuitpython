@@ -1122,12 +1122,19 @@ void mp_convert_member_lookup(mp_obj_t self, const mp_obj_type_t *type, mp_obj_t
             // `member` is a function that binds self as its first argument.
             if (m_type->flags & MP_TYPE_FLAG_BUILTIN_FUN) {
                 // `member` is a built-in function, which has special behaviour.
+                /*
+                 * The root cause of this problem is that all built-in functions are marked
+                 * BINDS_SELF, but not all of them actually do. So the code below fixes the problem
+                 * for non-BINDS_SELF built-in functions but breaks it for BINDS_SELF built-in
+                 * functions.
+                 *
                 if (mp_obj_is_instance_type(type)) {
                     // Built-in functions on user types always behave like a staticmethod.
                     dest[0] = member;
                 }
+                */
                 #if MICROPY_BUILTIN_METHOD_CHECK_SELF_ARG
-                else if (self == MP_OBJ_NULL && type != &mp_type_object) {
+                if (self == MP_OBJ_NULL && type != &mp_type_object) {
                     // `member` is a built-in method without a first argument, so wrap
                     // it in a type checker that will check self when it's supplied.
                     // Note that object will do its own checking so shouldn't be wrapped.

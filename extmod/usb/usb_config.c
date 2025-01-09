@@ -336,7 +336,7 @@ static mp_obj_t usb_config_net_ecm(size_t n_args, const mp_obj_t *args, mp_map_t
     elem = mp_map_lookup(kws, MP_OBJ_NEW_QSTR(MP_QSTR_str), MP_MAP_LOOKUP);
     uint8_t str_idx = usb_config_str(self, elem ? elem->value : NULL, NULL);
   
-    size_t itf = cfg_desc->bNumInterfaces;
+    size_t itf = self->cfg_desc->bNumInterfaces;
     assert(itf + 1 < CFG_TUD_INTERFACE_MAX);
     size_t ep_idx = self->ep_idx;
     uint8_t desc[] = {

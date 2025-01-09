@@ -28,14 +28,18 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <malloc.h>
+#include <netinet/in.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include "morelib/ioctl.h"
 #include "morelib/mount.h"
+#include "morelib/telnet.h"
 #include "morelib/thread.h"
+#include "tinyusb/net_device_lwip.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -235,22 +239,43 @@ static void set_time(void) {
     }
 }
 
+static void telnet_accept(void *arg, int fd) {
+    int mux_fd = (intptr_t)arg;
+    if (ioctl(mux_fd, TMUX_ADD, fd) < 0) {
+        write(fd, "Service Unavailable\r\n", 21);
+    }
+    close(fd);
+}
+
 static void setup_tty(void) {
-    const char *tty = getenv("TTY");
-    int fd = -1;
-    if (tty) {
-        fd = open(tty, O_RDWR, 0);
-    }
-    if (fd < 0) {
-        // If the specified tty failed, try opening the default
-        fd = open(DEFAULT_TTY, O_RDWR, 0);
-    }
-    if (fd < 0) {
+    int mux_fd = open("/dev/tmux", O_RDWR, 0);
+    if (mux_fd < 0) {
         perror("failed up open terminal");
         return;
     }
+
+    int s_fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY, 0);
+    telnet_accept((void *)mux_fd, s_fd);
+
+    int usb_fd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY, 0);
+    telnet_accept((void *)mux_fd, usb_fd);
+
+    #if MICROPY_PY_LWIP
+    struct sockaddr_in address = {
+        .sin_family = AF_INET,
+        .sin_port = htons(23),
+        .sin_addr = { .s_addr = htonl(INADDR_ANY) },
+    };
+    static struct telnet_server server;
+    int ret = telnet_server_init(&server, (struct sockaddr *)&address, sizeof(address), telnet_accept, (void *)mux_fd);
+    if (ret < 0) {
+        perror("failed to start telnet server");
+        close(mux_fd);
+    }
+    #else
     // Successful open of tty installs it on stdio fds, so we an close our fd.
-    close(fd);
+    close(mux_fd);
+    #endif
 }
 
 static int mount_root_fs(void) {

@@ -91,8 +91,7 @@ set(MICROPY_QSTRDEFS_PORT
 )
 
 set(MICROPY_SOURCE_LIB
-    ${MICROPY_DIR}/shared/netutils/dhcpserver.c
-    ${MICROPY_DIR}/shared/netutils/netutils.c
+    # ${MICROPY_DIR}/shared/netutils/dhcpserver.c
     ${MICROPY_DIR}/shared/netutils/trace.c
     ${MICROPY_DIR}/shared/readline/readline.c
     ${MICROPY_DIR}/shared/runtime/gchelper_thumb1.s
@@ -200,11 +199,12 @@ if(MICROPY_PY_LWIP)
         ${PICO_TINYUSB_PATH}/lib/networking/rndis_reports.c
     )
 
-    target_link_libraries(${MICROPY_TARGET} lwip_helper)
+    target_link_libraries(${MICROPY_TARGET} lwip_helper morelib_lwip)
 
     list(APPEND PICO_SDK_COMPONENTS
         pico_lwip_core
         pico_lwip_core4
+        pico_lwip_core6
         pico_lwip_contrib_freertos
         # pico_lwip_freertos
         pico_lwip_mdns
@@ -216,9 +216,6 @@ if(MICROPY_PY_LWIP)
         ${PICO_LWIP_PATH}/src/netif/ethernet.c
     )
 
-    target_include_directories(${MICROPY_TARGET} PRIVATE
-        lwip_inc
-    )
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_LWIP=1
     )

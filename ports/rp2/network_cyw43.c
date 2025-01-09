@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "morelib/poll.h"
 
 #include "FreeRTOS.h"
 #include "timers.h"
@@ -33,7 +34,6 @@
 #include "py/runtime.h"
 #include "py/objstr.h"
 #include "py/mphal.h"
-#include "py/poll.h"
 
 #if MICROPY_PY_NETWORK_CYW43
 
@@ -84,10 +84,10 @@ static void network_cyw43_print(const mp_print_t *print, mp_obj_t self_in, mp_pr
     mp_printf(print, "<CYW43 %s %s %u.%u.%u.%u>",
         self->itf == CYW43_ITF_STA ? "STA" : "AP",
         status_str,
-        netif->ip_addr.addr & 0xff,
-        netif->ip_addr.addr >> 8 & 0xff,
-        netif->ip_addr.addr >> 16 & 0xff,
-        netif->ip_addr.addr >> 24
+        ip_2_ip4(&netif->ip_addr)->addr & 0xff,
+        ip_2_ip4(&netif->ip_addr)->addr >> 8 & 0xff,
+        ip_2_ip4(&netif->ip_addr)->addr >> 16 & 0xff,
+        ip_2_ip4(&netif->ip_addr)->addr >> 24
         );
 }
 
@@ -316,7 +316,7 @@ static mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_m
 
     // Start the scan
     xSemaphoreTake(pcb->mutex, portMAX_DELAY);
-    ulTaskNotifyValueClear(NULL, -1);
+    ulTaskNotifyTake(pdTRUE, 0);
     int scan_res = cyw43_wifi_scan(self->cyw, &opts, pbuf, network_cyw43_scan_cb);
     if (scan_res >= 0) {
         pcb->scan_active = true;
@@ -333,7 +333,7 @@ static mp_obj_t network_cyw43_scan(size_t n_args, const mp_obj_t *pos_args, mp_m
     struct pbuf *results = NULL;
     if (scan_res >= 0) {
         TickType_t timeout = pdMS_TO_TICKS(10000);
-        while (mp_ulTaskNotifyTake(pdTRUE, &timeout)) {
+        while (poll_wait(&timeout)) {
             xSemaphoreTake(pcb->mutex, portMAX_DELAY);
             bool scan_active = pcb->scan_active;
             xSemaphoreGive(pcb->mutex);

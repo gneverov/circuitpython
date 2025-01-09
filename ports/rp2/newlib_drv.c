@@ -50,6 +50,7 @@ const struct devfs_entry devfs_entries[] = {
     // { "/dhara", S_IFBLK, DEV_DHARA, dhara_open },
 
     { "/tty", S_IFCHR, DEV_TTY },
+    { "/tmux", S_IFCHR, DEV_TMUX },
 
     { "/ttyS0", S_IFCHR, DEV_TTYS0 },
     { "/ttyS1", S_IFCHR, DEV_TTYS1 },

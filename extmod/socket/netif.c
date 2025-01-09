@@ -6,26 +6,30 @@
 
 #include "lwip/dhcp.h"
 #include "lwip/dns.h"
+#include "lwip/err.h"
 #include "lwip/netif.h"
 
-#include "./error.h"
-#include "./netif.h"
-#include "./socket.h"
-#include "shared/netutils/netutils.h"
+#include "extmod/io/poll.h"
+#include "extmod/modos_newlib.h"
+#include "extmod/socket/netif.h"
+#include "extmod/socket/socket.h"
 #include "py/gc.h"
-#include "py/mperrno.h"
-#include "py/obj.h"
-#include "py/qstr.h"
 #include "py/runtime.h"
 
 
 typedef struct {
     mp_obj_base_t base;
+    mp_poll_t poll;
     u8_t index;
-    mp_stream_poll_t poll;
 } netif_obj_t;
 
 typedef err_t (*netif_func_t)(struct netif *netif, va_list args);
+
+static void socket_lwip_raise(err_t err) {
+    if (err != ERR_OK) {
+        mp_raise_OSError(err_to_errno(err));
+    }
+}
 
 static err_t netif_vcall(u8_t index, netif_func_t func, va_list args) {
     err_t err;
@@ -83,11 +87,11 @@ static mp_obj_t netif_make_new(const mp_obj_type_t *type, size_t n_args, const m
 
     if (!self) {
         self = mp_obj_malloc_with_finaliser(netif_obj_t, type);
+        mp_poll_init(&self->poll);
         self->index = index;
-        mp_stream_poll_init(&self->poll);
         netif_call_raise(index, netif_lwip_set, self);
+        mp_os_check_ret(mp_poll_alloc(&self->poll, 0));
     }
-
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -99,6 +103,7 @@ static mp_obj_t netif_new(u8_t index) {
 static mp_obj_t netif_del(mp_obj_t self_in) {
     netif_obj_t *self = MP_OBJ_TO_PTR(self_in);
     netif_call(self->index, netif_lwip_set, NULL);
+    mp_poll_deinit(&self->poll);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(netif_del_obj, netif_del);
@@ -111,6 +116,28 @@ static err_t netif_lwip_dict(struct netif *netif, va_list args) {
     return ERR_OK;
 }
 
+mp_obj_t netif_inet_ntoa(const ip_addr_t *ipaddr) {
+    vstr_t vstr;
+    vstr_init(&vstr, IPADDR_STRLEN_MAX);
+    const char *s = ipaddr_ntoa_r(ipaddr, vstr.buf, vstr.alloc);
+    vstr.len = strnlen(s, vstr.alloc);
+    return mp_obj_new_str_from_vstr(&vstr);
+}
+
+void netif_inet_aton(mp_obj_t addr_in, ip_addr_t *ipaddr) {
+    const char *addr = mp_obj_str_get_str(addr_in);
+    if (!ipaddr_aton(addr, ipaddr)) {
+        mp_raise_ValueError(NULL);
+    }
+}
+
+static void netif_inet4_aton(mp_obj_t addr_in, ip4_addr_t *ipaddr) {
+    const char *addr = mp_obj_str_get_str(addr_in);
+    if (!ip4addr_aton(addr, ipaddr)) {
+        mp_raise_ValueError(NULL);
+    }
+}
+
 static mp_obj_t netif_dict(mp_obj_t self_in) {
     netif_obj_t *self = MP_OBJ_TO_PTR(self_in);
     struct netif netif;
@@ -119,10 +146,23 @@ static mp_obj_t netif_dict(mp_obj_t self_in) {
 
     mp_obj_t dict = mp_obj_new_dict(16);
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_index), MP_OBJ_NEW_SMALL_INT(netif_get_index(&netif)));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_address), netutils_format_ipv4_addr((uint8_t *)netif_ip_addr4(&netif), NETUTILS_BIG));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_gateway), netutils_format_ipv4_addr((uint8_t *)netif_ip_gw4(&netif), NETUTILS_BIG));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_netmask), netutils_format_ipv4_addr((uint8_t *)netif_ip_netmask4(&netif), NETUTILS_BIG));
+    #if LWIP_IPV4
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_address), netif_inet_ntoa(netif_ip_addr4(&netif)));
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_gateway), netif_inet_ntoa(netif_ip_gw4(&netif)));
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_netmask), netif_inet_ntoa(netif_ip_netmask4(&netif)));
+    #endif
+    #if LWIP_DHCP
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_dhcp), mp_obj_new_bool(dhcp_supplied_address(&netif)));
+    #endif
+    #if LWIP_IPV6
+    mp_obj_t list = mp_obj_new_list(0, NULL);
+    for (size_t i = 0; i < LWIP_IPV6_NUM_ADDRESSES; i++) {
+        if (ip6_addr_isvalid(netif_ip6_addr_state(&netif, i))) {
+            mp_obj_list_append(list, netif_inet_ntoa(netif_ip_addr6(&netif, i)));
+        }
+    }
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_addresses), list);
+    #endif
 
     vstr_t hwaddr;
     vstr_init(&hwaddr, ETH_HWADDR_LEN * 3);
@@ -132,10 +172,6 @@ static mp_obj_t netif_dict(mp_obj_t self_in) {
     vstr_cut_tail_bytes(&hwaddr, 1);
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_mac), mp_obj_new_str_from_vstr(&hwaddr));
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_mtu), MP_OBJ_NEW_SMALL_INT(netif.mtu));
-
-    const char *hostname = netif_get_hostname(&netif);
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_hostname), mp_obj_new_str(hostname, strlen(hostname)));
-
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_enabled), mp_obj_new_bool(netif_is_up(&netif)));
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_link_up), mp_obj_new_bool(netif_is_link_up(&netif)));
 
@@ -175,7 +211,7 @@ static void netif_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind
     netif_call_raise(self->index, netif_lwip_dict, &netif, name);
 
     char address[IP4ADDR_STRLEN_MAX];
-    ip4addr_ntoa_r(netif_ip_addr4(&netif), address, IP4ADDR_STRLEN_MAX);
+    ip4addr_ntoa_r(netif_ip4_addr(&netif), address, IP4ADDR_STRLEN_MAX);
     if (netif_is_up(&netif)) {
         mp_printf(print, "NetInterface(name=%s, address=%s, link=%s)", name, address, netif_is_link_up(&netif) ? "up" : "down");
     }
@@ -185,27 +221,30 @@ static void netif_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind
 }
 
 static err_t netif_lwip_configure(struct netif *netif, va_list args) {
-    ip_addr_t *address = va_arg(args, ip4_addr_t *);
-    ip_addr_t *netmask = va_arg(args, ip4_addr_t *);
-    ip_addr_t *gateway = va_arg(args, ip4_addr_t *);
+    ip4_addr_t *address = va_arg(args, ip4_addr_t *);
+    ip4_addr_t *netmask = va_arg(args, ip4_addr_t *);
+    ip4_addr_t *gateway = va_arg(args, ip4_addr_t *);
     netif_set_addr(netif, address, netmask, gateway);
+    #if LWIP_DHCP
     dhcp_inform(netif);
+    #endif
     return ERR_OK;
 }
 
 static mp_obj_t netif_configure(size_t n_args, const mp_obj_t *args) {
     netif_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    ip_addr_t address, netmask, gateway;
-    netutils_parse_ipv4_addr(args[1], (uint8_t *)&address, NETUTILS_BIG);
-    netutils_parse_ipv4_addr(args[2], (uint8_t *)&netmask, NETUTILS_BIG);
-    netutils_parse_ipv4_addr(args[3], (uint8_t *)&gateway, NETUTILS_BIG);    
+    ip4_addr_t address, netmask, gateway;
+    netif_inet4_aton(args[1], &address);
+    netif_inet4_aton(args[2], &netmask);
+    netif_inet4_aton(args[3], &gateway);    
 
     netif_call_raise(self->index, netif_lwip_configure, &address, &netmask, &gateway);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(netif_configure_obj, 4, 4, netif_configure);
 
+#if LWIP_DHCP
 static err_t netif_lwip_dhcp_start(struct netif *netif, va_list args) {
     return dhcp_start(netif);
 }
@@ -240,6 +279,7 @@ static mp_obj_t netif_dhcp_renew(mp_obj_t self_in) {
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(netif_dhcp_renew_obj, netif_dhcp_renew);
+#endif
 
 static err_t netif_lwip_enable(struct netif *netif, va_list args) {
     int enable = va_arg(args, int);
@@ -247,7 +287,9 @@ static err_t netif_lwip_enable(struct netif *netif, va_list args) {
         netif_set_up(netif);
     }
     else {
+        #if LWIP_DHCP
         dhcp_release_and_stop(netif);
+        #endif
         netif_set_down(netif);
     }
     return ERR_OK;
@@ -264,72 +306,53 @@ static MP_DEFINE_CONST_FUN_OBJ_2(netif_enable_obj, netif_enable);
 static void netif_lwip_status_callback(struct netif *netif) {
     netif_obj_t *self = netif_get_client_data(netif, netif_lwip_client_id());
     if (self) {
-        mp_stream_poll_signal(&self->poll, MP_STREAM_POLL_RD, NULL);
+        poll_file_notify(self->poll.file, 0, POLLIN);
     }
     netif_set_status_callback(netif, NULL);
 }
 
 static err_t netif_lwip_wait(struct netif *netif, va_list args) {
+    netif_obj_t *self = va_arg(args, netif_obj_t *);
     if (ip_addr_isany(netif_ip_addr4(netif)) || !netif_is_link_up(netif)) {
+        poll_file_notify(self->poll.file, POLLIN, 0);
         netif_set_status_callback(netif, netif_lwip_status_callback);
         return ERR_WOULDBLOCK;
     }
     return ERR_OK;
 }
 
-static mp_uint_t netif_wait_nonblock(mp_obj_t stream_obj, void *buf, mp_uint_t len, int *errcode) {
-    netif_obj_t *self = MP_OBJ_TO_PTR(stream_obj);
-    err_t err = netif_call(self->index, netif_lwip_wait);
-    return socket_lwip_err(err, errcode) ? MP_STREAM_ERROR : 0;
-}
-
 static mp_obj_t netif_wait(size_t n_args, const mp_obj_t *args) {
-    TickType_t timeout = portMAX_DELAY;
+    netif_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int timeout = -1;
     if ((n_args > 1) && (args[1] != mp_const_none)) {
-        timeout = pdMS_TO_TICKS(mp_obj_get_int(args[1]));
+        timeout = mp_obj_get_int(args[1]);
     }
 
-    int errcode;
-    if (mp_poll_block(args[0], NULL, 0, &errcode, netif_wait_nonblock, MP_STREAM_POLL_RD, timeout, false) == MP_STREAM_ERROR) {
-        mp_raise_OSError(errcode);
+    TickType_t xTicksToWait = (timeout < 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout);
+    err_t err;
+    do {
+        err = netif_call(self->index, netif_lwip_wait, self);
     }
+    while ((err == ERR_WOULDBLOCK) && mp_poll_wait(&self->poll, POLLIN, &xTicksToWait));
+
+    socket_lwip_raise(err);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(netif_wait_obj, 1, 2, netif_wait);
-
-static mp_uint_t netif_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
-    netif_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    uint32_t ret;
-    switch (request) {
-        case MP_STREAM_POLL_CTL:
-            LOCK_TCPIP_CORE();
-            ret = mp_stream_poll_ctl(&self->poll, (void*)arg, errcode);
-            UNLOCK_TCPIP_CORE();
-            break;
-        default:
-            *errcode = MP_EINVAL;
-            ret = MP_STREAM_ERROR;
-            break;
-    }
-    return ret;
-}
 
 static const mp_rom_map_elem_t netif_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__),         MP_ROM_PTR(&netif_del_obj) },
     { MP_ROM_QSTR(MP_QSTR___dict__),        MP_ROM_PTR(&netif_dict_obj) },
     { MP_ROM_QSTR(MP_QSTR_configure),       MP_ROM_PTR(&netif_configure_obj) },
+    #if LWIP_DHCP
     { MP_ROM_QSTR(MP_QSTR_dhcp_start),      MP_ROM_PTR(&netif_dhcp_start_obj) },
     { MP_ROM_QSTR(MP_QSTR_dhcp_stop),       MP_ROM_PTR(&netif_dhcp_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_dhcp_renew),      MP_ROM_PTR(&netif_dhcp_renew_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_enable),          MP_ROM_PTR(&netif_enable_obj) },
     { MP_ROM_QSTR(MP_QSTR_wait),            MP_ROM_PTR(&netif_wait_obj) },
 };
 static MP_DEFINE_CONST_DICT(netif_locals_dict, netif_locals_dict_table);
-
-static const mp_stream_p_t netif_stream_p = {
-    .ioctl = netif_ioctl,
-    .can_poll = 1,
-};
 
 MP_DEFINE_CONST_OBJ_TYPE(
     netif_type,
@@ -338,7 +361,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     // make_new, netif_make_new,
     print, netif_print,
     attr, netif_attr,
-    protocol, &netif_stream_p,
     locals_dict, &netif_locals_dict
     );
 
@@ -472,7 +494,7 @@ static mp_obj_t netif_dns_servers_get(void) {
         if (ip_addr_isany(&dns_servers[i])) {
             continue;
         }
-        items[len++] = netutils_format_ipv4_addr((uint8_t *)&dns_servers[i], NETUTILS_BIG);
+        items[len++] = netif_inet_ntoa(&dns_servers[i]);
     }
     return mp_obj_new_list(len, items);
 }
@@ -487,7 +509,7 @@ static mp_obj_t netif_dns_servers_set(mp_obj_t value) {
     
     ip_addr_t dns_servers[DNS_MAX_SERVERS];
     for (size_t i = 0; i < len; i++) {
-        netutils_parse_ipv4_addr(items[i], (uint8_t *)&dns_servers[i], NETUTILS_BIG);
+        netif_inet_aton(items[i], &dns_servers[i]);
     }
     
     LOCK_TCPIP_CORE();

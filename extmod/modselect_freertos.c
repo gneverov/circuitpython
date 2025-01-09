@@ -86,10 +86,9 @@ static MP_DEFINE_CONST_FUN_OBJ_3(select_poll_modify_obj, select_poll_modify);
 static mp_obj_t select_poll_poll(size_t n_args, const mp_obj_t *args) {
     select_obj_poll_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_int_t timeout_ms = (n_args > 1 && args[1] != mp_const_none) ? mp_obj_get_int(args[1]) : -1;
-    TickType_t timeout = timeout_ms >= 0 ? pdMS_TO_TICKS(timeout_ms) : portMAX_DELAY;
 
     int ret;
-    MP_OS_CALL(ret, poll_ticks, self->fds, self->nfds, &timeout);
+    MP_OS_CALL(ret, poll, self->fds, self->nfds, timeout_ms);
     mp_os_check_ret(ret);
 
     mp_obj_t result = mp_obj_new_list(ret, NULL);

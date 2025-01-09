@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <errno.h>
+
 #include "py/obj.h"
 
 
@@ -40,15 +42,7 @@ bool mp_os_nonblocking_ret(int ret);
 
 int mp_os_get_fd(mp_obj_t obj_in);
 
-bool mp_os_event_wait(int fd, uint events);
-
-mp_obj_t mp_os_isatty(mp_obj_t fd_in);
-
-mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in);
-
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(mp_os_open_obj);
-
-mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in);
 
 int mp_os_read_vstr(int fd, vstr_t *vstr, size_t size);
 

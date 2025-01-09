@@ -3,9 +3,9 @@
 
 #include "lwip/apps/sntp.h"
 
+#include "extmod/socket/netif.h"
 #include "extmod/socket/sntp.h"
 #include "py/runtime.h"
-#include "shared/netutils/netutils.h"
 
 
 static mp_obj_t sntp_sntp_get(void) {
@@ -27,7 +27,7 @@ static mp_obj_t sntp_sntp_get(void) {
     mp_obj_t items[SNTP_MAX_SERVERS];
     for (size_t i = 0; i < SNTP_MAX_SERVERS; i++) {
         if (!ip_addr_isany(&sntp_servers[i])) {
-            items[len++] = netutils_format_ipv4_addr((uint8_t *)&sntp_servers[i], NETUTILS_BIG);
+            items[len++] = netif_inet_ntoa(&sntp_servers[i]);
         }
     }
     return mp_obj_new_list(len, items);    
@@ -54,7 +54,7 @@ mp_obj_t sntp_sntp(size_t n_args, const mp_obj_t *args) {
     }
     ip_addr_t sntp_servers[SNTP_MAX_SERVERS];
     for (size_t i = 0; i < len; i++) {
-        netutils_parse_ipv4_addr(items[i], (uint8_t *)&sntp_servers[i], NETUTILS_BIG);
+        netif_inet_aton(items[i], &sntp_servers[i]);
     }
 
     LOCK_TCPIP_CORE();

@@ -9,6 +9,29 @@
 
 static const char *parse_arg(const mp_obj_t arg, const char *format, qstr name, va_list *vals) {
     switch (*format) {
+        case '(': {
+            format++;
+            if (arg != MP_OBJ_NULL) {
+                size_t len;
+                mp_obj_t *items;
+                mp_obj_tuple_get(arg, &len, &items);
+                for (size_t i = 0; i < len; i++) {
+                    format = parse_arg(items[i], format, MP_QSTR_, vals);
+                }
+            } else {
+                while (*format != ')') {
+                    format = parse_arg(MP_OBJ_NULL, format, MP_QSTR_, vals);
+                }
+            }
+            if (*format == ')') {
+                format++;
+                break;
+            }
+        }
+        case ')': {
+            mp_raise_TypeError(NULL);
+            break;
+        }
         case 's':
         case 'z': {
             bool optional = *format == 'z';
@@ -162,7 +185,9 @@ void vparse_args_and_kw(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args, 
 void parse_args_and_kw_map(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args, const char *format, const qstr keywords[], ...) {
     va_list vals;
     va_start(vals, keywords);
-    vparse_args_and_kw(n_args, args, kw_args, format, keywords, vals);
+    mp_map_t empty;
+    mp_map_init(&empty, 0);
+    vparse_args_and_kw(n_args, args, kw_args ? kw_args : &empty, format, keywords, vals);
     va_end(vals);
 }
 

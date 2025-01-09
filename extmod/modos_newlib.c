@@ -16,7 +16,6 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 #include "morelib/dlfcn.h"
-#include "morelib/event.h"
 #include "morelib/mount.h"
 
 #include "extmod/modos_newlib.h"
@@ -27,7 +26,7 @@
 __attribute__((visibility("hidden")))
 mp_obj_t mp_os_check_ret(int ret) {
     if (ret >= 0) {
-        return mp_obj_new_int(ret);
+        return MP_OBJ_NEW_SMALL_INT(ret);
     } else {
         mp_raise_OSError(errno);
     }
@@ -46,16 +45,6 @@ int mp_os_get_fd(mp_obj_t obj_in) {
         obj_in = mp_call_method_n_kw(0, 0, args);
     }
     return mp_obj_get_int(obj_in);
-}
-
-bool mp_os_event_wait(int fd, uint events) {
-    int ret;
-    MP_OS_CALL(ret, event_wait, fd, events);
-    if (mp_os_nonblocking_ret(ret)) {
-        return false;
-    }
-    mp_os_check_ret(ret);
-    return true;
 }
 
 static const MP_DEFINE_STR_OBJ(mp_os_name_obj, "posix");
@@ -182,8 +171,7 @@ static mp_obj_t mp_os_fsync(mp_obj_t fd_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_fsync_obj, mp_os_fsync);
 
-__attribute__((visibility("hidden")))
-mp_obj_t mp_os_isatty(mp_obj_t fd_in) {
+static mp_obj_t mp_os_isatty(mp_obj_t fd_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     int ret = isatty(fd);
     mp_os_check_ret(ret);
@@ -191,8 +179,7 @@ mp_obj_t mp_os_isatty(mp_obj_t fd_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_isatty_obj, mp_os_isatty);
 
-__attribute__((visibility("hidden")))
-mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in) {
+static mp_obj_t mp_os_lseek(mp_obj_t fd_in, mp_obj_t pos_in, mp_obj_t whence_in) {
     mp_int_t fd = mp_obj_get_int(fd_in);
     mp_int_t pos = mp_obj_get_int(pos_in);
     mp_int_t whence = mp_obj_get_int(whence_in);
@@ -507,10 +494,9 @@ static mp_obj_t mp_os_sync(void) {
     MP_THREAD_GIL_ENTER();
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_0(mp_os_sync_obj, mp_os_sync);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_sync_obj, mp_os_sync);
 
-__attribute__((visibility("hidden")))
-mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in) {
+static mp_obj_t mp_os_truncate(mp_obj_t path_in, mp_obj_t length_in) {
     int ret;
     if (mp_obj_is_int(path_in)) {
         mp_int_t fd = mp_obj_get_int(path_in);
@@ -619,7 +605,7 @@ static mp_obj_t mp_os_dlerror(void) {
     };
     nlr_raise(mp_obj_exception_make_new(&mp_type_OSError, error_len ? 2 : 1, 0, args));
 }
-MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dlerror_obj, mp_os_dlerror);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dlerror_obj, mp_os_dlerror);
 
 static mp_obj_t mp_os_dlflash(mp_obj_t file_in) {
     const char *file = mp_obj_str_get_str(file_in);
@@ -629,7 +615,7 @@ static mp_obj_t mp_os_dlflash(mp_obj_t file_in) {
     }
     return mp_obj_new_int((intptr_t)result);
 }
-MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlflash_obj, mp_os_dlflash);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlflash_obj, mp_os_dlflash);
 
 static mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
     const char *file = mp_obj_str_get_str(file_in);
@@ -639,7 +625,7 @@ static mp_obj_t mp_os_dlopen(mp_obj_t file_in) {
     }
     return mp_obj_new_int((intptr_t)result);
 }
-MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlopen_obj, mp_os_dlopen);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_os_dlopen_obj, mp_os_dlopen);
 
 static mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
     void *handle = (void *)mp_obj_get_int(handle_in);
@@ -659,7 +645,7 @@ static mp_obj_t mp_os_dlsym(mp_obj_t handle_in, mp_obj_t symbol_in) {
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dlsym_obj, mp_os_dlsym);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_os_dlsym_obj, mp_os_dlsym);
 
 static mp_obj_t mp_os_dllist(void) {
     mp_obj_t list = mp_obj_new_list(0, NULL);
@@ -685,7 +671,7 @@ static mp_obj_t mp_os_dllist(void) {
     }
     return list;
 }
-MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dllist_obj, mp_os_dllist);
 
 #ifndef NDEBUG
 static mp_obj_t mp_os_dldebug(void) {
@@ -711,7 +697,7 @@ static mp_obj_t mp_os_dldebug(void) {
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dldebug_obj, mp_os_dldebug);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_os_dldebug_obj, mp_os_dldebug);
 #endif
 
 static mp_obj_t mp_os_mkfs(mp_obj_t source_in, mp_obj_t type_in) {

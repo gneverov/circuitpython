@@ -13,6 +13,9 @@ E.g., "s" is the character in the format string and "const char **str" is the ty
 s - const char **str
 parses object to C string
 
+z - const char **str
+parses object to C string, or None to NULL
+
 s* - mp_buffer_info_t *buf
 parses object to MP buffer
 

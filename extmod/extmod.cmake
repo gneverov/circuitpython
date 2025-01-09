@@ -68,28 +68,14 @@ if(MICROPY_FREERTOS)
     list(APPEND MICROPY_SOURCE_EXTMOD 
         ${MICROPY_EXTMOD_DIR}/modfcntl.c
         ${MICROPY_EXTMOD_DIR}/modlocale.c
-        ${MICROPY_EXTMOD_DIR}/modio_newlib.c
         ${MICROPY_EXTMOD_DIR}/modos_newlib.c
         ${MICROPY_EXTMOD_DIR}/modselect_freertos.c
         ${MICROPY_EXTMOD_DIR}/modsignal.c
         ${MICROPY_EXTMOD_DIR}/modtermios.c
         ${MICROPY_EXTMOD_DIR}/modtime_newlib.c
     )
-
-    if(MICROPY_PY_LWIP)
-        list(APPEND MICROPY_SOURCE_EXTMOD
-            ${MICROPY_EXTMOD_DIR}/socket/modsocket.c
-            ${MICROPY_EXTMOD_DIR}/socket/socket.c
-            ${MICROPY_EXTMOD_DIR}/socket/error.c
-            ${MICROPY_EXTMOD_DIR}/socket/dns.c
-            ${MICROPY_EXTMOD_DIR}/socket/tcp.c        
-            ${MICROPY_EXTMOD_DIR}/socket/udp.c
-            ${MICROPY_EXTMOD_DIR}/socket/modnetwork.c
-            ${MICROPY_EXTMOD_DIR}/socket/netif.c
-            ${MICROPY_EXTMOD_DIR}/socket/ping.c
-            ${MICROPY_EXTMOD_DIR}/socket/sntp.c
-        )
-    endif()
+    include(${MICROPY_EXTMOD_DIR}/io/io.cmake)
+    include(${MICROPY_EXTMOD_DIR}/socket/socket.cmake)
     
     list(APPEND MICROPY_SOURCE_EXTMOD   
         ${MICROPY_EXTMOD_DIR}/usb/modusb.c
