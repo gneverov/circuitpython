@@ -30,10 +30,6 @@
 #include "py/pystack.h"
 #include "py/stackctrl.h"
 
-#if MICROPY_FREERTOS
-extern unsigned char __MpStackBottom, __MpStackTop;
-#endif
-
 // For use with mp_call_function_1_from_nlr_jump_callback.
 #define MP_DEFINE_NLR_JUMP_CALLBACK_FUNCTION_1(ctx, f, a) \
     nlr_jump_callback_node_call_function_1_t ctx = { \

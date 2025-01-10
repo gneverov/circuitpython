@@ -34,7 +34,7 @@
 #include <errno.h> // needed because mp_is_nonblocking_error uses system error codes
 
 #include "py/runtime.h"
-#include "py/stream_poll.h"
+#include "py/stream.h"
 #include "py/objstr.h"
 #include "py/reader.h"
 #include "extmod/vfs.h"
@@ -697,10 +697,14 @@ static mp_uint_t socket_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, i
                 }
             }
         }
+    } else {
+        // Unsupported ioctl.
+        *errcode = MP_EINVAL;
+        return MP_STREAM_ERROR;
     }
 
     // Pass all requests down to the underlying socket
-    ret |= mp_stream_ioctl(sock, request, arg, errcode);
+    ret |= mp_get_stream(sock)->ioctl(sock, request, arg, errcode);
 
     if (request == MP_STREAM_POLL) {
         // The direction the library needed is available, return a fake result to the caller so that
@@ -717,8 +721,7 @@ static const mp_rom_map_elem_t ssl_socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&mp_stream_write_obj) },
-    { MP_ROM_QSTR(MP_QSTR_settimeout), MP_ROM_PTR(&mp_stream_settimeout_obj) },
-    { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&mp_stream_setblocking_obj) },
+    { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&socket_setblocking_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_stream_close_obj) },
     #if MICROPY_PY_SSL_FINALISER
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_stream_close_obj) },
@@ -737,7 +740,6 @@ static const mp_stream_p_t ssl_socket_stream_p = {
     .read = socket_read,
     .write = socket_write,
     .ioctl = socket_ioctl,
-    .can_poll = 1,
 };
 
 static MP_DEFINE_CONST_OBJ_TYPE(

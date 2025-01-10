@@ -4,7 +4,6 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2023 Gregory Neverov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,50 +51,23 @@ static mp_obj_t iobase_make_new(const mp_obj_type_t *type, size_t n_args, size_t
     return MP_OBJ_FROM_PTR(&iobase_singleton);
 }
 
-static mp_obj_t iobase_call_method(size_t n_args, size_t n_kw, const mp_obj_t *args, int *errcode) {
-    mp_obj_t ret_obj = MP_OBJ_NULL;
-    nlr_buf_t nlr;
-    if (nlr_push(&nlr) == 0) {
-        ret_obj = mp_call_method_n_kw(n_args, n_kw, args);
-        nlr_pop();
-    } else {
-        mp_obj_t exc_obj = MP_OBJ_FROM_PTR(nlr.ret_val);
-        if (!mp_obj_is_os_error(exc_obj, errcode)) {
-            *errcode = MP_EINVAL;
-        }
-    }
-    return ret_obj;
-}
-
-static mp_uint_t iobase_check_ret(mp_obj_t ret_obj, int *errcode) {
-    if (ret_obj == MP_OBJ_NULL) {
-        assert(*errcode != 0);
-        return MP_STREAM_ERROR;
-    }
+static mp_uint_t iobase_read_write(mp_obj_t obj, void *buf, mp_uint_t size, int *errcode, qstr qst) {
+    mp_obj_t dest[3];
+    mp_load_method(obj, qst, dest);
+    mp_obj_array_t ar = {{&mp_type_bytearray}, BYTEARRAY_TYPECODE, 0, size, buf};
+    dest[2] = MP_OBJ_FROM_PTR(&ar);
+    mp_obj_t ret_obj = mp_call_method_n_kw(1, 0, dest);
     if (ret_obj == mp_const_none) {
         *errcode = MP_EAGAIN;
-        return MP_STREAM_ERROR;
-    }
-    if (!mp_obj_is_int(ret_obj)) {
-        *errcode = MP_EINVAL;
         return MP_STREAM_ERROR;
     }
     mp_int_t ret = mp_obj_get_int(ret_obj);
     if (ret >= 0) {
         return ret;
     } else {
-        *errcode = MP_EINVAL;
+        *errcode = -ret;
         return MP_STREAM_ERROR;
     }
-}
-
-static mp_uint_t iobase_read_write(mp_obj_t obj, void *buf, mp_uint_t size, int *errcode, qstr qst) {
-    mp_obj_t dest[3];
-    mp_load_method(obj, qst, dest);
-    mp_obj_array_t ar = {{&mp_type_bytearray}, BYTEARRAY_TYPECODE, 0, size, buf};
-    dest[2] = MP_OBJ_FROM_PTR(&ar);
-    mp_obj_t ret_obj = iobase_call_method(1, 0, dest, errcode);
-    return iobase_check_ret(ret_obj, errcode);
 }
 static mp_uint_t iobase_read(mp_obj_t obj, void *buf, mp_uint_t size, int *errcode) {
     return iobase_read_write(obj, buf, size, errcode, MP_QSTR_readinto);
@@ -107,53 +79,16 @@ static mp_uint_t iobase_write(mp_obj_t obj, const void *buf, mp_uint_t size, int
 
 static mp_uint_t iobase_ioctl(mp_obj_t obj, mp_uint_t request, uintptr_t arg, int *errcode) {
     mp_obj_t dest[4];
-    switch (request) {
-        #if MICROPY_FREERTOS
-        case MP_STREAM_POLL_CTL:
-            mp_load_method_maybe(obj, MP_QSTR_poll_ctl, dest);
-            if (dest[0] != MP_OBJ_NULL) {
-                mp_obj_t stream_obj = iobase_call_method(0, 0, dest, errcode);
-                if (stream_obj == MP_OBJ_NULL) {
-                    return MP_STREAM_ERROR;
-                }
-
-                const mp_stream_p_t *stream_p = mp_get_stream(stream_obj);
-                if (!stream_p || !stream_p->ioctl) {
-                    *errcode = MP_EINVAL;
-                    return MP_STREAM_ERROR;
-                }
-
-                return stream_p->ioctl(stream_obj, MP_STREAM_POLL_CTL, arg, errcode);
-            }
-            break;
-        #endif
-        case MP_STREAM_TIMEOUT: {
-            mp_load_method_maybe(obj, MP_QSTR_settimeout, dest);
-            if (dest[0] != MP_OBJ_NULL) {
-                mp_int_t timeout = arg;
-                dest[2] = timeout < 0 ? mp_const_none : MP_OBJ_NEW_SMALL_INT(timeout);
-                mp_obj_t ret_obj = iobase_call_method(1, 0, dest, errcode);
-                return ret_obj == MP_OBJ_NULL ? MP_STREAM_ERROR : 0;
-            }
-            break;
-        }
-
-        case MP_STREAM_CLOSE:
-            mp_load_method_maybe(obj, MP_QSTR_close, dest);
-            if (dest[0] != MP_OBJ_NULL) {
-                if (iobase_call_method(0, 0, dest, errcode) == MP_OBJ_NULL) {
-                    return MP_STREAM_ERROR;
-                }
-                return 0;
-            }
-            break;
-    }
-
     mp_load_method(obj, MP_QSTR_ioctl, dest);
     dest[2] = mp_obj_new_int_from_uint(request);
     dest[3] = mp_obj_new_int_from_uint(arg);
-    mp_obj_t ret_obj = iobase_call_method(2, 0, dest, errcode);
-    return iobase_check_ret(ret_obj, errcode);
+    mp_int_t ret = mp_obj_get_int(mp_call_method_n_kw(2, 0, dest));
+    if (ret >= 0) {
+        return ret;
+    } else {
+        *errcode = -ret;
+        return MP_STREAM_ERROR;
+    }
 }
 
 static const mp_stream_p_t iobase_p = {

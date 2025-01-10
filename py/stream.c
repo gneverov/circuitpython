@@ -53,7 +53,6 @@ mp_uint_t mp_stream_rw(mp_obj_t stream, void *buf_, mp_uint_t size, int *errcode
     } else {
         io_func = stream_p->read;
     }
-    flags |= stream_p->can_poll ? MP_STREAM_RW_ONCE : 0;
 
     *errcode = 0;
     mp_uint_t done = 0;
@@ -499,32 +498,6 @@ static mp_obj_t stream_flush(mp_obj_t self) {
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_1(mp_stream_flush_obj, stream_flush);
-
-static mp_obj_t stream_settimeout(mp_obj_t self, mp_obj_t timeout_in) {
-    const mp_stream_p_t *stream_p = mp_get_stream(self);
-    mp_int_t timeout = -1;
-    if (timeout_in != mp_const_none) {
-        timeout = mp_obj_get_int(timeout_in);
-        if (timeout < 0) {
-            mp_raise_ValueError(NULL);
-        }
-    }
-    if (!stream_p->can_poll) {
-        return mp_const_none;
-    }
-    int error;
-    mp_uint_t res = stream_p->ioctl(self, MP_STREAM_TIMEOUT, timeout, &error);
-    if (res == MP_STREAM_ERROR) {
-        mp_raise_OSError(error);
-    }
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_2(mp_stream_settimeout_obj, stream_settimeout);
-
-static mp_obj_t stream_setblocking(mp_obj_t self, mp_obj_t value) {
-    return stream_settimeout(self, mp_obj_is_true(value) ? mp_const_none : MP_OBJ_NEW_SMALL_INT(0));
-}
-MP_DEFINE_CONST_FUN_OBJ_2(mp_stream_setblocking_obj, stream_setblocking);
 
 static mp_obj_t stream_ioctl(size_t n_args, const mp_obj_t *args) {
     mp_buffer_info_t bufinfo;

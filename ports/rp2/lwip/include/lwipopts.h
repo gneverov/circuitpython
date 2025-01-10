@@ -52,7 +52,7 @@ typedef uint32_t sys_prot_t;
 #define MEMP_MEM_MALLOC                 1
 #define LWIP_ERRNO_STDINCLUDE           1
 #define TCPIP_MBOX_SIZE                 8
-#define TCPIP_THREAD_STACKSIZE          (LWIP_MDNS_RESPONDER ? 2048 : 1024)
+#define TCPIP_THREAD_STACKSIZE          2048
 #define TCPIP_THREAD_PRIO               2
 
 #define LWIP_FREERTOS_CHECK_CORE_LOCKING 1
