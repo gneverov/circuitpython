@@ -880,16 +880,6 @@ found:
     return ret_ptr;
 }
 
-/*
-void *gc_alloc(mp_uint_t n_bytes) {
-    return _gc_alloc(n_bytes, false);
-}
-
-void *gc_alloc_with_finaliser(mp_uint_t n_bytes) {
-    return _gc_alloc(n_bytes, true);
-}
-*/
-
 // force the freeing of a piece of memory
 // TODO: freeing here does not call finaliser
 void gc_free(void *ptr) {
@@ -991,35 +981,6 @@ size_t gc_nbytes(const void *ptr) {
     GC_EXIT();
     return 0;
 }
-
-#if 0
-// old, simple realloc that didn't expand memory in place
-void *gc_realloc(void *ptr, mp_uint_t n_bytes) {
-    mp_uint_t n_existing = gc_nbytes(ptr);
-    if (n_bytes <= n_existing) {
-        return ptr;
-    } else {
-        bool has_finaliser;
-        if (ptr == NULL) {
-            has_finaliser = false;
-        } else {
-            #if MICROPY_ENABLE_FINALISER
-            has_finaliser = FTB_GET(BLOCK_FROM_PTR((mp_uint_t)ptr));
-            #else
-            has_finaliser = false;
-            #endif
-        }
-        void *ptr2 = gc_alloc(n_bytes, has_finaliser);
-        if (ptr2 == NULL) {
-            return ptr2;
-        }
-        memcpy(ptr2, ptr, n_existing);
-        gc_free(ptr);
-        return ptr2;
-    }
-}
-
-#else // Alternative gc_realloc impl
 
 void *gc_realloc(void *ptr_in, size_t n_bytes, bool allow_move) {
     // check for pure allocation
@@ -1170,7 +1131,6 @@ void *gc_realloc(void *ptr_in, size_t n_bytes, bool allow_move) {
     gc_free(ptr_in);
     return ptr_out;
 }
-#endif // Alternative gc_realloc impl
 
 void gc_dump_info(const mp_print_t *print) {
     gc_info_t info;

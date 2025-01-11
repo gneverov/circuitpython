@@ -165,7 +165,7 @@ static mp_obj_t netif_dict(mp_obj_t self_in) {
     #endif
 
     vstr_t hwaddr;
-    vstr_init(&hwaddr, ETH_HWADDR_LEN * 3);
+    vstr_init(&hwaddr, NETIF_MAX_HWADDR_LEN * 3);
     for (size_t i = 0; i < netif.hwaddr_len; i++) {
         vstr_printf(&hwaddr, "%02x:", netif.hwaddr[i]);
     }

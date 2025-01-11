@@ -37,6 +37,7 @@
 #include "shared/timeutils/timeutils.h"
 #include "pico/time.h"
 #include "pico/unique_id.h"
+#include "pico/aon_timer.h"
 
 #if MICROPY_PY_NETWORK_CYW43
 #include "cyw43.h"
@@ -67,8 +68,42 @@ mp_uint_t mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     return size;
 }
 
+#if PICO_RISCV
+__attribute__((naked)) mp_uint_t mp_hal_ticks_cpu(void) {
+    __asm volatile (
+        "li a0, 4\n" // mask value to uninhibit mcycle counter
+        "csrw mcountinhibit, a0\n" // uninhibit mcycle counter
+        "csrr a0, mcycle\n" // get mcycle counter
+        "ret\n"
+        );
+}
+#endif
+
+void mp_hal_delay_us(mp_uint_t us) {
+    // Avoid calling sleep_us() and invoking the alarm pool by splitting long
+    // sleeps into an optional longer sleep and a shorter busy-wait
+    uint64_t end = time_us_64() + us;
+    if (us > 1000) {
+        mp_hal_delay_ms(us / 1000);
+    }
+    while (time_us_64() < end) {
+        // Tight loop busy-wait for accurate timing
+    }
+}
+
 void mp_hal_delay_ms(mp_uint_t ms) {
     vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+void mp_hal_time_ns_set_from_rtc(void) {
+    #if PICO_RP2040
+    // Outstanding RTC register writes need at least two RTC clock cycles to
+    // update. (See RP2040 datasheet section 4.8.4 "Reference clock").
+    mp_hal_delay_us(44);
+
+    void inittimeofday(void);
+    inittimeofday();
+    #endif
 }
 
 uint64_t mp_hal_time_ns(void) {

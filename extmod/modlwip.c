@@ -127,15 +127,15 @@ sio_fd_t sio_open(u8_t dvnum) {
 }
 
 void sio_send(u8_t c, sio_fd_t fd) {
-    mp_obj_type_t *type = mp_obj_get_type(MP_STATE_VM(lwip_slip_stream));
+    const mp_stream_p_t *stream_p = mp_get_stream(MP_STATE_VM(lwip_slip_stream));
     int error;
-    type->stream_p->write(MP_STATE_VM(lwip_slip_stream), &c, 1, &error);
+    stream_p->write(MP_STATE_VM(lwip_slip_stream), &c, 1, &error);
 }
 
 u32_t sio_tryread(sio_fd_t fd, u8_t *data, u32_t len) {
-    mp_obj_type_t *type = mp_obj_get_type(MP_STATE_VM(lwip_slip_stream));
+    const mp_stream_p_t *stream_p = mp_get_stream(MP_STATE_VM(lwip_slip_stream));
     int error;
-    mp_uint_t out_sz = type->stream_p->read(MP_STATE_VM(lwip_slip_stream), data, len, &error);
+    mp_uint_t out_sz = stream_p->read(MP_STATE_VM(lwip_slip_stream), data, len, &error);
     if (out_sz == MP_STREAM_ERROR) {
         if (mp_is_nonblocking_error(error)) {
             return 0;
@@ -326,6 +326,10 @@ typedef struct _lwip_socket_obj_t {
     int8_t state;
 } lwip_socket_obj_t;
 
+static inline bool socket_is_timedout(lwip_socket_obj_t *socket, mp_uint_t ticks_start) {
+    return socket->timeout != -1 && (mp_uint_t)(mp_hal_ticks_ms() - ticks_start) >= socket->timeout;
+}
+
 static inline void poll_sockets(void) {
     mp_event_wait_ms(1);
 }
@@ -369,7 +373,7 @@ mp_obj_t lwip_format_inet_addr(const ip_addr_t *ip, mp_uint_t port) {
     char ipstr[IPADDR_STRLEN_MAX];
     ipaddr_ntoa_r(ip, ipstr, sizeof(ipstr));
     mp_obj_t tuple[2] = {
-        tuple[0] = mp_obj_new_str(ipstr, strlen(ipstr)),
+        tuple[0] = mp_obj_new_str_from_cstr(ipstr),
         tuple[1] = mp_obj_new_int(port),
     };
     return mp_obj_new_tuple(2, tuple);
@@ -473,7 +477,7 @@ static void _lwip_tcp_err_unaccepted(void *arg, err_t err) {
     // because it's only ever used by lwIP if tcp_connect is called on the TCP PCB.
     lwip_socket_obj_t *socket = (lwip_socket_obj_t *)pcb->connected;
 
-    // Array is not volatile because thiss callback is executed within the lwIP context
+    // Array is not volatile because this callback is executed within the lwIP context
     uint8_t alloc = socket->incoming.connection.alloc;
     struct tcp_pcb **tcp_array = (struct tcp_pcb **)lwip_socket_incoming_array(socket);
 
@@ -1036,26 +1040,22 @@ static mp_obj_t lwip_socket_accept(mp_obj_t self_in) {
     // accept incoming connection
     struct tcp_pcb *volatile *incoming_connection = &lwip_socket_incoming_array(socket)[socket->incoming.connection.iget];
     if (*incoming_connection == NULL) {
-        if (socket->timeout == 0) {
+        mp_uint_t ticks_start = mp_hal_ticks_ms();
+        for (;;) {
             MICROPY_PY_LWIP_EXIT
-            m_del_obj(lwip_socket_obj_t, socket2);
-            mp_raise_OSError(MP_EAGAIN);
-        } else if (socket->timeout != -1) {
-            mp_uint_t retries = socket->timeout / 100;
-            while (*incoming_connection == NULL) {
+            poll_sockets();
+            MICROPY_PY_LWIP_REENTER
+            if (*incoming_connection != NULL) {
+                break;
+            }
+            if (socket_is_timedout(socket, ticks_start)) {
                 MICROPY_PY_LWIP_EXIT
-                if (retries-- == 0) {
-                    m_del_obj(lwip_socket_obj_t, socket2);
+                m_del_obj(lwip_socket_obj_t, socket2);
+                if (socket->timeout == 0) {
+                    mp_raise_OSError(MP_EAGAIN);
+                } else {
                     mp_raise_OSError(MP_ETIMEDOUT);
                 }
-                mp_hal_delay_ms(100);
-                MICROPY_PY_LWIP_REENTER
-            }
-        } else {
-            while (*incoming_connection == NULL) {
-                MICROPY_PY_LWIP_EXIT
-                poll_sockets();
-                MICROPY_PY_LWIP_REENTER
             }
         }
     }
@@ -1130,21 +1130,21 @@ static mp_obj_t lwip_socket_connect(mp_obj_t self_in, mp_obj_t addr_in) {
             MICROPY_PY_LWIP_EXIT
 
             // And now we wait...
-            if (socket->timeout != -1) {
-                for (mp_uint_t retries = socket->timeout / 100; retries--;) {
-                    mp_hal_delay_ms(100);
-                    if (socket->state != STATE_CONNECTING) {
-                        break;
+            mp_uint_t ticks_start = mp_hal_ticks_ms();
+            for (;;) {
+                poll_sockets();
+                if (socket->state != STATE_CONNECTING) {
+                    break;
+                }
+                if (socket_is_timedout(socket, ticks_start)) {
+                    if (socket->timeout == 0) {
+                        mp_raise_OSError(MP_EINPROGRESS);
+                    } else {
+                        mp_raise_OSError(MP_ETIMEDOUT);
                     }
                 }
-                if (socket->state == STATE_CONNECTING) {
-                    mp_raise_OSError(MP_EINPROGRESS);
-                }
-            } else {
-                while (socket->state == STATE_CONNECTING) {
-                    poll_sockets();
-                }
             }
+
             if (socket->state == STATE_CONNECTED) {
                 err = ERR_OK;
             } else {
@@ -1432,7 +1432,7 @@ static mp_obj_t lwip_socket_setsockopt(size_t n_args, const mp_obj_t *args) {
         case IP_DROP_MEMBERSHIP: {
             mp_buffer_info_t bufinfo;
             mp_get_buffer_raise(args[3], &bufinfo, MP_BUFFER_READ);
-            if (bufinfo.len != sizeof(ip_addr_t) * 2) {
+            if (bufinfo.len != sizeof(MP_IGMP_IP_ADDR_TYPE) * 2) {
                 mp_raise_ValueError(NULL);
             }
 

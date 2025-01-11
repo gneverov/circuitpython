@@ -49,8 +49,8 @@ void PORTENTA_board_low_power(int mode);
 #define MICROPY_BOARD_ENTER_STANDBY PORTENTA_board_low_power(2);
 
 void PORTENTA_board_osc_enable(int enable);
-#define MICROPY_BOARD_OSC_ENABLE    PORTENTA_board_osc_enable(1);
-#define MICROPY_BOARD_OSC_DISABLE   PORTENTA_board_osc_enable(0);
+#define MICROPY_BOARD_PRE_STOP      PORTENTA_board_osc_enable(0);
+#define MICROPY_BOARD_POST_STOP     PORTENTA_board_osc_enable(1);
 
 // PLL1 400MHz/50MHz for SDMMC and FDCAN
 // USB and RNG are clocked from the HSI48
@@ -240,6 +240,7 @@ extern struct _spi_bdev_t spi_bdev;
 #define MICROPY_HW_SDRAM_SIZE               (64 / 8 * 1024 * 1024)  // 64 Mbit
 #define MICROPY_HW_SDRAM_STARTUP_TEST       (1)
 #define MICROPY_HW_SDRAM_TEST_FAIL_ON_ERROR (true)
+#define MICROPY_HW_FMC_SWAP_BANKS           (1)
 
 // Timing configuration for 200MHz/2=100MHz (10ns)
 #define MICROPY_HW_SDRAM_CLOCK_PERIOD       2

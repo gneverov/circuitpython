@@ -157,6 +157,9 @@ LIBSTDCPP_FILE_NAME = "$(shell $(CXX) $(CXXFLAGS) -print-file-name=libstdc++.a)"
 LDFLAGS += -L"$(shell dirname $(LIBSTDCPP_FILE_NAME))"
 endif
 
+# Hook tinyusb USB interrupt if used to service usb task.
+LDFLAGS += --wrap=dcd_event_handler
+
 # Options for mpy-cross
 MPY_CROSS_FLAGS += -march=armv7m
 
@@ -174,8 +177,8 @@ SHARED_SRC_C += $(addprefix shared/,\
 	runtime/stdout_helpers.c \
 	runtime/sys_stdio_mphal.c \
 	timeutils/timeutils.c \
-	tinyusb/mp_cdc_common.c \
 	tinyusb/mp_usbd.c \
+	tinyusb/mp_usbd_cdc.c \
 	tinyusb/mp_usbd_descriptor.c \
 	)
 

@@ -549,21 +549,38 @@ static mp_obj_t network_wlan_config(size_t n_args, const mp_obj_t *args, mp_map_
                         break;
                     }
                     case MP_QSTR_channel: {
-                        uint8_t primary;
-                        wifi_second_chan_t secondary;
-                        // Get the current value of secondary
-                        esp_exceptions(esp_wifi_get_channel(&primary, &secondary));
-                        primary = mp_obj_get_int(kwargs->table[i].value);
-                        esp_err_t err = esp_wifi_set_channel(primary, secondary);
-                        if (err == ESP_ERR_INVALID_ARG) {
-                            // May need to swap secondary channel above to below or below to above
-                            secondary = (
-                                (secondary == WIFI_SECOND_CHAN_ABOVE)
-                                ? WIFI_SECOND_CHAN_BELOW
-                                : (secondary == WIFI_SECOND_CHAN_BELOW)
+                        uint8_t channel = mp_obj_get_int(kwargs->table[i].value);
+                        if (self->if_id == ESP_IF_WIFI_AP) {
+                            cfg.ap.channel = channel;
+                        } else {
+                            // This setting is only used to determine the
+                            // starting channel for a scan, so it can result in
+                            // slightly faster connection times.
+                            cfg.sta.channel = channel;
+
+                            // This additional code to directly set the channel
+                            // on the STA interface is only relevant for ESP-NOW
+                            // (when there is no STA connection attempt.)
+                            uint8_t old_primary;
+                            wifi_second_chan_t secondary;
+                            // Get the current value of secondary
+                            esp_exceptions(esp_wifi_get_channel(&old_primary, &secondary));
+                            esp_err_t err = esp_wifi_set_channel(channel, secondary);
+                            if (err == ESP_ERR_INVALID_ARG) {
+                                // May need to swap secondary channel above to below or below to above
+                                secondary = (
+                                    (secondary == WIFI_SECOND_CHAN_ABOVE)
+                                    ? WIFI_SECOND_CHAN_BELOW
+                                    : (secondary == WIFI_SECOND_CHAN_BELOW)
                                     ? WIFI_SECOND_CHAN_ABOVE
                                     : WIFI_SECOND_CHAN_NONE);
-                            esp_exceptions(esp_wifi_set_channel(primary, secondary));
+                                err = esp_wifi_set_channel(channel, secondary);
+                            }
+                            esp_exceptions(err);
+                            if (channel != old_primary) {
+                                // Workaround the ESP-IDF Wi-Fi stack sometimes taking a moment to change channels
+                                mp_hal_delay_ms(1);
+                            }
                         }
                         break;
                     }
@@ -640,7 +657,7 @@ static mp_obj_t network_wlan_config(size_t n_args, const mp_obj_t *args, mp_map_
         case MP_QSTR_essid:
             switch (self->if_id) {
                 case ESP_IF_WIFI_STA:
-                    val = mp_obj_new_str((char *)cfg.sta.ssid, strlen((char *)cfg.sta.ssid));
+                    val = mp_obj_new_str_from_cstr((char *)cfg.sta.ssid);
                     break;
                 case ESP_IF_WIFI_AP:
                     val = mp_obj_new_str((char *)cfg.ap.ssid, cfg.ap.ssid_len);
@@ -728,6 +745,7 @@ static const mp_rom_map_elem_t wlan_if_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_isconnected), MP_ROM_PTR(&network_wlan_isconnected_obj) },
     { MP_ROM_QSTR(MP_QSTR_config), MP_ROM_PTR(&network_wlan_config_obj) },
     { MP_ROM_QSTR(MP_QSTR_ifconfig), MP_ROM_PTR(&esp_network_ifconfig_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ipconfig), MP_ROM_PTR(&esp_nic_ipconfig_obj) },
 
     // Constants
     { MP_ROM_QSTR(MP_QSTR_IF_STA), MP_ROM_INT(WIFI_IF_STA)},

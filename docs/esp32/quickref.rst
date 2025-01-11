@@ -18,7 +18,7 @@ working with this board it may be useful to get an overview of the microcontroll
    general.rst
    tutorial/index.rst
 
-Note that there are several varieties of ESP32 -- ESP32, ESP32C3, ESP32S2, ESP32S3 --
+Note that there are several varieties of ESP32 -- ESP32, ESP32C3, ESP32C6, ESP32S2, ESP32S3 --
 supported by MicroPython, with some differences in functionality between them.
 
 Installing MicroPython
@@ -61,13 +61,13 @@ The :mod:`esp32` module::
     import esp32
 
     esp32.raw_temperature() # read the internal temperature of the MCU, in Fahrenheit
-    esp32.ULP()             # access to the Ultra-Low-Power Co-processor, not on ESP32C3
+    esp32.ULP()             # access to the Ultra-Low-Power Co-processor, not on ESP32C3/C6
 
 Note that the temperature sensor in the ESP32 will typically read higher than
 ambient due to the IC getting warm while it runs.  This effect can be minimised
 by reading the temperature sensor immediately after waking up from sleep.
 
-ESP32C3, ESP32S2, and ESP32S3 also have an internal temperature sensor available.
+ESP32C3, ESP32C6, ESP32S2, and ESP32S3 also have an internal temperature sensor available.
 It is implemented a bit differently to the ESP32 and returns the temperature in
 Celsius::
 
@@ -89,7 +89,7 @@ The :mod:`network` module::
     wlan.isconnected()      # check if the station is connected to an AP
     wlan.connect('ssid', 'key') # connect to an AP
     wlan.config('mac')      # get the interface's MAC address
-    wlan.ifconfig()         # get the interface's IP/netmask/gw/DNS addresses
+    wlan.ipconfig('addr4')  # get the interface's IPv4 addresses
 
     ap = network.WLAN(network.AP_IF) # create access-point interface
     ap.config(ssid='ESP-AP') # set the SSID of the access point
@@ -107,7 +107,7 @@ A useful function for connecting to your local WiFi network is::
             wlan.connect('ssid', 'key')
             while not wlan.isconnected():
                 pass
-        print('network config:', wlan.ifconfig())
+        print('network config:', wlan.ipconfig('addr4'))
 
 Once the network is established the :mod:`socket <socket>` module can be used
 to create and use TCP/UDP sockets as usual, and the ``requests`` module for
@@ -130,7 +130,7 @@ To use the wired interfaces one has to specify the pins and mode ::
 
     lan = network.LAN(mdc=PIN_MDC, ...)   # Set the pin and mode configuration
     lan.active(True)                      # activate the interface
-    lan.ifconfig()                        # get the interface's IP/netmask/gw/DNS addresses
+    lan.ipconfig('addr4')                 # get the interface's IPv4 addresses
 
 
 The keyword arguments for the constructor defining the PHY type and interface are:

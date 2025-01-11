@@ -29,7 +29,6 @@
 #include <string.h>
 
 #include "py/runtime.h"
-#include "py/stackctrl.h"
 
 #if MICROPY_PY_THREAD
 

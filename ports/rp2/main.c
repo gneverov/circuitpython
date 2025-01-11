@@ -50,12 +50,12 @@
 #endif
 
 #include "py/compile.h"
+#include "py/cstack.h"
 #include "py/runtime.h"
 #include "py/gc.h"
 #include "py/gc_handle.h"
 #include "py/mperrno.h"
 #include "py/mphal.h"
-#include "py/stackctrl.h"
 #include "extmod/modbluetooth.h"
 #include "extmod/modnetwork.h"
 #include "extmod/freeze/freeze.h"
@@ -99,8 +99,7 @@ static void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_
     #endif
 
     // Initialise stack extents and GC heap.
-    mp_stack_set_top(stack_top);
-    mp_stack_set_limit(stack_top - stack_bottom - 256);
+    mp_cstack_init_with_top(stack_top, stack_top - stack_bottom);
 
     for (int i = 0;; i++) {
         gc_init(gc_heap_start, gc_heap_end);

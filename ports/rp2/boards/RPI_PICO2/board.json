@@ -9,11 +9,14 @@
         "USB"
     ],
     "images": [
-        "rp2-pico.jpg"
+        "rp2-pico2.jpg"
     ],
     "mcu": "rp2350",
-    "product": "Pico",
+    "product": "Pico 2",
     "thumbnail": "",
-    "url": "https://www.raspberrypi.com/products/raspberry-pi-pico/",
+    "url": "https://www.raspberrypi.com/products/raspberry-pi-pico-2/",
+    "variants": {
+        "RISCV": "RISC-V CPU mode"
+    },
     "vendor": "Raspberry Pi"
 }

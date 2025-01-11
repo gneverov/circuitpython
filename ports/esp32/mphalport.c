@@ -42,15 +42,22 @@
 #include "extmod/misc.h"
 #include "shared/timeutils/timeutils.h"
 #include "shared/runtime/pyexec.h"
-#include "mphalport.h"
+#include "shared/tinyusb/mp_usbd.h"
+#include "shared/tinyusb/mp_usbd_cdc.h"
 #include "usb.h"
 #include "usb_serial_jtag.h"
 #include "uart.h"
+
+#if MICROPY_PY_STRING_TX_GIL_THRESHOLD < 0
+#error "MICROPY_PY_STRING_TX_GIL_THRESHOLD must be positive"
+#endif
 
 TaskHandle_t mp_main_task_handle;
 
 static uint8_t stdin_ringbuf_array[260];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0};
+
+portMUX_TYPE mp_atomic_mux = portMUX_INITIALIZER_UNLOCKED;
 
 // Check the ESP-IDF error code and raise an OSError if it's not ESP_OK.
 #if MICROPY_ERROR_REPORTING <= MICROPY_ERROR_REPORTING_NORMAL
@@ -100,10 +107,17 @@ void check_esp_err_(esp_err_t code, const char *func, const int line, const char
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     uintptr_t ret = 0;
-    #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    #if MICROPY_HW_ESP_USB_SERIAL_JTAG
     usb_serial_jtag_poll_rx();
     #endif
-    if ((poll_flags & MP_STREAM_POLL_RD) && stdin_ringbuf.iget != stdin_ringbuf.iput) {
+    #if MICROPY_HW_USB_CDC
+    ret |= mp_usbd_cdc_poll_interfaces(poll_flags);
+    #endif
+    #if MICROPY_PY_OS_DUPTERM
+    ret |= mp_os_dupterm_poll(poll_flags);
+    #endif
+    // Check ringbuffer directly for uart and usj.
+    if ((poll_flags & MP_STREAM_POLL_RD) && ringbuf_peek(&stdin_ringbuf) != -1) {
         ret |= MP_STREAM_POLL_RD;
     }
     if (poll_flags & MP_STREAM_POLL_WR) {
@@ -114,8 +128,11 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 
 int mp_hal_stdin_rx_chr(void) {
     for (;;) {
-        #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+        #if MICROPY_HW_ESP_USB_SERIAL_JTAG
         usb_serial_jtag_poll_rx();
+        #endif
+        #if MICROPY_HW_USB_CDC
+        mp_usbd_cdc_poll_interfaces(0);
         #endif
         int c = ringbuf_get(&stdin_ringbuf);
         if (c != -1) {
@@ -129,15 +146,19 @@ mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     // Only release the GIL if many characters are being sent
     mp_uint_t ret = len;
     bool did_write = false;
-    bool release_gil = len > 20;
+    #if MICROPY_HW_ENABLE_UART_REPL || CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+    bool release_gil = len > MICROPY_PY_STRING_TX_GIL_THRESHOLD;
+    #if MICROPY_DEBUG_PRINTERS && MICROPY_DEBUG_VERBOSE && MICROPY_PY_THREAD_GIL
+    // If verbose debug output is enabled some strings are printed before the
+    // GIL mutex is set up.  When that happens, no Python code is running and
+    // therefore the interpreter doesn't care about the GIL not being ready.
+    release_gil = release_gil && (MP_STATE_VM(gil_mutex).handle != NULL);
+    #endif
     if (release_gil) {
         MP_THREAD_GIL_EXIT();
     }
-    #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    #if MICROPY_HW_ESP_USB_SERIAL_JTAG
     usb_serial_jtag_tx_strn(str, len);
-    did_write = true;
-    #elif CONFIG_USB_OTG_SUPPORTED
-    usb_tx_strn(str, len);
     did_write = true;
     #endif
     #if MICROPY_HW_ENABLE_UART_REPL
@@ -147,6 +168,14 @@ mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     if (release_gil) {
         MP_THREAD_GIL_ENTER();
     }
+    #endif // MICROPY_HW_ENABLE_UART_REPL || CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+    #if MICROPY_HW_USB_CDC
+    mp_uint_t cdc_res = mp_usbd_cdc_tx_strn(str, len);
+    if (cdc_res > 0) {
+        did_write = true;
+        ret = MIN(cdc_res, ret);
+    }
+    #endif
     int dupterm_res = mp_os_dupterm_tx_strn(str, len);
     if (dupterm_res >= 0) {
         did_write = true;

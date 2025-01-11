@@ -9,22 +9,46 @@
 // These functions are taken from lib/pico-sdk/src/common/pico_sync/mutex.c and modified
 // so that they atomically obtain the mutex and disable interrupts.
 
-uint32_t __time_critical_func(mutex_enter_blocking_and_disable_interrupts)(mutex_t * mtx) {
+uint32_t __time_critical_func(recursive_mutex_enter_blocking_and_disable_interrupts)(recursive_mutex_t * mtx) {
     lock_owner_id_t caller = lock_get_caller_owner_id();
     do {
         uint32_t save = spin_lock_blocking(mtx->core.spin_lock);
-        if (!lock_is_owner_id_valid(mtx->owner)) {
+        if (mtx->owner == caller || !lock_is_owner_id_valid(mtx->owner)) {
             mtx->owner = caller;
+            uint __unused total = ++mtx->enter_count;
             spin_unlock_unsafe(mtx->core.spin_lock);
+            assert(total); // check for overflow
             return save;
         }
         lock_internal_spin_unlock_with_wait(&mtx->core, save);
     } while (true);
 }
 
-void __time_critical_func(mutex_exit_and_restore_interrupts)(mutex_t * mtx, uint32_t save) {
+void __time_critical_func(recursive_mutex_exit_and_restore_interrupts)(recursive_mutex_t * mtx, uint32_t save) {
     spin_lock_unsafe_blocking(mtx->core.spin_lock);
     assert(lock_is_owner_id_valid(mtx->owner));
-    mtx->owner = LOCK_INVALID_OWNER_ID;
+    assert(mtx->enter_count);
+    if (!--mtx->enter_count) {
+        mtx->owner = LOCK_INVALID_OWNER_ID;
+    }
     lock_internal_spin_unlock_with_notify(&mtx->core, save);
+}
+
+void __time_critical_func(recursive_mutex_nowait_enter_blocking)(recursive_mutex_nowait_t * mtx) {
+    while (!recursive_mutex_try_enter(&mtx->mutex, NULL)) {
+        tight_loop_contents();
+    }
+}
+
+void __time_critical_func(recursive_mutex_nowait_exit)(recursive_mutex_nowait_t * wrapper) {
+    recursive_mutex_t *mtx = &wrapper->mutex;
+    // Rest of this function is a copy of recursive_mutex_exit(), with
+    // lock_internal_spin_unlock_with_notify() removed.
+    uint32_t save = spin_lock_blocking(mtx->core.spin_lock);
+    assert(lock_is_owner_id_valid(mtx->owner));
+    assert(mtx->enter_count);
+    if (!--mtx->enter_count) {
+        mtx->owner = LOCK_INVALID_OWNER_ID;
+    }
+    spin_unlock(mtx->core.spin_lock, save);
 }

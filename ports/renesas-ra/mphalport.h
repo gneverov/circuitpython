@@ -42,6 +42,7 @@
 #define MICROPY_HW_USB_CDC_TX_TIMEOUT (500)
 
 extern const unsigned char mp_hal_status_to_errno_table[4];
+extern int mp_interrupt_char;
 extern ringbuf_t stdin_ringbuf;
 
 static inline int mp_hal_status_to_neg_errno(HAL_StatusTypeDef status) {
@@ -50,6 +51,10 @@ static inline int mp_hal_status_to_neg_errno(HAL_StatusTypeDef status) {
 
 NORETURN void mp_hal_raise(HAL_StatusTypeDef status);
 void mp_hal_set_interrupt_char(int c); // -1 to disable
+
+static inline void mp_hal_wake_main_task_from_isr(void) {
+    // Defined for tinyusb support, nothing needs to be done here.
+}
 
 // timing functions
 

@@ -86,6 +86,14 @@ else()
     add_executable(${MICROPY_TARGET})
 endif()
 
+# Provide a C-level definitions of PICO_ARM.
+# (The pico-sdk already defines PICO_RISCV when it's enabled.)
+if(PICO_ARM)
+    target_compile_definitions(pico_platform_headers INTERFACE
+        PICO_ARM=1
+    )
+endif()
+
 set(MICROPY_QSTRDEFS_PORT
     ${MICROPY_PORT_DIR}/qstrdefsport.h
 )
@@ -94,7 +102,6 @@ set(MICROPY_SOURCE_LIB
     # ${MICROPY_DIR}/shared/netutils/dhcpserver.c
     ${MICROPY_DIR}/shared/netutils/trace.c
     ${MICROPY_DIR}/shared/readline/readline.c
-    ${MICROPY_DIR}/shared/runtime/gchelper_thumb1.s
     ${MICROPY_DIR}/shared/runtime/gchelper_native.c
     ${MICROPY_DIR}/shared/runtime/interrupt_char.c
     ${MICROPY_DIR}/shared/runtime/pyexec.c
@@ -102,12 +109,23 @@ set(MICROPY_SOURCE_LIB
     ${MICROPY_DIR}/shared/timeutils/timeutils.c
 )
 
+if(PICO_ARM)
+    list(APPEND MICROPY_SOURCE_LIB
+        ${MICROPY_DIR}/shared/runtime/gchelper_thumb1.s
+    )
+elseif(PICO_RISCV)
+    list(APPEND MICROPY_SOURCE_LIB
+        ${MICROPY_DIR}/shared/runtime/gchelper_rv32i.s
+    )
+endif()
+
 set(MICROPY_SOURCE_DRIVERS
     ${MICROPY_DIR}/drivers/bus/softspi.c
     ${MICROPY_DIR}/drivers/dht/dht.c
 )
 
 set(MICROPY_SOURCE_PORT
+    clocks_extra.c
     help.c
     machine_i2c.c
     machine_pin.c
@@ -147,7 +165,6 @@ set(MICROPY_SOURCE_QSTR
 )
 
 set(PICO_SDK_COMPONENTS
-    cmsis_core
     hardware_adc
     hardware_base
     hardware_clocks
@@ -179,6 +196,17 @@ set(PICO_SDK_COMPONENTS
     tinyusb_common
     tinyusb_device
 )
+
+if(PICO_ARM)
+    list(APPEND PICO_SDK_COMPONENTS
+        cmsis_core
+    )
+elseif(PICO_RISCV)
+    list(APPEND PICO_SDK_COMPONENTS
+        hardware_hazard3
+        hardware_riscv
+    )
+endif()
 
 if(MICROPY_EXTMOD_EXAMPLE)
     include(${MICROPY_DIR}/extmod/example/example.cmake)
@@ -397,6 +425,7 @@ endif()
 list(APPEND MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_EXTMOD}
     ${MICROPY_SOURCE_USERMOD}
+    ${MICROPY_SOURCE_BOARD}
 )
 
 # Define mpy-cross flags
@@ -413,6 +442,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${MICROPY_SOURCE_LIB}
     ${MICROPY_SOURCE_DRIVERS}
     ${MICROPY_SOURCE_PORT}
+    ${MICROPY_SOURCE_BOARD}
 )
 
 if(MICROPY_SSL_MBEDTLS)
@@ -435,6 +465,10 @@ target_compile_options(${MICROPY_TARGET} PRIVATE
     -g  # always include debug information in the ELF
 )
 
+target_link_options(${MICROPY_TARGET} PRIVATE
+    -Wl,--wrap=runtime_init_clocks
+)
+
 # Apply optimisations to performance-critical source code.
 set_source_files_properties(
     ${MICROPY_PY_DIR}/map.c
@@ -452,6 +486,7 @@ set_source_files_properties(
 )
 
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
+    ${MICROPY_DEF_BOARD}
     PICO_FLOAT_PROPAGATE_NANS=1
     PICO_HEAP_SIZE=0
     PICO_STACK_SIZE=4096
@@ -466,6 +501,16 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     PICO_INT64_OPS_IN_RAM=1
     $<$<NOT:$<STREQUAL:${PICO_CHIP},rp2040>>:PSRAM_BASE=0x11000000u>
 )
+
+if(PICO_RP2040)
+    target_compile_definitions(${MICROPY_TARGET} PRIVATE
+        PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
+    )
+elseif(PICO_RP2350)
+    target_compile_definitions(${MICROPY_TARGET} PRIVATE
+        PICO_EMBED_XIP_SETUP=1 # to put flash into continuous read mode
+    )
+endif()
 
 target_link_libraries(${MICROPY_TARGET}
     morelib_rp2
@@ -493,7 +538,7 @@ endif()
 
 pico_add_extra_outputs(${MICROPY_TARGET})
 
-pico_find_compiler(PICO_COMPILER_SIZE ${PICO_GCC_TRIPLE}-size)
+pico_find_compiler_with_triples(PICO_COMPILER_SIZE "${PICO_GCC_TRIPLE}" size)
 
 add_custom_command(TARGET ${MICROPY_TARGET}
     POST_BUILD
@@ -511,8 +556,16 @@ set(GEN_PINS_MKPINS "${MICROPY_BOARDS_DIR}/make-pins.py")
 set(GEN_PINS_SRC "${CMAKE_BINARY_DIR}/pins_${MICROPY_BOARD}.c")
 set(GEN_PINS_HDR "${MICROPY_GENHDR_DIR}/pins.h")
 
-if(EXISTS "${MICROPY_BOARDS_DIR}/${MICROPY_BOARD}/pins.csv")
-    set(GEN_PINS_BOARD_CSV "${MICROPY_BOARDS_DIR}/${MICROPY_BOARD}/pins.csv")
+if(NOT PICO_NUM_GPIOS)
+    set(PICO_NUM_GPIOS 30)
+endif()
+
+if(NOT PICO_NUM_EXT_GPIOS)
+    set(PICO_NUM_EXT_GPIOS 10)
+endif()
+
+if(EXISTS "${MICROPY_BOARD_DIR}/pins.csv")
+    set(GEN_PINS_BOARD_CSV "${MICROPY_BOARD_DIR}/pins.csv")
     set(GEN_PINS_CSV_ARG --board-csv "${GEN_PINS_BOARD_CSV}")
 endif()
 
@@ -523,7 +576,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
 # Generate pins
 add_custom_command(
     OUTPUT ${GEN_PINS_HDR} ${GEN_PINS_SRC}
-    COMMAND ${Python3_EXECUTABLE} ${GEN_PINS_MKPINS} ${GEN_PINS_CSV_ARG} --af-csv ${GEN_PINS_AF_CSV} --prefix ${GEN_PINS_PREFIX} --output-source ${GEN_PINS_SRC} --output-header ${GEN_PINS_HDR}
+    COMMAND ${Python3_EXECUTABLE} ${GEN_PINS_MKPINS} ${GEN_PINS_CSV_ARG} --af-csv ${GEN_PINS_AF_CSV} --prefix ${GEN_PINS_PREFIX} --output-source ${GEN_PINS_SRC} --num-gpios ${PICO_NUM_GPIOS} --num-ext-gpios ${PICO_NUM_EXT_GPIOS} --output-header ${GEN_PINS_HDR}
     DEPENDS
         ${GEN_PINS_AF_CSV}
         ${GEN_PINS_BOARD_CSV}

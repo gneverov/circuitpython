@@ -27,8 +27,20 @@ if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
     message(FATAL_ERROR "Invalid MICROPY_BOARD specified: ${MICROPY_BOARD}")
 endif()
 
+# If a board variant is specified, check that it exists.
+if(MICROPY_BOARD_VARIANT)
+    if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigvariant_${MICROPY_BOARD_VARIANT}.cmake)
+        message(FATAL_ERROR "Invalid MICROPY_BOARD_VARIANT specified: ${MICROPY_BOARD_VARIANT}")
+    endif()
+endif()
+
 # Include board config, it may override MICROPY_FROZEN_MANIFEST
 include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
+if(NOT MICROPY_BOARD_VARIANT)
+    include(${MICROPY_BOARD_DIR}/mpconfigvariant.cmake OPTIONAL)
+else()
+    include(${MICROPY_BOARD_DIR}/mpconfigvariant_${MICROPY_BOARD_VARIANT}.cmake)
+endif()
 
 
 include(${MICROPY_DIR}/lib/pico-sdk/pico_sdk_init.cmake)

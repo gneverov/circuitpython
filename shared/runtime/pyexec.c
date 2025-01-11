@@ -44,7 +44,6 @@
 #include "genhdr/mpversion.h"
 
 pyexec_mode_kind_t pyexec_mode_kind = PYEXEC_MODE_FRIENDLY_REPL;
-int pyexec_system_exit = 0;
 
 #if MICROPY_REPL_INFO
 static bool repl_display_debugging_info = 0;
@@ -92,9 +91,6 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
     #ifdef MICROPY_BOARD_BEFORE_PYTHON_EXEC
     MICROPY_BOARD_BEFORE_PYTHON_EXEC(input_kind, exec_flags);
     #endif
-
-    // by default a SystemExit exception returns 0
-    pyexec_system_exit = 0;
 
     nlr_buf_t nlr;
     nlr.ret_val = NULL;
@@ -160,9 +156,6 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         // check for SystemExit
         const mp_obj_exception_t *exc = nlr.ret_val;
         if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(exc->base.type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
-            if ((exc->args->len > 0) && mp_obj_is_small_int(exc->args->items[0])) {
-                pyexec_system_exit = MP_OBJ_SMALL_INT_VALUE(exc->args->items[0]);
-            }
             ret = PYEXEC_FORCED_EXIT;
         } else {
             mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));

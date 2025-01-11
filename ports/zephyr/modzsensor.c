@@ -28,8 +28,9 @@
 
 #include "py/runtime.h"
 
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/drivers/sensor.h>
+#include "zephyr_device.h"
 
 #if MICROPY_PY_ZSENSOR
 
@@ -41,10 +42,7 @@ typedef struct _mp_obj_sensor_t {
 static mp_obj_t sensor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 1, false);
     mp_obj_sensor_t *o = mp_obj_malloc(mp_obj_sensor_t, type);
-    o->dev = device_get_binding(mp_obj_str_get_str(args[0]));
-    if (o->dev == NULL) {
-        mp_raise_ValueError(MP_ERROR_TEXT("dev not found"));
-    }
+    o->dev = zephyr_device_find(args[0]);
     return MP_OBJ_FROM_PTR(o);
 }
 
@@ -128,11 +126,24 @@ static const mp_rom_map_elem_t mp_module_zsensor_globals_table[] = {
     C(MAGN_Y),
     C(MAGN_Z),
     C(DIE_TEMP),
+    C(AMBIENT_TEMP),
     C(PRESS),
     C(PROX),
     C(HUMIDITY),
     C(LIGHT),
+    C(IR),
+    C(RED),
+    C(GREEN),
+    C(BLUE),
     C(ALTITUDE),
+    C(PM_1_0),
+    C(PM_2_5),
+    C(PM_10),
+    C(DISTANCE),
+    C(CO2),
+    C(VOC),
+    C(GAS_RES),
+    C(VOLTAGE),
 #undef C
 };
 

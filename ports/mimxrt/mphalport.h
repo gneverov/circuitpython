@@ -72,6 +72,7 @@
 #define MP_HAL_PIN_TRIGGER_RISE         kGPIO_IntRisingEdge
 #define MP_HAL_PIN_TRIGGER_RISE_FALL    kGPIO_IntRisingOrFallingEdge
 
+extern int mp_interrupt_char;
 extern ringbuf_t stdin_ringbuf;
 
 // Define an alias for systick_ms, because the shared softtimer.c uses
@@ -107,6 +108,10 @@ __attribute__((always_inline)) static inline uint32_t disable_irq(void) {
 }
 
 void mp_hal_set_interrupt_char(int c);
+
+static inline void mp_hal_wake_main_task_from_isr(void) {
+    // Defined for tinyusb support, nothing needs to be done here.
+}
 
 static inline mp_uint_t mp_hal_ticks_ms(void) {
     return ticks_ms32();

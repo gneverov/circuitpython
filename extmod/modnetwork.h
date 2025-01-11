@@ -72,6 +72,10 @@ mp_obj_t mod_network_hostname(size_t n_args, const mp_obj_t *args);
 
 #include "lwip/init.h"
 
+#if MICROPY_PY_NETWORK_PPP_LWIP
+extern const struct _mp_obj_type_t mp_network_ppp_lwip_type;
+#endif
+
 struct netif;
 void mod_network_lwip_init(void);
 void mod_network_lwip_poll_wrapper(uint32_t ticks_ms);
@@ -82,6 +86,10 @@ mp_obj_t mod_network_nic_ipconfig(struct netif *netif, size_t n_args, const mp_o
 extern int mp_mod_network_prefer_dns_use_ip_version;
 #endif
 #elif defined(MICROPY_PORT_NETWORK_INTERFACES)
+
+#if MICROPY_PY_NETWORK_NINAW10
+mp_obj_t network_ninaw10_ipconfig(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs);
+#endif
 
 struct _mod_network_socket_obj_t;
 

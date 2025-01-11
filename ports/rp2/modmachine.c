@@ -27,9 +27,12 @@
 // This file is never compiled standalone, it's included directly from
 // extmod/modmachine.c via MICROPY_PY_MACHINE_INCLUDEFILE.
 
+#include "tusb.h"
+
 #include "py/mphal.h"
 #include "modmachine.h"
 #include "hardware/clocks.h"
+#include "clocks_extra.h"
 #include "hardware/pll.h"
 #include "hardware/structs/rosc.h"
 #include "hardware/structs/scb.h"
@@ -44,6 +47,7 @@
 #include "machine/pin.h"
 #include "machine/pio_sm.h"
 #include "machine/uart.h"
+#include "pico/runtime_init.h"
 
 #define RP2_RESET_PWRON (1)
 #define RP2_RESET_WDT (3)
@@ -100,6 +104,20 @@ static void mp_machine_set_freq(size_t n_args, const mp_obj_t *args) {
     if (!set_sys_clock_khz(freq / 1000, false)) {
         mp_raise_ValueError(MP_ERROR_TEXT("cannot change frequency"));
     }
+    if (n_args > 1) {
+        mp_int_t freq_peri = mp_obj_get_int(args[1]);
+        if (freq_peri != (USB_CLK_KHZ * KHZ)) {
+            if (freq_peri == freq) {
+                clock_configure(clk_peri,
+                    0,
+                    CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+                    freq,
+                    freq);
+            } else {
+                mp_raise_ValueError(MP_ERROR_TEXT("peripheral freq must be 48_000_000 or the same as the MCU freq"));
+            }
+        }
+    }
     #if MICROPY_HW_ENABLE_UART_REPL
     // setup_default_uart();
     // mp_uart_init();
@@ -107,11 +125,10 @@ static void mp_machine_set_freq(size_t n_args, const mp_obj_t *args) {
 }
 
 static void mp_machine_idle(void) {
-    __wfe();
+    MICROPY_INTERNAL_WFE(1);
 }
 
 static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
-    #if PICO_RP2040
     mp_int_t delay_ms = 0;
     bool use_timer_alarm = false;
 
@@ -133,10 +150,22 @@ static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
 
     const uint32_t xosc_hz = XOSC_MHZ * 1000000;
 
-    uint32_t my_interrupts = mp_thread_begin_atomic_section();
-    // Disable USB and ADC clocks.
-    clock_stop(clk_usb);
+    uint32_t my_interrupts = MICROPY_BEGIN_ATOMIC_SECTION();
+    #if MICROPY_HW_ENABLE_USBDEV
+    // Only disable the USB clock if a USB host has not configured the device
+    // or if going to DORMANT mode.
+    bool disable_usb = !(tud_mounted() && n_args > 0);
+    #else
+    bool disable_usb = true;
+    #endif
+    if (disable_usb) {
+        clock_stop(clk_usb);
+    }
+
     clock_stop(clk_adc);
+    #if PICO_RP2350
+    clock_stop(clk_hstx);
+    #endif
 
     // CLK_REF = XOSC
     clock_configure(clk_ref, CLOCKS_CLK_REF_CTRL_SRC_VALUE_XOSC_CLKSRC, 0, xosc_hz, xosc_hz);
@@ -145,14 +174,18 @@ static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
     clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF, 0, xosc_hz, xosc_hz);
 
     // CLK_RTC = XOSC / 256
+    #if PICO_RP2040
     clock_configure(clk_rtc, 0, CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC, xosc_hz, xosc_hz / 256);
+    #endif
 
     // CLK_PERI = CLK_SYS
     clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, xosc_hz, xosc_hz);
 
     // Disable PLLs.
     pll_deinit(pll_sys);
-    pll_deinit(pll_usb);
+    if (disable_usb) {
+        pll_deinit(pll_usb);
+    }
 
     // Disable ROSC.
     rosc_hw->ctrl = ROSC_CTRL_ENABLE_VALUE_DISABLE << ROSC_CTRL_ENABLE_LSB;
@@ -163,45 +196,74 @@ static void mp_machine_lightsleep(size_t n_args, const mp_obj_t *args) {
         #endif
         xosc_dormant();
     } else {
-        uint32_t sleep_en0 = clocks_hw->sleep_en0;
-        uint32_t sleep_en1 = clocks_hw->sleep_en1;
         bool timer3_enabled = irq_is_enabled(3);
 
-        clocks_hw->sleep_en0 = CLOCKS_SLEEP_EN0_CLK_RTC_RTC_BITS;
+        const uint32_t alarm_num = 3;
+        const uint32_t irq_num = TIMER_ALARM_IRQ_NUM(timer_hw, alarm_num);
         if (use_timer_alarm) {
             // Make sure ALARM3/IRQ3 is enabled on _this_ core
-            timer_hw->inte |= 1 << 3;
             if (!timer3_enabled) {
-                irq_set_enabled(3, true);
+                irq_set_enabled(irq_num, true);
             }
+            hw_set_bits(&timer_hw->inte, 1u << alarm_num);
             // Use timer alarm to wake.
+            clocks_hw->sleep_en0 = 0x0;
+            #if PICO_RP2040
             clocks_hw->sleep_en1 = CLOCKS_SLEEP_EN1_CLK_SYS_TIMER_BITS;
-            timer_hw->alarm[3] = timer_hw->timerawl + delay_ms * 1000;
+            #elif PICO_RP2350
+            clocks_hw->sleep_en1 = CLOCKS_SLEEP_EN1_CLK_REF_TICKS_BITS | CLOCKS_SLEEP_EN1_CLK_SYS_TIMER0_BITS;
+            #else
+            #error Unknown processor
+            #endif
+            timer_hw->intr = 1u << alarm_num; // clear any IRQ
+            timer_hw->alarm[alarm_num] = timer_hw->timerawl + delay_ms * 1000;
         } else {
             // TODO: Use RTC alarm to wake.
-            clocks_hw->sleep_en1 = 0;
+            clocks_hw->sleep_en0 = 0x0;
+            clocks_hw->sleep_en1 = 0x0;
         }
+
+        if (!disable_usb) {
+            clocks_hw->sleep_en0 |= CLOCKS_SLEEP_EN0_CLK_SYS_PLL_USB_BITS;
+            #if PICO_RP2040
+            clocks_hw->sleep_en1 |= CLOCKS_SLEEP_EN1_CLK_USB_USBCTRL_BITS;
+            #elif PICO_RP2350
+            clocks_hw->sleep_en1 |= CLOCKS_SLEEP_EN1_CLK_SYS_USBCTRL_BITS;
+            #else
+            #error Unknown processor
+            #endif
+        }
+
+        #if PICO_ARM
+        // Configure SLEEPDEEP bits on Cortex-M CPUs.
+        #if PICO_RP2040
         scb_hw->scr |= M0PLUS_SCR_SLEEPDEEP_BITS;
+        #elif PICO_RP2350
+        scb_hw->scr |= M33_SCR_SLEEPDEEP_BITS;
+        #else
+        #error Unknown processor
+        #endif
+        #endif
+
+        // Go into low-power mode.
         __wfi();
-        scb_hw->scr &= ~M0PLUS_SCR_SLEEPDEEP_BITS;
+
         if (!timer3_enabled) {
-            irq_set_enabled(3, false);
+            irq_set_enabled(irq_num, false);
         }
-        clocks_hw->sleep_en0 = sleep_en0;
-        clocks_hw->sleep_en1 = sleep_en1;
+        clocks_hw->sleep_en0 |= ~(0u);
+        clocks_hw->sleep_en1 |= ~(0u);
     }
 
     // Enable ROSC.
     rosc_hw->ctrl = ROSC_CTRL_ENABLE_VALUE_ENABLE << ROSC_CTRL_ENABLE_LSB;
 
     // Bring back all clocks.
-    // clocks_init();
-    // Will be fixed upstream
-    assert(0);
-    mp_thread_end_atomic_section(my_interrupts);
-    #else
-    assert(0);
-    #endif
+    runtime_init_clocks_optional_usb(disable_usb);
+    MICROPY_END_ATOMIC_SECTION(my_interrupts);
+
+    // Re-sync mp_hal_time_ns() counter with aon timer.
+    mp_hal_time_ns_set_from_rtc();
 }
 
 NORETURN static void mp_machine_deepsleep(size_t n_args, const mp_obj_t *args) {
