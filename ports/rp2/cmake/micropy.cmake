@@ -1,31 +1,3 @@
-# Set the board if it's not already set.
-if(NOT MICROPY_BOARD)
-    set(MICROPY_BOARD RPI_PICO)
-endif()
-
-# Set the board directory and check that it exists.
-if(NOT MICROPY_BOARD_DIR)
-    set(MICROPY_BOARD_DIR ${MICROPY_PORT_DIR}/boards/${MICROPY_BOARD})
-endif()
-get_filename_component(MICROPY_BOARD_DIR ${MICROPY_BOARD_DIR} ABSOLUTE)
-if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
-    message(FATAL_ERROR "Invalid MICROPY_BOARD specified: ${MICROPY_BOARD}")
-endif()
-
-# Include board config, it may override MICROPY_FROZEN_MANIFEST
-include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
-
-# Set the PICO_BOARD if it's not already set (allow a board to override it).
-if(NOT PICO_BOARD)
-    string(TOLOWER ${MICROPY_BOARD} PICO_BOARD)
-endif()
-
-# Necessary submodules for all boards.
-find_package (Python3 COMPONENTS Interpreter)
-string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/freertos)
-string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/mbedtls)
-string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/tinyusb)
-
 function(add_micropy_extension_library target lib)
     if(MICROPY_DYNLINK)
         add_dynamic_library(${target} ${ARGN})
@@ -323,11 +295,6 @@ if(MICROPY_BLUETOOTH_NIMBLE)
 endif()
 
 if (MICROPY_PY_NETWORK_CYW43)
-    # string(CONCAT GIT_SUBMODULES "${GIT_SUBMODULES} " lib/cyw43-driver)
-    # if((NOT (${ECHO_SUBMODULES})) AND NOT EXISTS ${MICROPY_DIR}/lib/cyw43-driver/src/cyw43.h)
-    #     message(FATAL_ERROR " cyw43-driver not initialized.\n Run 'make BOARD=${MICROPY_BOARD} submodules'")
-    # endif()
-
     add_library(network_cyw43 INTERFACE)
 
     target_sources(network_cyw43 INTERFACE 
@@ -598,7 +565,7 @@ if(MICROPY_DYNLINK)
     list(TRANSFORM LIBC_OBJS PREPEND ${LIBC_OBJS_DIR})
 
     # Extract object files ("ar x") into output directory
-    add_custom_target(extract_libc2
+    add_custom_target(extract_libc
         COMMAND mkdir -p ${LIBC_OBJS_DIR}
         COMMAND ${CMAKE_AR} x ${PICOLIBC_SYSROOT}/lib/${PICOLIBC_BUILDTYPE}/libc.a --output ${LIBC_OBJS_DIR}
         BYPRODUCTS ${LIBC_OBJS}
@@ -609,7 +576,7 @@ if(MICROPY_DYNLINK)
     include(${MICROPY_PORT_DIR}/cmake/picolibc_objs.cmake)
     list(TRANSFORM LIBC_OBJECTS PREPEND ${LIBC_OBJS_DIR}/)
     target_sources(${MICROPY_TARGET} PRIVATE
-        # ${LIBC_OBJECTS}
+        ${LIBC_OBJECTS}
     )
-    add_dependencies(${MICROPY_TARGET} extract_libc2)
+    add_dependencies(${MICROPY_TARGET} extract_libc)
 endif()

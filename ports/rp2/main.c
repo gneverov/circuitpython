@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <malloc.h>
-#include <netinet/in.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +36,6 @@
 #include <unistd.h>
 #include "morelib/ioctl.h"
 #include "morelib/mount.h"
-#include "morelib/telnet.h"
 #include "morelib/thread.h"
 #include "tinyusb/net_device_lwip.h"
 
@@ -46,6 +44,8 @@
 #include "freertos/interrupts.h"
 
 #if MICROPY_PY_LWIP
+#include <netinet/in.h>
+#include "morelib/telnet.h"
 #include "lwip/lwip_init.h"
 #endif
 

@@ -944,20 +944,19 @@ set(LIBC_OBJECTS
     # memmove.c.o
     # memset.c.o
     # memset.S.o
-    nano-malloc-calloc.c.o
-    # nano-malloc-cfree.c.o
-    nano-malloc-free.c.o
-    # nano-malloc-getpagesize.c.o
-    # nano-malloc-mallinfo.c.o
-    nano-malloc-malloc.c.o
-    # nano-malloc-malloc_stats.c.o
-    # nano-malloc-malloc_usable_size.c.o
-    # nano-malloc-mallopt.c.o
-    nano-malloc-memalign.c.o
-    nano-malloc-posix_memalign.c.o
-    # nano-malloc-pvalloc.c.o
-    nano-malloc-realloc.c.o
-    # nano-malloc-valloc.c.o
+    nano-calloc.c.o
+    nano-free.c.o
+    # nano-getpagesize.c.o
+    # nano-mallinfo.c.o
+    nano-malloc.c.o
+    # nano-malloc-stats.c.o
+    # nano-malloc-usable-size.c.o
+    # nano-mallopt.c.o
+    nano-memalign.c.o
+    nano-posix-memalign.c.o
+    # nano-pvalloc.c.o
+    nano-realloc.c.o
+    # nano-valloc.c.o
     # setjmp.S.o
     # strcmp.S.o
     # strcpy.S.o

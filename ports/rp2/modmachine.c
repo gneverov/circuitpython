@@ -48,6 +48,9 @@
 #include "machine/pio_sm.h"
 #include "machine/uart.h"
 #include "pico/runtime_init.h"
+#if MICROPY_PY_NETWORK_CYW43
+#include "lib/cyw43-driver/src/cyw43.h"
+#endif
 
 #define RP2_RESET_PWRON (1)
 #define RP2_RESET_WDT (3)

@@ -7,6 +7,8 @@
 #include "../obj.h"
 #include "../super.h"
 
+#include "py/runtime.h"
+
 
 extern const mp_obj_type_t lvgl_type_canvas_layer;
 

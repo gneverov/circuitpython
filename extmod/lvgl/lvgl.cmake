@@ -50,7 +50,7 @@ target_compile_options(lvgl PRIVATE
     -fdata-sections
 )
 
-target_link_libraries(lvgl newlib_helper_headers)
+target_link_libraries(lvgl morelib_headers)
 
 set_source_files_properties(
     ${MICROPY_DIR}/extmod/lvgl/anim.c

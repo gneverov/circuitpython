@@ -20,7 +20,7 @@ extern "C" {
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "pico/spi.h"
+#include "rp2/spi.h"
 
 /*********************
  *      DEFINES
@@ -30,7 +30,7 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 typedef struct {
-    pico_spi_ll_t *spi;
+    rp2_spi_t *spi;
     uint8_t cs;
     uint8_t dc;
     uint8_t dma;
@@ -42,7 +42,7 @@ typedef struct {
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
-int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint dc, uint baudrate, lv_display_t **disp);
+int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, rp2_spi_t *spi, uint cs, uint dc, uint baudrate, lv_display_t **disp);
 
 void lv_ili9341_disp_deinit(lv_display_t *disp);
 

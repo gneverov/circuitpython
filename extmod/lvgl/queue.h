@@ -4,7 +4,7 @@
 #pragma once
 
 #include "./types/shared_ptr.h"
-#include "py/stream_poll.h"
+#include "extmod/io/poll.h"
 
 
 typedef void (*lvgl_queue_fun_t)(void *arg);
@@ -18,7 +18,8 @@ struct lvgl_obj_queue;
 
 typedef struct lvgl_queue {
     lvgl_ptr_handle_t base;
-    mp_stream_poll_t poll;
+    mp_poll_t poll;
+    struct poll_file file;
     size_t size;
     int reader_closed : 1;
     int writer_closed : 1;

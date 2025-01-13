@@ -27,19 +27,12 @@ if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
     message(FATAL_ERROR "Invalid MICROPY_BOARD specified: ${MICROPY_BOARD}")
 endif()
 
-# If a board variant is specified, check that it exists.
-if(MICROPY_BOARD_VARIANT)
-    if(NOT EXISTS ${MICROPY_BOARD_DIR}/mpconfigvariant_${MICROPY_BOARD_VARIANT}.cmake)
-        message(FATAL_ERROR "Invalid MICROPY_BOARD_VARIANT specified: ${MICROPY_BOARD_VARIANT}")
-    endif()
-endif()
-
 # Include board config, it may override MICROPY_FROZEN_MANIFEST
 include(${MICROPY_BOARD_DIR}/mpconfigboard.cmake)
-if(NOT MICROPY_BOARD_VARIANT)
-    include(${MICROPY_BOARD_DIR}/mpconfigvariant.cmake OPTIONAL)
-else()
-    include(${MICROPY_BOARD_DIR}/mpconfigvariant_${MICROPY_BOARD_VARIANT}.cmake)
+
+# Set the PICO_BOARD if it's not already set (allow a board to override it).
+if(NOT PICO_BOARD)
+    string(TOLOWER ${MICROPY_BOARD} PICO_BOARD)
 endif()
 
 
@@ -70,5 +63,5 @@ set(MICROPY_PY_AUDIO_MP3 OFF)
 set(MICROPY_LVGL OFF)
 set(MICROPY_SSL_MBEDTLS OFF)
 set(MICROPY_PY_LWIP ON)
-set(MICROPY_PY_NETWORK_CYW43 ON)
+# set(MICROPY_PY_NETWORK_CYW43 ON)
 include(cmake/micropy.cmake)

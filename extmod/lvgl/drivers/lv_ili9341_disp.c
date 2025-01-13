@@ -9,7 +9,7 @@
 #include <errno.h>
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
-#include "pico/dma.h"
+#include "rp2/dma.h"
 
 /*********************
  *      DEFINES
@@ -124,7 +124,7 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static int disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint dc, uint baudrate);
+static int disp_init(lv_ili9341_disp_t *drv, rp2_spi_t *spi, uint cs, uint dc, uint baudrate);
 
 static void disp_deinit(lv_ili9341_disp_t *drv);
 
@@ -146,7 +146,7 @@ static void disp_resolution_changed(lv_event_t *e);
  *   GLOBAL FUNCTIONS
  **********************/
 
-int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint dc, uint baudrate, lv_display_t **disp) {
+int lv_ili9341_disp_init(lv_ili9341_disp_t *drv, rp2_spi_t *spi, uint cs, uint dc, uint baudrate, lv_display_t **disp) {
     /*------------------------------------
      * Create a display
      * -----------------------------------*/
@@ -197,7 +197,7 @@ void lv_ili9341_disp_deinit(lv_display_t *disp) {
 // }
 
 static void disp_write(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *data, size_t len) {
-    pico_spi_take(drv->spi, portMAX_DELAY);
+    rp2_spi_take(drv->spi, portMAX_DELAY);
     gpio_put(drv->cs, false);
     spi_set_baudrate(drv->spi->inst, drv->baudrate);
     
@@ -208,19 +208,19 @@ static void disp_write(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *data,
     spi_write_blocking(drv->spi->inst, data, len);
 
     gpio_put(drv->cs, true);
-    pico_spi_give(drv->spi);
+    rp2_spi_give(drv->spi);
 }
 
 static void disp_dma_irq_handler(uint channel, void *context, BaseType_t *pxHigherPriorityTaskWoken) {
     lv_ili9341_disp_t *drv = context;
-    pico_dma_acknowledge_irq(drv->dma);
+    rp2_dma_acknowledge_irq(drv->dma);
     drv->int_count++;
 
     spi_write_blocking(drv->spi->inst, NULL, 0);
     spi_set_format(drv->spi->inst, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_put(drv->cs, true);
 
-    pico_spi_give_from_isr(drv->spi, pxHigherPriorityTaskWoken);
+    rp2_spi_give_from_isr(drv->spi, pxHigherPriorityTaskWoken);
 
     TaskHandle_t task = drv->task;
     drv->task = NULL;
@@ -233,12 +233,12 @@ static void disp_dma_irq_handler(uint channel, void *context, BaseType_t *pxHigh
 static void disp_write_dma(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *data, size_t len) {
     // disp_write(drv, cmd, data, len);
 
-    pico_dma_clear_irq(drv->dma);
+    rp2_dma_clear_irq(drv->dma);
     assert(!drv->task);
     drv->task = xTaskGetCurrentTaskHandle();
-    pico_dma_set_irq(drv->dma, disp_dma_irq_handler, drv);
+    rp2_dma_set_irq(drv->dma, disp_dma_irq_handler, drv);
 
-    pico_spi_take(drv->spi, portMAX_DELAY);
+    rp2_spi_take(drv->spi, portMAX_DELAY);
     gpio_put(drv->cs, false);
     spi_set_baudrate(drv->spi->inst, drv->baudrate);
     
@@ -247,7 +247,7 @@ static void disp_write_dma(lv_ili9341_disp_t *drv, uint8_t cmd, const uint8_t *d
 
     gpio_put(drv->dc, true);
     spi_set_format(drv->spi->inst, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    pico_spi_take_to_isr(drv->spi);
+    rp2_spi_take_to_isr(drv->spi);
     dma_channel_set_read_addr(drv->dma, data, false);
     dma_channel_set_trans_count(drv->dma, len / 2, true);
 }
@@ -280,7 +280,7 @@ static const uint8_t disp_init_cmd[] = {
 };
 
 /*Initialize your display and the required peripherals.*/
-static int disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint dc, uint baudrate) {
+static int disp_init(lv_ili9341_disp_t *drv, rp2_spi_t *spi, uint cs, uint dc, uint baudrate) {
     drv->spi = spi;
     drv->cs = cs;
     drv->dc = dc;
@@ -300,7 +300,7 @@ static int disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint d
     channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
     dma_channel_set_config(channel, &c, false);
     dma_channel_set_write_addr(channel, &spi_get_hw(drv->spi->inst)->dr, false);
-    pico_dma_set_irq(channel, disp_dma_irq_handler, drv);
+    rp2_dma_set_irq(channel, disp_dma_irq_handler, drv);
 
     gpio_init(drv->cs);
     gpio_put(drv->cs, true);
@@ -326,7 +326,7 @@ static int disp_init(lv_ili9341_disp_t *drv, pico_spi_ll_t *spi, uint cs, uint d
 static void disp_deinit(lv_ili9341_disp_t *drv) {
     disp_write(drv, ILI9341_SWRESET, NULL, 0);
     if (drv->dma != 255) {
-        pico_dma_clear_irq(drv->dma);
+        rp2_dma_clear_irq(drv->dma);
         dma_channel_unclaim(drv->dma);
         drv->dma = 255;
     }
@@ -357,9 +357,9 @@ static void disp_flush(lv_display_t *disp, const lv_area_t * area, uint8_t * px_
 static void disp_flush_wait(lv_display_t *disp) {
     lv_ili9341_disp_t *drv = lv_display_get_driver_data(disp);
     for (;;) {
-        pico_dma_clear_irq(drv->dma);
+        rp2_dma_clear_irq(drv->dma);
         TaskHandle_t task = drv->task;
-        pico_dma_set_irq(drv->dma, disp_dma_irq_handler, drv);
+        rp2_dma_set_irq(drv->dma, disp_dma_irq_handler, drv);
         if (!task) {
             break;
         }

@@ -16,7 +16,7 @@ static mp_obj_t mp_termios_tcgetattr(mp_obj_t fd_in) {
     mp_obj_t ccs[NCCS];
     for (int i = 0; i < NCCS; i++) {
         if ((i == VMIN) || (i == VTIME)) {
-            ccs[i] = MP_OBJ_NEW_SMALL_INT(&p.c_cc[i]);
+            ccs[i] = MP_OBJ_NEW_SMALL_INT(p.c_cc[i]);
         } else {
             ccs[i] = mp_obj_new_bytes(&p.c_cc[i], 1);
         }

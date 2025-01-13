@@ -33,7 +33,7 @@ static mp_obj_t lvgl_ILI9341_make_new(const mp_obj_type_t *type, size_t n_args, 
     lvgl_lock_init();
     lv_ili9341_disp_t *drv = malloc(sizeof(lv_ili9341_disp_t));
     lv_display_t *disp;
-    int errcode = lv_ili9341_disp_init(drv, &pico_spis_ll[spi_index], cs_pin, dc_pin, baudrate, &disp);
+    int errcode = lv_ili9341_disp_init(drv, &rp2_spis[spi_index], cs_pin, dc_pin, baudrate, &disp);
     lvgl_display_handle_t *handle = lvgl_display_alloc_handle(disp, lv_ili9341_disp_deinit);
     if (errcode) {
         goto cleanup;

@@ -24,6 +24,8 @@
 #include "./ft6206.h"
 #include "./ili9341.h"
 
+#include "py/mperrno.h"
+
 
 static SemaphoreHandle_t lvgl_mutex;
 static TaskHandle_t lvgl_task;
