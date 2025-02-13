@@ -21,17 +21,6 @@ static SemaphoreHandle_t signal_mutex;
 
 static mp_obj_t signal_handlers[_NSIG];
 
-static const mp_obj_tuple_t signal_sysexit_tuple = {
-    .base = { &mp_type_tuple },
-    .len = 1,
-    .items = { MP_OBJ_NEW_SMALL_INT(1) },
-};
-
-static const mp_obj_exception_t signal_sysexit_exception = {
-    .base = { &mp_type_SystemExit },
-    .args = (mp_obj_tuple_t *)&signal_sysexit_tuple,
-};
-
 static mp_obj_t signal_default_int_handler(mp_obj_t signum_in) {
     mp_sched_keyboard_interrupt();
     return mp_const_none;
@@ -48,11 +37,7 @@ static void signal_handler(int signum) {
                 mp_sched_keyboard_interrupt();
             }
         } else if (signum == SIGQUIT) {
-            if (mp_interrupt_char != -1) {
-                mp_sched_exception(MP_OBJ_FROM_PTR(&signal_sysexit_exception));
-            } else {
-                exit(0);
-            }
+            exit(0);
         }
         mp_task_interrupt();
     }

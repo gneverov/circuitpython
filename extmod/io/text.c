@@ -104,7 +104,7 @@ static mp_obj_t mp_io_text_read_until(size_t n_args, const mp_obj_t *args, int n
             mp_raise_OSError(errno);
         }
     }
-    return mp_obj_new_bytes_from_vstr(&out_buffer);
+    return mp_obj_new_str_from_vstr(&out_buffer);
 }
 
 static mp_obj_t mp_io_text_read(size_t n_args, const mp_obj_t *args) {

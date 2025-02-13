@@ -101,6 +101,7 @@ set(MICROPY_SOURCE_PORT
     help.c
     machine_i2c.c
     machine_pin.c
+    machine_rtc.c
     machine_spi.c
     machine_timer.c
     machine/audio_out_pwm.c
@@ -123,6 +124,7 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_PORT_DIR}/machine_adc.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
     ${MICROPY_PORT_DIR}/machine_pin.c
+    ${MICROPY_PORT_DIR}/machine_rtc.c
     ${MICROPY_PORT_DIR}/machine_spi.c
     ${MICROPY_PORT_DIR}/machine_timer.c
     ${MICROPY_PORT_DIR}/machine_wdt.c

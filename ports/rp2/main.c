@@ -159,7 +159,7 @@ static void mp_main(uint8_t *stack_bottom, uint8_t *stack_top, uint8_t *gc_heap_
 thread_t *mp_thread;
 
 #define INIT_STACK_SIZE (4 << 10)
-#define DEFAULT_ROOT_DEV "/dev/flash"
+#define DEFAULT_ROOT_DEV "/dev/storage"
 #define DEFAULT_ROOT_FS "fatfs"
 #ifdef NDEBUG
 #define DEFAULT_TTY "/dev/ttyUSB0"
@@ -335,6 +335,9 @@ static void init_task(void *params) {
     mount(NULL, "/dev", "devfs", 0, NULL);
     setup_tty();
     mount_root_fs();
+
+    void print_banner(void);
+    print_banner();
 
     const char *mp_stack_str = getenv("MP_STACK");
     size_t mp_stack_size = mp_stack_str ? atoi(mp_stack_str) : DEFAULT_MP_STACK;

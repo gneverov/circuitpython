@@ -15,7 +15,7 @@ static uintptr_t mp_fcntl_load_arg(mp_obj_t arg_in, char tmp[IOCTL_MAX_ARG_SIZE]
         mp_buffer_info_t bufinfo;
         mp_get_buffer_raise(arg_in, &bufinfo, MP_BUFFER_READ);
         memcpy(tmp, bufinfo.buf, MIN(bufinfo.len, IOCTL_MAX_ARG_SIZE));
-        return (uintptr_t)bufinfo.buf;
+        return (uintptr_t)tmp;
     }
 }
 

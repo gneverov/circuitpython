@@ -24,7 +24,7 @@ def obj_1():
 # Make an object draggable.
 def obj_2():
     def drag_event_handler(e):
-        indev = lvgl.indev
+        indev = lvgl.indevs[0]
         if not indev:
             return
 

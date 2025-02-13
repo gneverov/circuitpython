@@ -16,28 +16,25 @@ SPI_BAUDRATE = 40000000
 SCK, MOSI, MISO = 18, 19, 16
 
 # SPI CS pin for display
-CS = 20
+CS = 21
 
 # Data/Command pin for display
-DC = 22
+DC = 20
 
 # I2C instance for touch indev
-I2C_ID = 1
+I2C_ID = 0
 
 # I2C frequency for touch indev
 I2C_FREQ = 400000
 
 # I2C data pins for touch indev
-SCL, SDA = 27, 26
+SCL, SDA = 5, 4
 
 # Interrupt pin for touch
-TRIG = 15
+TRIG = 22
 
 # Backlight on/off pin for display
-lite = machine.Pin(28, machine.Pin.OUT, value=1)
-
-# Reset pin for display
-rst = machine.Pin(21, machine.Pin.OUT, value=1)
+lite = machine.Pin(26, machine.Pin.OUT, value=1)
 
 event_thread = None
 
@@ -50,7 +47,7 @@ def setup():
     if not lvgl.display:
         machine.SPI(SPI_ID, sck=SCK, mosi=MOSI, miso=MISO)
         disp = lvgl.ILI9341(SPI_ID, CS, DC, SPI_BAUDRATE)
-        disp.rotation = 270
+        disp.rotation = 90
 
     if not lvgl.indevs:
         i2c = machine.I2C(I2C_ID, freq=I2C_FREQ, scl=SCL, sda=SDA)
@@ -95,6 +92,7 @@ def run_module(mod):
         try:
             run(func)
         except Exception as e:
+            print()
             sys.print_exception(e)
         else:
             input()

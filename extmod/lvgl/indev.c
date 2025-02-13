@@ -4,6 +4,7 @@
 #include <malloc.h>
 
 #include "./indev.h"
+#include "./misc.h"
 #include "./modlvgl.h"
 #include "./obj.h"
 #include "./super.h"
@@ -79,8 +80,7 @@ static mp_obj_t lvgl_indev_get_vect(mp_obj_t self_in) {
     lv_indev_get_vect(indev, &point);
     lvgl_unlock();
 
-    mp_obj_t items[] = { mp_obj_new_int(point.x), mp_obj_new_int(point.y) };
-    return mp_obj_new_tuple(2, items);
+    return lvgl_point_to_mp(&point);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(lvgl_indev_get_vect_obj, lvgl_indev_get_vect);
 
@@ -111,7 +111,7 @@ mp_obj_t lvgl_indev_list(void) {
     mp_obj_t list = mp_obj_new_list(0, NULL);
     lvgl_lock();
     lv_indev_t *indev = lv_indev_get_next(NULL);
-    lvgl_indev_handle_t *handle = lvgl_ptr_from_lv(&lvgl_indev_type, indev);
+    lvgl_indev_handle_t *handle = lvgl_ptr_copy(lvgl_ptr_from_lv(&lvgl_indev_type, indev));
     lvgl_unlock();
 
     while (handle) {
@@ -123,7 +123,7 @@ mp_obj_t lvgl_indev_list(void) {
         lvgl_indev_handle_t *tmp = NULL;
         if (indev) {
             indev = lv_indev_get_next(indev);
-            tmp = lvgl_ptr_from_lv(&lvgl_indev_type, indev);
+            tmp = lvgl_ptr_copy(lvgl_ptr_from_lv(&lvgl_indev_type, indev));
         }
         lvgl_unlock();
 

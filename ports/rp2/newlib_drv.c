@@ -35,19 +35,19 @@ const struct devfs_entry devfs_entries[] = {
     { "/zero", S_IFCHR, DEV_ZERO },
     { "/full", S_IFCHR, DEV_FULL },
 
+    { "/firmware", S_IFBLK, DEV_MTDBLK0 },
+    { "/storage", S_IFBLK, DEV_MTDBLK1 },
+    { "/psram", S_IFBLK, DEV_MTDBLK2 },
+
     { "/mtd0", S_IFCHR, DEV_MTD0 },
     { "/mtd1", S_IFCHR, DEV_MTD1 },
     { "/mtd2", S_IFCHR, DEV_MTD2 },
     { "/mtd3", S_IFCHR, DEV_MTD3 },
 
-    { "/firmware", S_IFBLK, DEV_MTDBLK0 },
+    { "/mtdblock0", S_IFBLK, DEV_MTDBLK0 },
     { "/mtdblock1", S_IFBLK, DEV_MTDBLK1 },
     { "/mtdblock2", S_IFBLK, DEV_MTDBLK2 },
-    // { "/psram", S_IFBLK, DEV_MTDBLK4 },
-    // { "/mtdblock5", S_IFBLK, DEV_MTDBLK5 },
-    // { "/mtdblock6", S_IFBLK, DEV_MTDBLK6 },
-
-    // { "/dhara", S_IFBLK, DEV_DHARA, dhara_open },
+    { "/mtdblock3", S_IFBLK, DEV_MTDBLK3 },
 
     { "/tty", S_IFCHR, DEV_TTY },
     { "/tmux", S_IFCHR, DEV_TMUX },

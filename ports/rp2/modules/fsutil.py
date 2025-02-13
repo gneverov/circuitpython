@@ -3,7 +3,7 @@ import machine, os, usb
 if os.getenv("ROOT"):
     root_device, root_fstype = os.getenv("ROOT").split()[:2]
 else:
-    root_device, root_fstype = "/dev/flash", "fatfs"
+    root_device, root_fstype = "/dev/storage", "fatfs"
 
 msc = usb.MscDevice()
 
